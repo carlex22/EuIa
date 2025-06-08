@@ -1,7 +1,6 @@
 # Android build outputs
 /app/build/
 
-app/build/
 
 
 
@@ -10,8 +9,8 @@ app/build/
 *.iml
 .gradle/
 /local.properties
-gradle/
 /gradle/
+
 
 # Direto para assets grandes que não precisam estar no repo
 **/*.jar
