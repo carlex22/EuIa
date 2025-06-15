@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Permite comunicação em texto claro (HTTP) para o domínio de desenvolvimento local -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Substitua pelo IP da sua máquina. Você pode adicionar mais domínios se necessário. -->
+        <domain includeSubdomains="true">127.0.0.1</domain> 
+        <!-- Se você usar o emulador, o IP do seu computador host é geralmente 10.0.2.2 -->
+        <!-- <domain includeSubdomains="true">10.0.2.2</domain> -->
+    </domain-config>
+    
+    <!-- Mantém a configuração padrão segura para todos os outros domínios -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

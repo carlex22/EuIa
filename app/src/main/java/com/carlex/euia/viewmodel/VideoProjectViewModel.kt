@@ -35,6 +35,8 @@ import com.carlex.euia.worker.VideoProcessingWorker.Companion.TAG_PREFIX_SCENE_V
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_IMAGENS_REFERENCIA_JSON_INPUT
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_SOURCE_IMAGE_PATH_FOR_VIDEO
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_VIDEO_GEN_PROMPT
+
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -62,6 +64,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     private val audioDataStoreManager = AudioDataStoreManager(application)
     private val videoDataStoreManager = VideoDataStoreManager(application)
     private val videoPreferencesDataStoreManager = VideoPreferencesDataStoreManager(application)
+
 
     private val applicationContext: Context = application.applicationContext
     private val workManager = WorkManager.getInstance(applicationContext)
@@ -251,12 +254,10 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             }
         }
     }
-
     fun dismissRecreateImageDialog() {
         _sceneIdToRecreateImage.value = null
         _promptForRecreateImage.value = null
     }
-
     fun confirmAndProceedWithImageRecreation() {
         val sceneId = _sceneIdToRecreateImage.value
         val prompt = _promptForRecreateImage.value
@@ -265,11 +266,9 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         }
         dismissRecreateImageDialog()
     }
-
     fun triggerSelectReferenceImageForScene(sceneId: String) {
         _sceneIdForReferenceChangeDialog.value = sceneId
     }
-
     fun dismissReferenceImageSelectionDialog() {
         _sceneIdForReferenceChangeDialog.value = null
     }
@@ -450,9 +449,13 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                             Log.w(TAG, "Índice FOTO_REFERENCIA da API ($originalImageIndexFromApi) inválido para ${imagensReferenciasAtuais.size} imagens.")
                         }
                     }
+                    
+                      // Ajuste o valor conforme desejar (800ms aqui é só um exemplo)
+
+                 
 
                      generatedSceneDataList.add(SceneLinkData(
-                         id = UUID.randomUUID().toString(),
+                         id = cenaObj.optString("CENA", null),
                          cena = cenaObj.optString("CENA", null),
                          tempoInicio = if (cenaObj.has("TEMPO_INICIO")) cenaObj.optDouble("TEMPO_INICIO") else null,
                          tempoFim = if (cenaObj.has("TEMPO_FIM")) cenaObj.optDouble("TEMPO_FIM") else null,
@@ -524,11 +527,14 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             return
         }
 
+        // --- INÍCIO DA VERIFICAÇÃO DE TAREFA ATIVA ---
         if (sceneToUpdate.isGenerating || sceneToUpdate.isChangingClothes || sceneToUpdate.isGeneratingVideo) {
+            // Usa a nova mensagem de status da fila se disponível, senão uma mensagem genérica.
             val statusMessage = sceneToUpdate.queueStatusMessage ?: applicationContext.getString(R.string.status_scene_already_processing_simple)
-            Toast.makeText(applicationContext, statusMessage, Toast.LENGTH_LONG).show()
+            Toast.makeText(applicationContext, statusMessage, Toast.LENGTH_LONG).show() // Long para dar tempo de ler
             return
         }
+        // --- FIM DA VERIFICAÇÃO DE TAREFA ATIVA ---
 
         if (prompt.isBlank()) {
             Toast.makeText(applicationContext, applicationContext.getString(R.string.error_empty_prompt_for_image_gen), Toast.LENGTH_SHORT).show()
@@ -536,16 +542,18 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         }
 
         viewModelScope.launch {
+            // --- ATUALIZAÇÃO INICIAL DA UI ---
             internalUpdateSceneState(sceneId) {
                 it.copy(
                     isGenerating = true,
                     generationAttempt = 1,
                     generationErrorMessage = null,
                     queueStatusMessage = applicationContext.getString(R.string.status_enqueuing),
-                    queueRequestId = null
+                    queueRequestId = null // O worker vai gerar e salvar o ID real.
                 )
             }
 
+            // --- LÓGICA DE PREPARAÇÃO DO WORKER (EXISTENTE) ---
             val globalImages = currentImagensReferenciaStateFlow.first()
             var imagesJsonForWorker = "[]"
 
@@ -572,6 +580,10 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 KEY_IMAGENS_REFERENCIA_JSON_INPUT to imagesJsonForWorker
             )
             val sceneSpecificTag = TAG_PREFIX_SCENE_PROCESSING + sceneId
+            
+            
+delay(500L) 
+            
             val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
                 .setInputData(inputData)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -624,8 +636,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 generationAttempt = 0,
                 clothesChangeAttempt = 0,
                 generationErrorMessage = applicationContext.getString(R.string.message_cancelled_by_user),
-                queueRequestId = null,
-                queueStatusMessage = null
+                queueRequestId = null, // Limpa o ID da fila ao cancelar
+                queueStatusMessage = null // Limpa a mensagem da fila
             )}
             Toast.makeText(applicationContext, applicationContext.getString(R.string.toast_generation_cancelled_for_scene, sceneId.take(4)), Toast.LENGTH_SHORT).show()
         }
@@ -641,6 +653,9 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                      Log.w(TAG, "triggerBatchImageGenerationForScenes: Coroutine do ViewModel cancelada, parando de enfileirar workers.")
                      return@forEach
                  }
+                 
+                 
+                 
                  if (sceneLinkData.pathThumb != null) {
                      Log.d(TAG, "Pulando geração de imagem estática para cena ${sceneLinkData.id}, pois já é um vídeo de referência.")
                      internalUpdateSceneState(sceneLinkData.id) { it.copy(isGenerating = false, generationAttempt = 0) }
@@ -676,6 +691,9 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                          KEY_IMAGENS_REFERENCIA_JSON_INPUT to imagesJsonForThisWorker
                      )
                      val sceneSpecificTag = TAG_PREFIX_SCENE_PROCESSING + sceneLinkData.id
+                     
+                     
+                     delay(500)
                      val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
                          .setInputData(inputData)
                          .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -782,6 +800,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 KEY_CHOSEN_REFERENCE_IMAGE_PATH to chosenReferenceImagePath,
             )
             val sceneSpecificTag = TAG_PREFIX_SCENE_CLOTHES_PROCESSING + sceneId
+          
+          delay(500L) 
             val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
                 .setInputData(inputData)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -802,8 +822,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 isChangingClothes = false,
                 clothesChangeAttempt = 0,
                 generationErrorMessage = applicationContext.getString(R.string.message_cancelled_by_user),
-                queueRequestId = null,
-                queueStatusMessage = null
+                queueRequestId = null, // Limpa o ID da fila ao cancelar
+                queueStatusMessage = null // Limpa a mensagem da fila
             )}
             Toast.makeText(applicationContext, applicationContext.getString(R.string.toast_clothes_change_cancelled_for_scene, sceneId.take(4)), Toast.LENGTH_SHORT).show()
         }
@@ -974,6 +994,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 KEY_SOURCE_IMAGE_PATH_FOR_VIDEO to currentSourceImagePathForVideo
             )
             val sceneSpecificTag = TAG_PREFIX_SCENE_VIDEO_PROCESSING + sceneId
+          
+          delay(500L) 
             val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
                 .setInputData(inputData)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

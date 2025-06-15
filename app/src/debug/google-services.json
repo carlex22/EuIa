@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "229195560996",
+    "project_id": "euia-55398",
+    "storage_bucket": "euia-55398.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:229195560996:android:a69353ecd8c1d637f040b1",
+        "android_client_info": {
+          "package_name": "com.carlex.euia"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "229195560996-4m38nh0foniki8dtfholkps5vnu6ksnt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFO-07-pX0Un3eToiL6GL-DX0BhWPvmjc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "229195560996-4m38nh0foniki8dtfholkps5vnu6ksnt.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

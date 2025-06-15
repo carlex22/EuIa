@@ -20,7 +20,6 @@ import com.carlex.euia.api.GeminiVideoApi
 import com.carlex.euia.api.QueueApiClient
 import com.carlex.euia.data.ImagemReferencia
 import com.carlex.euia.data.SceneLinkData
-import com.carlex.euia.data.VideoDataStoreManager
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.carlex.euia.data.VideoProjectDataStoreManager
 import com.carlex.euia.utils.BitmapUtils
@@ -41,7 +40,7 @@ import kotlin.math.min
 
 private const val TAG = "VideoProcessingWorker"
 
-private const val NOTIFICATION_ID = 1
+private const val NOTIFICATION_ID = 35755
 private const val NOTIFICATION_CHANNEL_ID = "VideoProcessingChannelEUIA"
 
 data class InternalTaskResult(
@@ -81,8 +80,8 @@ class VideoProcessingWorker(
     private val tryOnMutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     
-    private val MAX_API_ATTEMPTS = 3
-    private val RETRY_DELAY_MILLIS = 5000L
+    private val MAX_API_ATTEMPTS = 1
+    private val RETRY_DELAY_MILLIS = 1000L
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val sceneId = inputData.getString(KEY_SCENE_ID)?.take(8) ?: appContext.getString(R.string.scene_id_unknown)
@@ -139,12 +138,7 @@ class VideoProcessingWorker(
         val sceneId = inputData.getString(KEY_SCENE_ID) ?: return@coroutineScope failWorker(appContext.getString(R.string.error_scene_id_missing))
         val taskType = inputData.getString(KEY_TASK_TYPE) ?: return@coroutineScope failWorker(appContext.getString(R.string.error_task_type_missing))
         
-        val userId = firebaseAuth.currentUser?.uid
-        if (userId.isNullOrBlank()) {
-            val errorMsg = appContext.getString(R.string.error_user_not_authenticated_for_queue)
-            updateSceneStateGeneral(sceneId, taskType, 0, false, errorMessage = errorMsg)
-            return@coroutineScope failWorker(errorMsg)
-        }
+        val userId = "iduser"//"firebaseAuth.currentUser?.uid ?: "anonymous_user""
 
         val taskResult = try {
             when (taskType) {
@@ -192,124 +186,162 @@ class VideoProcessingWorker(
         }
     }
     
+    
     private suspend fun handleQueueableTask(
-        sceneId: String,
-        taskType: String,
-        userId: String,
-        actionToExecute: suspend () -> InternalTaskResult
-    ): InternalTaskResult {
-        Log.d(TAG, "[$sceneId] -> [handleQueueableTask] Iniciado para tarefa: $taskType")
+    sceneId: String,
+    taskType: String,
+    userId: String,
+    actionToExecute: suspend () -> InternalTaskResult
+): InternalTaskResult {
+    Log.d(TAG, "[$sceneId] -> [handleQueueableTask] Iniciado para tarefa: $taskType")
 
-        val sceneData = projectDataStoreManager.sceneLinkDataList.first().find { it.id == sceneId }
-        val requestId = sceneData?.queueRequestId ?: UUID.randomUUID().toString()
+    val sceneData = projectDataStoreManager.sceneLinkDataList.first().find { it.id == sceneId }
+    var requestId = sceneId
 
-        if (sceneData?.queueRequestId.isNullOrBlank()) {
-            Log.i(TAG, "[$sceneId] -> [handleQueueableTask] Requisição nova. Gerando ReqID: $requestId")
-            updateSceneStateGeneral(sceneId, taskType, 1, null, queueRequestId = requestId, queueStatusMessage = appContext.getString(R.string.status_enqueuing))
-            
-            Log.d(TAG, "[$sceneId] -> [API_FILA] Chamando /enfileirar...")
-            try {
-                val enqueueResponse = queueApiClient.enqueueRequest(userId, requestId)
-                if (!enqueueResponse.isSuccessful) {
-                    val errorBody = enqueueResponse.errorBody()?.string() ?: "N/A"
-                    val errorMsg = appContext.getString(R.string.error_enqueue_failed_simple)
-                    Log.e(TAG, "[$sceneId] -> [API_FILA] Falha em /enfileirar. Código: ${enqueueResponse.code()}, Corpo: $errorBody")
-                    updateSceneStateGeneral(sceneId, taskType, 0, false, errorMessage = errorMsg, queueRequestId = null)
-                    return InternalTaskResult(errorMessage = errorMsg)
-                }
-                Log.i(TAG, "[$sceneId] -> [API_FILA] Sucesso em /enfileirar.")
-            } catch (e: Exception) {
-                val errorMsg = appContext.getString(R.string.error_enqueue_connection_failed, e.message)
-                Log.e(TAG, "[$sceneId] -> [API_FILA] Erro de conexão em /enfileirar.", e)
-                updateSceneStateGeneral(sceneId, taskType, 0, false, errorMessage = errorMsg, queueRequestId = null)
-                return InternalTaskResult(errorMessage = errorMsg)
-            }
-        } else {
-            Log.i(TAG, "[$sceneId] -> [handleQueueableTask] Requisição existente encontrada. Retomando monitoramento para ReqID: $requestId")
-        }
-        
-        Log.d(TAG, "[$sceneId] -> [handleQueueableTask] Entrando no loop de espera pela liberação (polling)...")
-        if (!waitForRelease(sceneId, taskType, userId, requestId)) {
-            val errorMsg = if (!coroutineContext.isActive) appContext.getString(R.string.error_processing_cancelled) else appContext.getString(R.string.error_queue_timeout)
-            Log.w(TAG, "[$sceneId] -> [handleQueueableTask] Saiu do polling sem liberação: $errorMsg")
-            
-            Log.d(TAG, "[$sceneId] -> [API_FILA] Chamando /confirmar_execucao (após timeout/cancelamento) para liberar o slot...")
-            queueApiClient.confirmExecution(userId, requestId)
-            return InternalTaskResult(errorMessage = errorMsg)
-        }
-        Log.i(TAG, "[$sceneId] -> [handleQueueableTask] SLOT LIBERADO! Prosseguindo para execução da tarefa principal.")
-        
-        updateNotificationProgress(appContext.getString(R.string.notification_task_released, taskType, sceneId.take(8)))
-        updateSceneStateGeneral(sceneId, taskType, 1, null, queueStatusMessage = appContext.getString(R.string.status_generating))
-        
-        var finalTaskResult: InternalTaskResult? = null
+    if (requestId.isBlank()) {
+        requestId = "22"
+        Log.i(TAG, "[$sceneId] -> [handleQueueableTask] Nova requisição. ReqID: $requestId")
+
+        updateSceneStateGeneral(sceneId, taskType, 1, null, queueRequestId = requestId, queueStatusMessage = appContext.getString(R.string.status_enqueuing))
+
         try {
-            var currentAttempt = 1
-            Log.d(TAG, "[$sceneId] -> [handleQueueableTask] Entrando no loop de retentativas da API (Max: $MAX_API_ATTEMPTS).")
-            while(currentAttempt <= MAX_API_ATTEMPTS && coroutineContext.isActive) {
-                Log.i(TAG, "[$sceneId] -> [AÇÃO_PRINCIPAL] Executando tentativa $currentAttempt para tarefa '$taskType'...")
-                finalTaskResult = actionToExecute()
-                if(finalTaskResult.isSuccess) {
-                    Log.i(TAG, "[$sceneId] -> [AÇÃO_PRINCIPAL] Sucesso na tentativa $currentAttempt.")
-                    break
-                }
+            val enqueueResponse = queueApiClient.enqueueRequest(requestId, "imagem")
+            val body = enqueueResponse.body()
+            if (!enqueueResponse.isSuccessful || body == null) {
+                val detail = body?.detail ?: enqueueResponse.errorBody()?.string() ?: "Erro ${enqueueResponse.code()}"
+                val msg = appContext.getString(R.string.error_enqueue_failed_api, detail)
+                Log.e(TAG, "[$sceneId] -> [API_FILA] Falha ao enfileirar: $detail")
+                updateSceneStateGeneral(sceneId, taskType, 0, false, errorMessage = msg)
+                return InternalTaskResult(errorMessage = msg)
+            }
+            val pos = body.posicaoAtual ?: run {
+                val msg = appContext.getString(R.string.error_enqueue_missing_field)
+                Log.e(TAG, "[$sceneId] -> [API_FILA] Faltando posicao_atual")
+                updateSceneStateGeneral(sceneId, taskType, 0, false, errorMessage = msg)
+                return InternalTaskResult(errorMessage = msg)
+            }
 
-                val attemptError = finalTaskResult.errorMessage ?: "Erro desconhecido na tentativa $currentAttempt"
-                Log.w(TAG, "[$sceneId] -> [AÇÃO_PRINCIPAL] Tentativa $currentAttempt falhou: $attemptError")
-                updateSceneStateGeneral(sceneId, taskType, currentAttempt, null, errorMessage = attemptError, queueStatusMessage = "Tentativa $currentAttempt falhou")
-                
-                currentAttempt++
-                if(currentAttempt <= MAX_API_ATTEMPTS && coroutineContext.isActive) {
-                    Log.d(TAG, "[$sceneId] -> [AÇÃO_PRINCIPAL] Aguardando ${RETRY_DELAY_MILLIS}ms para a próxima tentativa.")
-                    delay(RETRY_DELAY_MILLIS)
-                } else if(finalTaskResult != null) {
-                    Log.e(TAG, "[$sceneId] -> [AÇÃO_PRINCIPAL] Número máximo de tentativas atingido.")
-                    break 
-                }
-            }
-        } finally {
-            Log.d(TAG, "[$sceneId] -> [API_FILA] Entrando no bloco finally. Chamando /confirmar_execucao para ReqID $requestId...")
-            try {
-                queueApiClient.confirmExecution(userId, requestId)
-                Log.i(TAG, "[$sceneId] -> [API_FILA] Sucesso em /confirmar_execucao.")
-            } catch (e: Exception) {
-                Log.e(TAG, "[$sceneId] -> [API_FILA] FALHA CRÍTICA em /confirmar_execucao.", e)
-            }
+            val statusMsg = appContext.getString(R.string.status_in_queue_position, pos)
+            updateSceneStateGeneral(sceneId, taskType, 1, null, queueStatusMessage = statusMsg)
+            Log.i(TAG, "[$sceneId] -> Enfileirado. Posição: $pos")
+
+        } catch (e: Exception) {
+            val msg = appContext.getString(R.string.error_enqueue_connection_failed, e.message)
+            Log.e(TAG, "[$sceneId] -> Erro ao enfileirar", e)
+            updateSceneStateGeneral(sceneId, taskType, 0, false, errorMessage = msg)
+            return InternalTaskResult(errorMessage = msg)
         }
-        return finalTaskResult ?: InternalTaskResult(errorMessage = "A ação principal não retornou um resultado.")
+    } else {
+        Log.i(TAG, "[$sceneId] -> [handleQueueableTask] Requisição existente. ReqID: $requestId")
     }
 
-    private suspend fun waitForRelease(sceneId: String, taskType: String, userId: String, requestId: String): Boolean {
-        val maxPollingAttempts = 120 // 10 minutos (120 * 5s)
-        var pollingAttempts = 0
-        Log.d(TAG, "[$sceneId] -> [waitForRelease] Iniciado para ReqID: $requestId. Max tentativas: $maxPollingAttempts")
-        while (pollingAttempts < maxPollingAttempts && coroutineContext.isActive) {
-            delay(5000)
-            pollingAttempts++
-            Log.d(TAG, "[$sceneId] -> [API_FILA] Chamando /status_requisicao (Tentativa de polling: $pollingAttempts/$maxPollingAttempts)...")
-            try {
-                val response = queueApiClient.checkRequestStatus(userId, requestId)
-                if (response.isSuccessful && response.body() != null) {
-                    val statusBody = response.body()!!
-                    Log.d(TAG, "[$sceneId] -> [API_FILA] Resposta de /status_requisicao: ${statusBody.status}")
-                    if (statusBody.status == "liberado") {
-                        Log.i(TAG, "[$sceneId] -> [waitForRelease] Status 'liberado' recebido. Saindo do loop.")
-                        return true
+    if (!waitForRelease(sceneId, taskType, requestId)) {
+        val msg = if (!coroutineContext.isActive) appContext.getString(R.string.error_processing_cancelled) else appContext.getString(R.string.error_queue_timeout)
+        Log.w(TAG, "[$sceneId] -> Timeout ou cancelamento: $msg")
+        updateSceneStateGeneral(sceneId, taskType, 0, false, errorMessage = msg)
+        queueApiClient.confirmExecution(requestId, "imagem")
+        return InternalTaskResult(errorMessage = msg)
+    }
+
+    // ✅ Agora: Status processando (antes de chamar Gemini)
+    Log.i(TAG, "[$sceneId] -> SLOT LIBERADO! Status: PROCESSANDO")
+    updateNotificationProgress(appContext.getString(R.string.notification_task_released, taskType, sceneId.take(8)))
+    updateSceneStateGeneral(sceneId, taskType, 1, null, queueStatusMessage = appContext.getString(R.string.status_generating))
+
+    var finalResult: InternalTaskResult? = null
+    try {
+        var attempt = 1
+        while (attempt <= MAX_API_ATTEMPTS && coroutineContext.isActive) {
+            Log.i(TAG, "[$sceneId] -> Tentativa $attempt para '$taskType'...")
+            finalResult = actionToExecute()
+            if (finalResult.isSuccess) {
+                Log.i(TAG, "[$sceneId] -> Sucesso na tentativa $attempt.")
+                updateSceneStateGeneral(sceneId, taskType, 0, true, finalResult.filePath, finalResult.thumbPath)
+                updateNotificationProgress(appContext.getString(R.string.notification_task_completed_success, taskType, sceneId.take(8)), true)
+                break
+            }
+            Log.w(TAG, "[$sceneId] -> Falha tentativa $attempt: ${finalResult.errorMessage}")
+            updateSceneStateGeneral(sceneId, taskType, attempt, null, errorMessage = finalResult.errorMessage, queueStatusMessage = "Tentativa $attempt falhou")
+            attempt++
+            if (attempt <= MAX_API_ATTEMPTS && coroutineContext.isActive) delay(RETRY_DELAY_MILLIS)
+        }
+    } finally {
+        Log.i(TAG, "[$sceneId] -> Bloco finally. Chamando /confirmar para ReqID $requestId...")
+        try {
+            queueApiClient.confirmExecution(requestId, "imagem")
+            Log.i(TAG, "[$sceneId] -> /confirmar executado no finally.")
+        } catch (e: Exception) {
+            Log.e(TAG, "[$sceneId] -> Erro ao confirmar no finally.", e)
+        }
+    }
+
+    return finalResult ?: InternalTaskResult(errorMessage = "Falha na tarefa principal.")
+}
+
+
+    private suspend fun waitForRelease(sceneId: String, taskType: String, requestId: String): Boolean {
+    val maxPollingAttempts = 120
+    var pollingAttempts = 0
+
+    Log.d(TAG, "[$sceneId] -> [waitForRelease] Iniciado para ReqID: $requestId. Max tentativas: $maxPollingAttempts")
+
+    while (pollingAttempts < maxPollingAttempts && coroutineContext.isActive) {
+        delay(5000)
+        pollingAttempts++
+
+        Log.d(TAG, "[$sceneId] -> [API_FILA] Chamando /status (Polling $pollingAttempts/$maxPollingAttempts)...")
+        try {
+            val response = queueApiClient.checkRequestStatus(requestId, "imagem")
+            val body = response.body()
+
+            if (response.isSuccessful && body != null) {
+                Log.d(TAG, "[$sceneId] -> /status retornou: ${body.status}")
+
+                if (body.status == "liberado") {
+                    Log.i(TAG, "[$sceneId] -> [waitForRelease] Status 'liberado'. Saindo do loop.")
+                    return true
+                }
+
+                val statusMsg = body.mensagem ?: appContext.getString(
+                    R.string.status_in_queue_position,
+                    body.posicaoFila ?: 0
+                )
+                Log.d(TAG, "[$sceneId] -> [waitForRelease] Status ainda pendente: '$statusMsg'")
+
+                updateNotificationProgress(appContext.getString(R.string.notification_in_queue, sceneId.take(8), statusMsg))
+                updateSceneStateGeneral(sceneId, taskType, 1, null, queueStatusMessage = statusMsg)
+
+            } else if (response.code() == 404) {
+                Log.w(TAG, "[$sceneId] -> [API_FILA] /status retornou 404. Tentando re-enfileirar ReqID: $requestId...")
+
+                try {
+                    val retryEnqueue = queueApiClient.enqueueRequest(requestId, "imagem")
+                    if (retryEnqueue.isSuccessful) {
+                        Log.i(TAG, "[$sceneId] -> Re-enfileirado com sucesso após 404.")
+                        updateSceneStateGeneral(sceneId, taskType, 1, null, queueStatusMessage = "Re-enfileirado após 404")
+                    } else {
+                        val detail = retryEnqueue.errorBody()?.string()
+                        Log.e(TAG, "[$sceneId] -> Falha ao re-enfileirar após 404. Código: ${retryEnqueue.code()}, Detalhe: $detail")
                     }
-                    
-                    val statusMessage = statusBody.mensagem ?: appContext.getString(R.string.status_in_queue_position, (statusBody.posicaoFilaGlobal ?: 0) + 1)
-                    Log.d(TAG, "[$sceneId] -> [waitForRelease] Ainda pendente. Mensagem: '$statusMessage'")
-                    updateNotificationProgress(appContext.getString(R.string.notification_in_queue, sceneId.take(8), statusMessage))
-                    updateSceneStateGeneral(sceneId, taskType, 1, null, queueStatusMessage = statusMessage)
-                } else {
-                     Log.w(TAG, "[$sceneId] -> [API_FILA] Resposta de /status_requisicao não foi bem-sucedida. Código: ${response.code()}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "[$sceneId] -> Erro ao re-enfileirar após 404.", e)
                 }
-            } catch (e: Exception) { Log.e(TAG, "[$sceneId] -> [API_FILA] Erro de conexão em /status_requisicao.", e) }
-            pollingAttempts++
+
+            } else {
+                Log.w(TAG, "[$sceneId] -> /status falhou. Código: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[$sceneId] -> Erro de conexão ao consultar /status.", e)
         }
-        Log.w(TAG, "[$sceneId] -> [waitForRelease] Fim do loop de polling. Liberado: false.")
-        return false
     }
+
+    Log.w(TAG, "[$sceneId] -> [waitForRelease] Polling terminou sem liberação (timeout ou cancelamento).")
+    return false
+}
+
+    
+    
+    
     
     private suspend fun updateSceneStateGeneral(
         sceneId: String, taskType: String, attempt: Int, success: Boolean?,
@@ -323,13 +355,14 @@ class VideoProcessingWorker(
                     val taskFinished = success != null
                     val finalQueueRequestId = if (taskFinished) null else (queueRequestId ?: item.queueRequestId)
                     val finalQueueStatusMessage = if (taskFinished) null else (queueStatusMessage ?: item.queueStatusMessage)
+                    val finalErrorMessage = if (success == false) errorMessage else if (success == true) null else item.generationErrorMessage
 
                     when (taskType) {
                         TASK_TYPE_GENERATE_IMAGE -> item.copy(
                             isGenerating = !taskFinished,
                             generationAttempt = if (taskFinished) 0 else attempt,
                             imagemGeradaPath = if (success == true) generatedAssetPath else item.imagemGeradaPath,
-                            generationErrorMessage = if (success == false) errorMessage else null,
+                            generationErrorMessage = finalErrorMessage,
                             queueRequestId = finalQueueRequestId,
                             queueStatusMessage = finalQueueStatusMessage,
                         )
@@ -337,7 +370,7 @@ class VideoProcessingWorker(
                             isChangingClothes = !taskFinished,
                             clothesChangeAttempt = if (taskFinished) 0 else attempt,
                             imagemGeradaPath = if (success == true) generatedAssetPath else item.imagemGeradaPath,
-                            generationErrorMessage = if (success == false) errorMessage else null,
+                            generationErrorMessage = finalErrorMessage,
                             queueRequestId = finalQueueRequestId,
                             queueStatusMessage = finalQueueStatusMessage
                         )
@@ -346,7 +379,7 @@ class VideoProcessingWorker(
                             generationAttempt = if (taskFinished) 0 else attempt,
                             imagemGeradaPath = if (success == true) generatedAssetPath else item.imagemGeradaPath,
                             pathThumb = if (success == true) generatedThumbPath else item.pathThumb,
-                            generationErrorMessage = if (success == false) errorMessage else null,
+                            generationErrorMessage = finalErrorMessage,
                             queueRequestId = finalQueueRequestId,
                             queueStatusMessage = finalQueueStatusMessage
                         )
@@ -364,6 +397,9 @@ class VideoProcessingWorker(
 
     private suspend fun callGerarImagemApi(sceneId: String, cena: String?, prompt: String, listaImagensReferencia: List<ImagemReferencia>): InternalTaskResult {
         val promptNegativo = appContext.getString(R.string.prompt_negativo_geral_imagem)
+        
+        
+        
         val resultado = GeminiImageApi.gerarImagem(
             cena = cena.orEmpty(),
             prompt = "$prompt $promptNegativo",
