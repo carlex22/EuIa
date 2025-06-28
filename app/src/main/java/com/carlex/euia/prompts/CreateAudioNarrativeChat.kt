@@ -73,35 +73,37 @@ class CreateAudioNarrativeChat(
         *   Se NENHUM arquivo de texto foi anexado, baseie o diálogo nos "Dados do Cliente" e "Contexto e Objetivos do Vídeo" fornecidos acima.
 
     2.  **Criação do Diálogo (`dialogScript`):**
-        *   Utilize OS PERSONAGENS INFORMADOS na seção "Personagens e Suas Vozes Designadas" (Personagem 1, Personagem 2, e Personagem 3 SE a voz para ele foi fornecida).
-        *   O diálogo DEVE ser uma conversa fluida e natural.
-        *   Cada fala deve ser precedida pela etiqueta de personagem correspondente (ex: "Personagem 1:", "Personagem 2:", "Personagem 3:").
-        *   **Incorpore comandos ou descrições de estilo de fala diretamente no texto do diálogo** quando apropriado para transmitir a emoção desejada ou dar ênfase, especialmente considerando o estilo da voz designada para o personagem. Estes comandos devem ser claros, concisos e entre parênteses `()` ou colchetes `[]` ANTES do trecho de texto ao qual se aplicam.
-            *   Exemplos de estilo de fala: `(com entusiasmo)`, `(tom mais sério)`, `(sussurrando)`, `(com uma risada contida)`, `(intrigado)`, `(confiante)`.
-        *   O conteúdo do diálogo deve abordar os objetivos do vídeo (introdução, conteúdo principal, desfecho/CTA) de forma conversacional, utilizando o texto do arquivo anexado (se houver) ou o contexto geral como base.
+        *   Utilize OS PERSONAGENS INFORMADOS na seção "Personagens e Suas Vozes Designadas" (Personagem 1, Personagem 2).
+        *   O diálogo DEVE ser uma conversa fluida e natural. com pausa e elementod de emocao.
+        *   Cada fala deve ser precedida pela etiqueta de personagem correspondente + a emoção que bysca transmitir com sha voz ex: "Personagem 1 em tom de alivio:", "Personagem 2 em tom de desababo murmurando:").
+        *   **Incorpore comandos ou descrições de estilo de fala diretamente no texto do diálogo** quando apropriado para transmitir + emoção complementar ou dar ênfase na emocao. Estes comandos devem ser claros, concisos e entre parênteses `[]`  ANTES do trecho de texto ao qual se aplicam.
+            *   Exemplos de estilo de fala: `[com entusiasmo]`, `[tom mais sério]`, `[sussurrando]`, `[com uma risada contida]`, `[intrigado]`, `[confiante]`.
+        *   O conteúdo do diálogo deve abordar os objetivos do vídeo (introdução, conteúdo principal, desfecho) de forma conversacional, utilizando o texto do arquivo anexado (se houver) ou o contexto geral como base.
         *   Adapte a linguagem e o estilo da conversa ao público-alvo e ao tom geral definidos.
         *   A duração total do diálogo deve ser compatível com o "Tempo Estimado da Narração Total".
         *   Evite descrições visuais de cenas ou ações, foque APENAS no que é falado.
-        *   NÃO use marcações como "[pausa]" ou "[risos]" a menos que seja um comando de estilo de fala, como "(com uma risada)".
+        *   incluir marcações como "[pausa_longa]",  "[risos]"  sempre que pertinente.
         *   NÃO inclua números (0-9) no texto; escreva-os por extenso (ex: "noventa e nove" em vez de "99"). Converta símbolos como "R$", "%", "@", "+", "-" para suas formas escritas (ex: "reais", "por cento", "arroba", "mais", "menos").
 
     3.  **Configuração de Voz para os Personagens (`speakerVoiceSuggestions`):**
         *   Para cada personagem no diálogo, o campo `suggestedVoiceName` DEVE ser EXATAMENTE o nome da voz Gemini que foi designado para ele na seção "Personagens e Suas Vozes Designadas".
         *   No campo `suggestedStyleNotes`, forneça uma breve descrição do estilo geral esperado para aquele personagem, alinhado com a voz designada e o tom geral do vídeo (ex: "alegre e feminina", "calmo e masculino", "informativa e neutra").
 
-    $availableGeminiVoicesListForReference
+
+      $availableGeminiVoicesListForReference
 
     ## Formato de Saída JSON Esperado:
     Sua resposta DEVE ser um ÚNICO objeto JSON, sem nenhum texto ou comentário adicional antes ou depois. O JSON deve ter a seguinte estrutura EXATA:
 
     [{
-      "dialogScript": "Personagem 1: (com entusiasmo) Olá e bem-vindos! Hoje vamos conversar sobre o tema do nosso arquivo de texto!\nPersonagem 2: Oi pessoal! (animado) Exatamente! O arquivo menciona que \"{CONTEUDO_DO_ARQUIVO_TEXTO_ADAPTADO_AQUI}\".\nPersonagem 1: E isso se encaixa perfeitamente com {VIDEO_OBJECTIVE_INTRODUCTION}...\nPersonagem 2 (curioso): E como isso nos ajuda com {VIDEO_OBJECTIVE_CONTENT} baseado no texto?\nPersonagem 1: Ótima pergunta! O texto detalha que ... (continua o diálogo baseado no arquivo ou contexto) ...\nPersonagem 2: Entendi! E para finalizar, o que o pessoal pode fazer? {VIDEO_OBJECTIVE_OUTCOME}\nPersonagem 1: Isso mesmo! (concluindo) Não se esqueçam de ...!",
+      "dialogScript": "Personagem 1:A\n [com entusiasmo] Olá e bem-vindos! Hoje vamos conversar sobre o tema do nosso arquivo de texto!\n\nPersonagem 2: \nOi pessoal! [animado] Exatamente! O arquivo menciona que \"{CONTEUDO_DO_ARQUIVO_TEXTO_ADAPTADO_AQUI}\".\\nnPersonagem 1: \nE isso se encaixa perfeitamente com {VIDEO_OBJECTIVE_INTRODUCTION}...\n\nPersonagem 2 [curioso]: \nE como isso nos ajuda com {VIDEO_OBJECTIVE_CONTENT} baseado no texto?\n\nPersonagem 1: \nÓtima pergunta! O texto detalha que ... [continua o diálogo baseado no arquivo ou contexto] ...\n\nPersonagem 2: \nEntendi! E para finalizar, o que o pessoal pode fazer? {VIDEO_OBJECTIVE_OUTCOME}\\nnPersonagem 1:\n Isso mesmo! [concluindo] Não se esqueçam de ...!",
       "speakerVoiceSuggestions": [
         { "speakerTag": "Personagem 1", "suggestedVoiceName": "$voiceNameSpeaker1", "suggestedStyleNotes": "Descrição do estilo para Personagem 1" },
         { "speakerTag": "Personagem 2", "suggestedVoiceName": "$voiceNameSpeaker2", "suggestedStyleNotes": "Descrição do estilo para Personagem 2" }
-        ${if (!voiceNameSpeaker3.isNullOrBlank()) ",{ \"speakerTag\": \"Personagem 3\", \"suggestedVoiceName\": \"$voiceNameSpeaker3\", \"suggestedStyleNotes\": \"Descrição do estilo para Personagem 3\" }" else ""}
-      ]
     }]
+    
+     4.   de um nome ou cargo para cada personagem no contexto global ex: "Personagem 1" substitua por Carlos.Pedro.Porteiro.Motorista.. e "Personagem 2" substitua por Maria.Pedro.Doutoura.Secretaria... Isso deve dstar fundamentado com o contexto global
+ 
 
     **Lembre-se:** O **CONTEÚDO PRINCIPAL DA NARRATIVA ESTÁ NO ARQUIVO DE TEXTO ANEXO (se fornecido)**. Use-o para criar o `dialogScript`. As `speakerVoiceSuggestions` são para mapear os Personagens às vozes Gemini designadas. Se nenhum arquivo for anexado, use o contexto geral.
     """.trimIndent().replace("{VIDEO_TITLE}", videoTitle)

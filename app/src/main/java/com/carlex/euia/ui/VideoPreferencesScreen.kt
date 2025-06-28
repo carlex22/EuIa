@@ -59,6 +59,8 @@ fun VideoPreferencesScreen(
     val enableSubtitles by viewModel.enableSubtitles.collectAsState()
     val enableSceneTransitions by viewModel.enableSceneTransitions.collectAsState()
     val defaultSceneDuration by viewModel.defaultSceneDurationSeconds.collectAsState()
+    val videoFps by viewModel.videoFps.collectAsState()
+    val videoHdMotion by viewModel.videoHdMotion.collectAsState()
 
     // --- INÍCIO DA MODIFICAÇÃO ---
     val availableMaleVoicesPairList by viewModel.availableMaleVoices.collectAsState()
@@ -171,6 +173,14 @@ fun VideoPreferencesScreen(
                 onOptionSelected = { viewModel.setVideoAspectRatio(it) }
             )
             Spacer(modifier = Modifier.height(16.dp))
+            SettingExposedDropdown(
+                label = stringResource(R.string.video_prefs_label_fps),
+                options = viewModel.fpsOptions,
+                selectedOption = videoFps.toString(),
+                onOptionSelected = { viewModel.setVideoFps(it) },
+                displaySuffix = " FPS"
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = durationInput,
                 onValueChange = { newValue ->
@@ -219,6 +229,12 @@ fun VideoPreferencesScreen(
                 label = stringResource(R.string.video_prefs_label_enable_zoom_pan),
                 checked = enableZoomPan,
                 onCheckedChange = { viewModel.setEnableZoomPan(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingSwitch(
+                label = stringResource(R.string.video_prefs_label_hd_motion),
+                checked = videoHdMotion,
+                onCheckedChange = { viewModel.setVideoHdMotion(it) }
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -324,7 +340,8 @@ fun SettingExposedDropdown(
     options: List<String>,
     selectedOption: String,
     onOptionSelected: (String) -> Unit,
-    modifier: Modifier = Modifier
+    displaySuffix: String = "",
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -335,7 +352,7 @@ fun SettingExposedDropdown(
             onExpandedChange = { expanded = !expanded }
         ) {
             OutlinedTextField(
-                value = selectedOption.ifBlank { stringResource(R.string.video_prefs_placeholder_aspect_ratio_default) },
+                value = selectedOption.ifBlank { stringResource(R.string.video_prefs_placeholder_aspect_ratio_default) } + displaySuffix,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text(stringResource(R.string.video_prefs_label_selected_aspect_ratio)) },
@@ -354,7 +371,7 @@ fun SettingExposedDropdown(
                         onClick = {
                             onOptionSelected(option)
                             expanded = false
-                        }
+                        },
                     )
                 }
             }

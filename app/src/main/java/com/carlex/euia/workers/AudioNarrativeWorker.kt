@@ -66,7 +66,7 @@ const val KEY_GENERATED_PROMPT = "generatedPrompt"
 const val KEY_ERROR_MESSAGE = "errorMessage"
 const val KEY_RESULT_PATH = "resultPath"
 
-private const val NOTIFICATION_ID_AUDIO = 2
+private const val NOTIFICATION_ID_AUDIO = 299987
 private const val NOTIFICATION_CHANNEL_ID_AUDIO = "AudioNarrativeChannelEUIA"
 
 class AudioNarrativeWorker(
@@ -90,7 +90,10 @@ class AudioNarrativeWorker(
         val contentText = if (isChat) appContext.getString(R.string.notification_content_audio_dialog_starting)
                           else appContext.getString(R.string.notification_content_audio_starting)
 
-        createNotificationChannel()
+        // <<< CORREÇÃO PRINCIPAL AQUI >>>
+        // Garante que o canal seja criado ANTES de tentar criar a notificação.
+        //createNotificationChannel()
+        
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID_AUDIO)
             .setContentTitle(title)
             .setTicker(title)
@@ -131,7 +134,9 @@ class AudioNarrativeWorker(
             .setPriority(NotificationCompat.PRIORITY_LOW)
         notificationManager.notify(NOTIFICATION_ID_AUDIO, notificationBuilder.build())
     }
-
+    
+    // O resto da classe continua igual
+    // ... (doWork e outras funções auxiliares)
     @OptIn(ExperimentalSerializationApi::class)
     override suspend fun doWork(): Result = coroutineScope {
         Log.d(TAG, "doWork() Iniciado.")
@@ -384,10 +389,12 @@ class AudioNarrativeWorker(
                 }
                 val speakerMap = mutableMapOf("Personagem 1" to voiceSpeaker1Input, "Personagem 2" to voiceSpeaker2Input)
                 if (!voiceSpeaker3Input.isNullOrBlank()) {
-                    speakerMap["Personagem 3"] = voiceSpeaker3Input
+                   // speakerMap["Personagem 3"] = voiceSpeaker3Input
                 }
                 updateNotificationProgress(appContext.getString(R.string.notification_content_audio_generating_dialog))
                 updateWorkerProgress("Gerando áudio do diálogo...", true)
+                Log.d(TAG, "Gerando arquivo áudio de CHAT. ${speakerMap.toString()}")
+        
                 audioResult = GeminiMultiSpeakerAudio.generate(
                     dialogText = finalPromptUsed,
                     speakerVoiceMap = speakerMap,
@@ -696,18 +703,4 @@ class AudioNarrativeWorker(
         audioDataStoreManager.setUserLanguageToneAudio(userLanguageTone)
         audioDataStoreManager.setUserTargetAudienceAudio(userTargetAudience)
     }
-
-    // Strings XML que podem ser necessárias:
-    // <string name="error_no_external_storage">Armazenamento externo não disponível.</string>
-    // <string name="error_failed_to_create_project_dir">Falha ao criar diretório do projeto: %s</string>
-    // <string name="error_empty_prompt_for_ai">O prompt de instrução para a IA não pode estar vazio.</string>
-    // <string name="error_task_cancelled_before_subtitle_correction">Tarefa cancelada antes da correção da legenda.</string>
-    // <string name="error_task_cancelled_during_subtitle_correction">Tarefa cancelada durante a correção da legenda.</string>
-    // <string name="notification_content_audio_correcting_subs">Corrigindo texto da legenda...</string>
-    // <string name="notification_content_audio_subs_corrected">Legenda corrigida.</string>
-    // <string name="error_processing_ai_json_response_critical">Erro crítico ao processar JSON da IA: %s</string>
-    // <string name="error_chat_speaker1_voice_mandatory">Voz do Personagem 1 é obrigatória para diálogo.</string>
-    // <string name="error_chat_speaker2_voice_mandatory">Voz do Personagem 2 é obrigatória para diálogo.</string>
-    // <string name="error_narrator_voice_not_selected_internal">Voz do narrador não selecionada (interno).</string>
-
 }

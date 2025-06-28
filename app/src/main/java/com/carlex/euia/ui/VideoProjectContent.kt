@@ -283,32 +283,31 @@ private fun SceneLinkItem(
 
                         val displayPath = sceneLinkData.pathThumb ?: sceneLinkData.imagemGeradaPath
 
-                        val statusMessageToDisplay = when {
-                            isGeneratingAnything && !sceneLinkData.queueStatusMessage.isNullOrBlank() -> {
-                                sceneLinkData.queueStatusMessage
-                            }
-                            isGeneratingImage -> stringResource(R.string.scene_item_status_generating_attempt, sceneLinkData.generationAttempt)
-                            isChangingClothes -> stringResource(R.string.scene_item_status_changing_clothes_attempt, sceneLinkData.clothesChangeAttempt)
-                            isGeneratingVideo -> stringResource(R.string.scene_item_status_generating_video_attempt, sceneLinkData.generationAttempt)
-                            else -> null
-                        }
-
                         when {
-                            isGeneratingAnything -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.padding(8.dp)
-                                ) {
+                            isGeneratingImage -> {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                     CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
-                                    if (statusMessageToDisplay != null) {
-                                        Text(
-                                            text = statusMessageToDisplay,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            textAlign = TextAlign.Center,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 8.dp)
-                                        )
+                                    Text(stringResource(R.string.scene_item_status_generating_attempt, sceneLinkData.generationAttempt), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (sceneLinkData.generationAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
+                                        Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
+                                    }
+                                }
+                            }
+                            isChangingClothes -> {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
+                                    Text(stringResource(R.string.scene_item_status_changing_clothes_attempt, sceneLinkData.clothesChangeAttempt), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (sceneLinkData.clothesChangeAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
+                                        Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
+                                    }
+                                }
+                            }
+                             isGeneratingVideo -> {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
+                                    Text(stringResource(R.string.scene_item_status_generating_video_attempt, sceneLinkData.generationAttempt), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (sceneLinkData.generationAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
+                                        Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
                                     }
                                 }
                             }
@@ -340,21 +339,109 @@ private fun SceneLinkItem(
                                 }
                             }
                             else -> {
-                                Box(modifier = Modifier.fillMaxSize().clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.AddPhotoAlternate, contentDescription = stringResource(R.string.content_desc_generated_placeholder), modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                // <<< INÍCIO DA MODIFICAÇÃO >>>
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    // Se houver um erro, exibe o bloco de erro primeiro
+                                    if (!sceneLinkData.generationErrorMessage.isNullOrBlank()) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                                                .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
+                                                .padding(8.dp)
+                                                .clickable { projectViewModel.clearSceneGenerationError(sceneLinkData.id) },
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Error,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = sceneLinkData.generationErrorMessage!!,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                textAlign = TextAlign.Center,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.status_tap_to_clear_error),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Spacer(Modifier.height(16.dp))
+                                    }
+                                    
+                                    // Exibe as instruções de placeholder abaixo do erro ou sozinhas
+                                    Text(
+                                        text = stringResource(R.string.scene_placeholder_title),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(16.dp))
+                                    Text(
+                                        text = stringResource(R.string.scene_placeholder_instructions),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.AutoFixHigh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = " " + stringResource(R.string.scene_placeholder_action_generate),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.FolderOpen,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = " " + stringResource(R.string.scene_placeholder_action_select),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
+                                // <<< FIM DA MODIFICAÇÃO >>>
                             }
                         }
 
-                        sceneLinkData.generationErrorMessage?.let { errorMessage ->
-                            if (!isGeneratingAnything) {
-                                Text(
-                                    text = stringResource(R.string.scene_item_error_prefix, errorMessage),
-                                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center,
-                                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp, start = 4.dp, end = 4.dp).background(MaterialTheme.colorScheme.errorContainer.copy(alpha=0.1f), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
+                        // Este bloco de erro é para quando a IMAGEM JÁ EXISTE e ocorre um erro (ex: troca de roupa)
+                        if (!displayPath.isNullOrBlank() && !sceneLinkData.generationErrorMessage.isNullOrBlank() && !isGeneratingAnything) {
+                            Text(
+                                text = stringResource(R.string.scene_item_error_prefix, sceneLinkData.generationErrorMessage!!),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    .clickable { projectViewModel.clearSceneGenerationError(sceneLinkData.id) }
+                            )
                         }
+
 
                         Box(
                             modifier = Modifier
@@ -694,6 +781,12 @@ fun VideoProjectContent(
     val sceneIdToRecreateImage by projectViewModel.sceneIdToRecreateImage.collectAsState()
     val promptForRecreateImage by projectViewModel.promptForRecreateImage.collectAsState()
     val currentSceneIdForDialogRefChange by projectViewModel.sceneIdForReferenceChangeDialog.collectAsState()
+    
+    val showImageBatchCostDialog by projectViewModel.showImageBatchCostConfirmationDialog.collectAsState()
+    val imageBatchCost by projectViewModel.pendingImageBatchCost.collectAsState()
+    
+    val globalSceneError by projectViewModel.globalSceneError.collectAsState()
+
 
     if (sceneIdToRecreateImage != null && promptForRecreateImage != null) {
          AlertDialog(
@@ -739,9 +832,28 @@ fun VideoProjectContent(
         )
     }
 
+    if (showImageBatchCostDialog) {
+        AlertDialog(
+            onDismissRequest = { projectViewModel.cancelImageBatchGeneration() },
+            title = { Text(text = stringResource(R.string.dialog_title_confirm_generation)) },
+            text = { Text(text = stringResource(R.string.dialog_message_image_batch_cost, imageBatchCost)) },
+            confirmButton = {
+                Button(onClick = { projectViewModel.confirmImageBatchGeneration() }) {
+                    Text(stringResource(R.string.action_continue))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { projectViewModel.cancelImageBatchGeneration() }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Top
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.CenterHorizontally // Centraliza o conteúdo da Column
     ) {
         if (!isUiReady) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -768,8 +880,41 @@ fun VideoProjectContent(
                         )
                     }
                 }
-            }
-            else {
+            } else if (globalSceneError != null) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
+                            .padding(16.dp)
+                            .clickable { projectViewModel.clearGlobalSceneError() }, // Ação de clique para limpar
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Text(
+                            text = globalSceneError!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = stringResource(R.string.status_tap_to_clear_error),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            } else {
                 Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Icon(Icons.Filled.MovieFilter, contentDescription = stringResource(R.string.video_project_icon_desc_no_scenes), modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)

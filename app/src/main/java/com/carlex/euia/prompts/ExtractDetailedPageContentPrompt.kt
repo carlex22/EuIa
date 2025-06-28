@@ -21,10 +21,17 @@ class ExtractDetailedPageContentAsKeyValuesPrompt(
     }.trim()
 
     val prompt: String = """
+    Você é um pesquisador e redator de conteúdo especialista. Sua tarefa é expandir um conceito ou dica curta, fornecendo uma explicação mais profunda e prática.
+    
     Analise PROFUNDAMENTE o conteúdo textual principal da seguinte URL para extrair informações detalhadas e relevantes, essas informacies serao usadas para recriar o contexto e descrever esse cinteudo em um blog ou video:
     URL: "$pageUrl"
 
     $contextHint
+    
+    **Sua Missão:**
+    1.  **Pesquise e Aprofunde:** Usando a URL de contexto e seu conhecimento geral da internet, explique o **'porquê'** por trás deste conceito. Por que ele é importante? Qual a psicologia ou estratégia envolvida?
+    2.  **Dê um Exemplo Prático:** Ilustre o conceito com um exemplo claro e conciso de como ele poderia ser aplicado na prática, especialmente no contexto de criação de vídeos para redes sociais.
+    3.  **Formato da Resposta:** Sua resposta deve ser um único parágrafo de texto fluido e bem escrito, contendo de 4 a 6 frases. Não adicione títulos, marcadores ou qualquer formatação. A resposta deve ser o texto que substituirá diretamente o conceito original.
 
     Sua tarefa é retornar um ÚNICO objeto JSON com o seguinte campo:
     1.  "detailed_key_values": Array<Object>
@@ -38,6 +45,7 @@ class ExtractDetailedPageContentAsKeyValuesPrompt(
         * EVITE extrair informações de navegação do site (menus, rodapés, anúncios, links "leia também") ou metadados que não sejam parte do conteúdo principal. Foque no texto que um leitor consumiria.
         * Se nenhuma informação textual estruturável relevante for encontrada no corpo principal, retorne um array vazio: [].
 
+        Para cada tópico ou dica que você identificar, extraia não apenas o título, mas também o parágrafo explicativo associado a ele. Combine o título e a explicação no campo 'valor''
 
     A resposta deve ser exclusivamente o objeto JSON, sem nenhum texto adicional ou marcadores como ```json.
 

@@ -103,7 +103,7 @@ fun AudioInfoContent(
     val currentSexo by audioViewModel.sexo.collectAsState()
     val voiceSpeaker1 by audioViewModel.voiceSpeaker1.collectAsState()
     val voiceSpeaker2 by audioViewModel.voiceSpeaker2.collectAsState()
-    //val voiceSpeaker3 by audioViewModel.voiceSpeaker3.collectAsState()
+    val voiceSpeaker3 by audioViewModel.voiceSpeaker3.collectAsState()
     val isChatNarrative by audioViewModel.isChatNarrative.collectAsState() // Ainda é coletado para lógica condicional
     val narrativeContextFilePath by audioViewModel.narrativeContextFilePath.collectAsState()
 
@@ -201,7 +201,7 @@ fun AudioInfoContent(
                     canBeRemoved = false
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-               /* if (voiceSpeaker2.isNotBlank()) {
+                /* if (voiceSpeaker2.isNotBlank()) {
                     SpeakerVoiceSelector(
                         speakerLabel = stringResource(R.string.audio_info_label_speaker_3_optional),
                         selectedVoiceName = voiceSpeaker3 ?: "",
@@ -224,8 +224,8 @@ fun AudioInfoContent(
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.audio_info_action_add_speaker_3))
                     }
-                }*/
-                Spacer(modifier = Modifier.height(16.dp))
+                }
+                Spacer(modifier = Modifier.height(16.dp))*/
                 Divider()
 
                 Text(
@@ -469,7 +469,7 @@ fun AudioInfoContent(
             val currentSpeakerVoice = when(speakerKey) {
                 "speaker1" -> voiceSpeaker1
                 "speaker2" -> voiceSpeaker2
-               // "speaker3" -> voiceSpeaker3 ?: ""
+                "speaker3" -> voiceSpeaker3 ?: ""
                 else -> voiceSpeaker1
             }
             VoiceSelectionDialogInternal(
@@ -487,7 +487,7 @@ fun AudioInfoContent(
                     when(speakerKey) {
                         "speaker1" -> audioViewModel.setVoiceSpeaker1(voiceName)
                         "speaker2" -> audioViewModel.setVoiceSpeaker2(voiceName)
-                        //"speaker3" -> audioViewModel.setVoiceSpeaker3(voiceName)
+                        "speaker3" -> audioViewModel.setVoiceSpeaker3(voiceName)
                     }
                 },
                 onConfirmSelectionClicked = {
@@ -497,7 +497,7 @@ fun AudioInfoContent(
                     val newlySelectedVoice = when(previouslySelectedKey) {
                         "speaker1" -> audioViewModel.voiceSpeaker1.value
                         "speaker2" -> audioViewModel.voiceSpeaker2.value
-                        //"speaker3" -> audioViewModel.voiceSpeaker3.value
+                        "speaker3" -> audioViewModel.voiceSpeaker3.value
                         else -> ""
                     }
                     if (!newlySelectedVoice.isNullOrBlank()) {

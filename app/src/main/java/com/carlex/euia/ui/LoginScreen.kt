@@ -1,6 +1,9 @@
+// File: euia/ui/LoginScreen.kt
 package com.carlex.euia.ui
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts // Import necessário
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,9 +24,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.carlex.euia.AppDestinations // <<<<< ESTA IMPORTAÇÃO É CRUCIAL PARA RESOLVER O ERRO
-import com.carlex.euia.R
-import com.carlex.euia.viewmodel.AuthViewModel
+import com.carlex.euia.AppDestinations // Importação crucial para as rotas
+import com.carlex.euia.R // Importação R para recursos de string
+import com.carlex.euia.viewmodel.AuthViewModel // Importação do AuthViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,6 +47,14 @@ fun LoginScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current // Usado para exibir Toasts ou strings de recursos
+
+    // Launcher para o fluxo de login do Google
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        // Chama o método do ViewModel para lidar com o resultado do login do Google
+        authViewModel.handleGoogleSignInResult(result.data)
+    }
 
     // Observa o resultado do login (currentUser) e navega se houver sucesso
     LaunchedEffect(currentUser) {
@@ -73,9 +84,8 @@ fun LoginScreen(
                     duration = SnackbarDuration.Long // Mensagens de erro podem ser mais longas
                 )
             }
-            // Limpa o erro no ViewModel para evitar reexibições em reconfigurações
-            // (Assumindo que AuthViewModel tenha um método clearError() se o erro não for limpo automaticamente ao ser lido)
-            // authViewModel.clearError() // Se o seu AuthViewModel não tiver, remova esta linha
+            // Limpa o erro no ViewModel (se ele tiver um método clearError(), caso contrário, o StateFlow se encarrega)
+            // authViewModel.clearError()
         }
     }
 
@@ -96,9 +106,9 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Logo do aplicativo (usando um placeholder padrão do Android)
+                // Logo do aplicativo
                 Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground), // Verifique se este drawable existe
                     contentDescription = stringResource(R.string.content_desc_app_logo),
                     modifier = Modifier.size(120.dp)
                 )
@@ -150,7 +160,7 @@ fun LoginScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Botão de Login
+                // Botão de Login com e-mail/senha
                 Button(
                     onClick = {
                         emailError.value = null
@@ -163,7 +173,6 @@ fun LoginScreen(
                             passwordError.value = context.getString(R.string.login_password_empty_error)
                             return@Button
                         }
-                        // Lógica de validação mais complexa (ex: regex para email) pode ser adicionada
                         authViewModel.login(emailState.value, passwordState.value)
                     },
                     enabled = !isLoading,
@@ -179,6 +188,7 @@ fun LoginScreen(
                     }
                     Text(stringResource(R.string.login_button_login))
                 }
+                
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Botão "Esqueceu a senha?"
@@ -201,12 +211,30 @@ fun LoginScreen(
                 ) {
                     Text(stringResource(R.string.login_forgot_password))
                 }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // BOTÃO DE LOGIN COM GOOGLE
+                OutlinedButton(
+                    onClick = {
+                        // Inicia o fluxo de login do Google
+                        val signInIntent = authViewModel.getGoogleSignInIntent()
+                        googleSignInLauncher.launch(signInIntent)
+                    },
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Você pode usar um ícone do Google aqui (ex: um drawable `ic_google.xml` no `res/drawable`)
+                    // Exemplo: Icon(painterResource(id = R.drawable.ic_google), contentDescription = "Login com Google")
+                    Text("Entrar com Google") // Esta string pode ser adicionada ao strings.xml
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Botão para Registrar
                 OutlinedButton(
                     onClick = {
-                        navController.navigate(AppDestinations.REGISTER_ROUTE) // <<<<< ESTA REFERÊNCIA ESTÁ CORRETA AGORA
+                        navController.navigate(AppDestinations.REGISTER_ROUTE)
                     },
                     enabled = !isLoading,
                     modifier = Modifier.fillMaxWidth()
@@ -214,18 +242,6 @@ fun LoginScreen(
                     Text(stringResource(R.string.login_button_register))
                 }
             }
-
-            // Overlay de progresso (comentado, pois o CircularProgressIndicator já está no botão de login)
-            // if (isLoading) {
-            //     Box(
-            //         modifier = Modifier
-            //             .fillMaxSize()
-            //             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
-            //         contentAlignment = Alignment.Center
-            //     ) {
-            //         CircularProgressIndicator()
-            //     }
-            // }
         }
     }
 }

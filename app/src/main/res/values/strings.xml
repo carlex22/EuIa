@@ -1,5 +1,322 @@
 =<?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+<!-- =================================================================== -->
+<!-- ================ STRINGS PARA O DIÁLOGO DE UPLOAD YOUTUBE ========= -->
+<!-- =================================================================== -->
+
+<!-- Título do diálogo principal de publicação -->
+<string name="yhoutube_upload_dialog_title">Publicar Vídeo no YouTube</string>
+
+<!-- Texto do placeholder para a área da thumbnail -->
+<string name="youtube_upload_thumbnail_placeholder">Clique para selecionar ou gerar uma thumbnail</string>
+
+<!-- Descrição de conteúdo para a imagem da thumbnail (acessibilidade) -->
+<string name="youtube_upload_thumbnail_preview">Pré-visualização da thumbnail</string>
+
+<!-- Labels para os campos de texto -->
+<string name="youtube_upload_label_title">Título</string>
+<string name="youtube_upload_label_description">Descrição</string>
+<string name="youtube_upload_label_hashtags">Hashtags (ex: #IA #Video)</string>
+
+<!-- Texto para os botões do diálogo principal -->
+<string name="youtube_upload_action_send">Enviar</string>
+<string name="youtube_upload_action_generate">Gerar com IA</string>
+
+
+<!-- =================================================================== -->
+<!-- ================ STRINGS PARA O SELETOR DE THUMBNAIL ============== -->
+<!-- =================================================================== -->
+
+<!-- Título do diálogo de seleção de imagem de cena -->
+<string name="youtube_upload_thumbnail_selection_title">Selecione uma Imagem para a Thumbnail</string>
+
+<!-- Mensagem exibida quando não há imagens de cena para selecionar -->
+<string name="youtube_upload_thumbnail_selection_no_images">Nenhuma imagem de cena disponível. Gere as imagens na aba "Cenas" primeiro.</string>
+
+
+<!-- =================================================================== -->
+<!-- ================ STRINGS PARA TOASTS E FEEDBACK =================== -->
+<!-- =================================================================== -->
+
+<!-- Toasts do processo de geração de metadados -->
+<string name="toast_generating_metadata_started">Iniciando geração de metadados com IA…</string>
+<string name="toast_metadata_generated_no_thumb_prompt">Metadados gerados, mas sem prompt para thumbnail.</string>
+<string name="toast_generating_thumbnail_started">Gerando nova thumbnail com IA…</string>
+<string name="toast_thumbnail_generated_success">Thumbnail gerada com sucesso!</string>
+
+<!-- Toasts do processo de upload final -->
+<string name="youtube_upload_toast_initiation">Iniciando upload para o YouTube…</string>
+<string name="youtube_upload_toast_success">Upload concluído! ID do Vídeo: %s</string>
+
+
+<!-- =================================================================== -->
+<!-- ================ STRINGS PARA MENSAGENS DE ERRO =================== -->
+<!-- =================================================================== -->
+
+<!-- Erros na geração de metadados -->
+<string name="error_generating_metadata_unknown">Ocorreu um erro desconhecido ao gerar os metadados.</string>
+<string name="error_generating_metadata_toast">Erro ao gerar metadados: %s</string>
+
+<!-- Erros na geração da thumbnail -->
+<string name="error_generating_thumbnail_unknown">Ocorreu um erro desconhecido ao gerar a thumbnail.</string>
+<string name="error_generating_thumbnail_toast">Erro ao gerar thumbnail: %s</string>
+
+<!-- Erros no processo de upload -->
+<string name="error_upload_unknown">Ocorreu um erro desconhecido durante o upload.</string>
+<string name="youtube_upload_toast_failure">Falha no upload: %s</string>
+<string name="youtube_upload_video_file_not_found_toast">Arquivo de vídeo não encontrado.</string>
+
+
+<!-- =================================================================== -->
+<!-- ================ STRINGS GENÉRICAS (se ainda não existirem) ======= -->
+<!-- =================================================================== -->
+
+<!-- Ações comuns que podem ser reutilizadas -->
+<string name="action_ca6gncel">Cancelar</string>
+<string name="action_close">Fechar</string>
+<string name="action_wait">Aguarde...</string>
+
+
+    <!-- ... outras strings que você já tem ... -->
+
+    <!-- Strings para YouTubeUploader -->
+    <string name="youtube_upload_default_title">Meu Vídeo Gerado com Euia</string>
+    <string name="youtube_upload_default_description">Este vídeo foi criado automaticamente usando o aplicativo Euia! #EuiaApp</string>
+    <string name="youtube_upload_no_video_to_share">Nenhum vídeo gerado para compartilhar.</string>
+    <string name="youtube_upload_video_file_not_found">Arquivo de vídeo não encontrado.</string>
+    <string name="youtube_upload_file_provider_error">Erro ao preparar arquivo para compartilhamento. Verifique permissões.</string>
+    <string name="youtube_upload_starting_youtube_app">Iniciando aplicativo do YouTube...</string>
+    <string name="youtube_upload_no_youtube_found">Aplicativo YouTube não encontrado. Abrindo seletor de apps.</string>
+    <string name="youtube_upload_share_video_via">Compartilhar vídeo via</string>
+    <string name="youtube_upload_general_error_starting_activity">Erro ao iniciar o compartilhamento.</string>
+
+    <!-- Adicionado para o botão na tela de vídeo final (se ainda não tiver) -->
+    <string name="video_generator_action_upload_youtube">Enviar ao YouTube</string>
+
+<string name="default_web_client_id">229195560996-g6jpabo0f0j278bshscnl7l0gpekp7mj.apps.googleusercontent.com</string>
+
+    <!-- ... suas strings existentes ... -->
+
+    <!-- Strings para o novo fluxo de Upload do YouTube (programático) -->
+    <string name="youtube_upload_dialog_title">Upload para o YouTube</string>
+    <string name="youtube_upload_dialog_status_initiating">Iniciando upload de metadados...</string>
+    <string name="youtube_upload_dialog_status_initiated">Upload iniciado! ID do Vídeo: %s. \nAGORA É NECESSÁRIO IMPLEMENTAR O UPLOAD REAL DO ARQUIVO.</string>
+    <string name="youtube_upload_dialog_status_next_step">Esta função apenas INICIA o upload resumável. A etapa de envio do arquivo de vídeo precisa ser implementada.</string>
+    <string name="youtube_upload_dialog_status_failed">Falha no upload: %s</string>
+    <string name="youtube_upload_toast_initiation_success">Iniciação de upload do YouTube bem-sucedida!</string>
+    <string name="youtube_upload_toast_initiation_failed">Falha na iniciação do upload do YouTube.</string>
+    <string name="youtube_upload_auth_token_missing">Token de autenticação do YouTube (OAuth) ausente. Tente fazer login no Google para continuar.</string>
+    
+
+<string name="notification_permission_dialog_title">Permissão de Notificação</string>
+    <string name="notification_permission_dialog_message">Para mantê-lo informado sobre o progresso de tarefas longas, como a geração de vídeos, mesmo quando o app estiver em segundo plano, precisamos da sua permissão para enviar notificações.</string>
+    <string name="notification_permission_dialog_confirm_button">Permitir</string>
+    <string name="notification_permission_dialog_dismiss_button">Agora não</string>
+    <string name="notification_permission_denied_feedback">Ok, mas o progresso de tarefas em segundo plano não será exibido.</string>
+
+
+<!-- Canal de Notificação para Análise de Imagem de Referência -->
+<string name="notification_channel_name_ref_image">Análise de Imagens</string>
+<string name="notification_channel_description_ref_image">Mostra o progresso da análise de detalhes das imagens de referência.</string>
+
+<!-- Textos da Notificação -->
+<string name="notification_title_ref_image_analysis">Analisando Detalhes</string>
+<string name="notification_content_ref_image_starting">Iniciando análise de imagens...</string>
+<string name="notification_content_ref_image_fetching_data">Buscando dados para análise...</string>
+<string name="notification_content_ref_image_analyzing">Analisando %1$d imagens...</string>
+<string name="notification_content_ref_image_saving">Salvando detalhes encontrados...</string>
+<string name="notification_content_ref_image_success">Análise concluída. %1$d detalhes salvos.</string>
+<string name="notification_content_ref_image_failed">Falha na análise: %1$s</string>
+
+<string name="video_prefs_label_fps">Taxa de Quadros (FPS)</string>
+    <string name="video_prefs_label_hd_motion">Movimento HD (Suavização)</string>
+
+
+ <string name="video_processing_notification_starting">Iniciando Geração cenas</string>
+
+<!-- No seu arquivo res/values/strings.xml -->
+
+    <!-- ... (suas strings existentes aqui) ... -->
+
+    <string name="status_analyzing_post_production">Analisando cenas para pós-produção...</string>
+    <string name="video_generator_title_analyzing">Analisando Cenas</string>
+
+<!-- No seu arquivo res/values/strings.xml -->
+
+    <!-- ... (suas strings existentes aqui) ... -->
+
+    <!-- Strings adicionadas para VideoProjectViewModel e PostProductionWorker -->
+    <string name="status_processing">Processando...</string>
+    <string name="error_post_production_unknown">Erro desconhecido na pós-produção.</string>
+    
+    <string name="error_post_production_failed">A pós-produção falhou. Detalhes: %1$s</string>
+    <string name="error_post_prodnuction_cancelled">A pós-produção foi cancelada.</string>
+  
+    <string name="error_no_scenes_to_process_post_production">Nenhuma cena encontrada para processar na pós-produção.</string>
+    <string name="error_unknown_post_production_failure">error_unknown_post_production_failure</string>
+    <string name="error_post_production_cancelled_by_user">Pós-produção cancelada pelo usuário.</string>
+    <string name="error_post_production_cancelled">Pós-produção cancelada.</string>
+    <string name="scene_no_specific_narration_available">sem narração específica</string>
+
+    <!-- ... (o restante das suas strings) ... -->
+
+    <string name="drawer_menu_post_production">Pós-Produção</string>
+
+    <!-- ... (o restante das suas strings) ... -->
+
+
+    <!-- ... (suas strings existentes) ... -->
+
+    <!-- Novas strings para Pós-Produção (PostProductionWorker) -->
+    <string name="notification_title_post_production">Pós-Produção de Vídeo</string>
+    <string name="notification_channel_name_post">Pós-Produção</string>
+    <string name="notification_channel_description_post">Notificações sobre o processo de pós-produção das cenas do vídeo.</string>
+    <string name="notification_content_post_production_starting">Iniciando pós-produção das cenas do vídeo...</string>
+    <string name="notification_content_post_production_analyzing_scene">Analisando cena %1$s (%2$d/%3$d)...</string>
+    <string name="notification_content_post_production_completed_success">Pós-produção concluída para %1$d de %2$d cenas.</string>
+    <string name="error_failed_to_create_log_dir">Falha ao criar diretório de logs para pós-produção.</string>
+    <string name="error_no_scenes_for_post_production">Nenhuma cena válida encontrada para pós-produção.</string>
+    <string name="error_narrative_missing_for_post_production">Narrativa principal não encontrada para guiar a pós-produção.</string>
+    <string name="error_worker_cancelled_mid_batch">Tarefa cancelada durante o processamento em lote da pós-produção.</string>
+    <string name="error_post_producntion_cancelled_explicitly">Pós-produção cancelada explicitamente.</string>
+    <string name="error_unknown_post_production_error">Erro desconhecido na pós-produção.</string>
+    <string name="error_failed_to_save_post_production_scenes">Falha ao salvar o roteiro de pós-produção.</string>
+    <string name="error_no_scenes_processed_successfully">Nenhuma cena pôde ser processada com sucesso pela IA na pós-produção.</string>
+    <string name="toast_post_production_completed">Pós-produção de vídeo concluída!</string>
+    <string name="toast_post_production_failed">Falha na pós-produção do vídeo.</string>
+    <string name="toast_post_production_cancelled">Pós-produção de vídeo cancelada.</string>
+
+
+    <!-- Novas strings para VideoGeneratorViewModel -->
+    <string name="video_gen_vm_error_no_post_production_data">Dados de pós-produção não encontrados. Gere as cenas de pós-produção primeiro.</string>
+
+
+
+
+
+
+<string name="video_render_notification_channel_name">Renderização de Vídeo</string>
+<string name="video_render_notification_channel_desc">Mostra o progresso da renderização do vídeo final.</string>
+<string name="video_render_notification_title">Renderizando Vídeo</string>
+
+<string name="hoverlay_permission_dialog_title">Permissão Necessária</string>
+<string name="video_generator_status_check_notification">video_generator_status_check_notification</string>
+<string name="overlay_permission_dialog_confirm_button">Ir para Configurações</string>
+<string name="overlay_permission_dialog_dismiss_button">Agora não</string>
+
+    <!-- ... (suas strings existentes) ... -->
+
+    <!-- =============================================================== -->
+    <!-- NOVAS STRINGS PARA O SERVIÇO E OVERLAY DE GERAÇÃO DE VÍDEO -->
+    <!-- =============================================================== -->
+<string name="overlay_error_invalid_data">Erro: Dados inválidos para geração.</string>
+<string name="overlay_generation_cancelled">Geração de vídeo cancelada.</string>
+<string name="video_gen_vm_toast_generation_started_background">Geração iniciada. Acompanhe o progresso pela notificação.</string>
+
+    <!-- Nome do canal de notificação para o progresso do vídeo -->
+    <string name="overlay_channel_name">Progresso da Geração de Vídeo</string>
+    
+    <!-- Descrição do canal de notificação -->
+    <string name="overlay_channel_description">Mostra o progresso da geração de vídeo em segundo plano.</string>
+
+    <!-- Título da notificação e do overlay -->
+    <string name="overlay_generating_video">Gerando seu vídeo...</string>
+
+    <!-- Texto inicial do overlay/notificação -->
+    <string name="overlay_starting">Iniciando geração...</string>
+
+    <!-- Texto final de sucesso no overlay/notificação -->
+    <string name="overlay_generation_complete">Geração concluída!</string>
+    
+    <!-- Texto final de falha no overlay/notificação -->
+    <string name="overlay_generation_failed">Geração falhou.</string>
+
+
+    <!-- =============================================================== -->
+    <!-- NOVAS STRINGS PARA O DIÁLOGO DE PERMISSÃO DE OVERLAY -->
+    <!-- =============================================================== -->
+
+    <!-- Título do diálogo de permissão -->
+    <string name="overlay_permission_dialog_title">Permissão Necessária</string>
+    
+    <!-- Mensagem explicativa no diálogo de permissão -->
+    <string name="overlay_permission_dialog_message">Para mostrar o progresso da geração do vídeo sobre outros aplicativos quando você sair, por favor, ative a permissão "Aparecer sobre outros apps" para o EUIA nas configurações.</string>
+    
+    <!-- Texto do botão de confirmação no diálogo de permissão -->
+    <string name="overlay_permission_dialog_action_go_to_settings">Ir para Configurações</string>
+    
+    <!-- Texto do botão de cancelar (string genérica já deve existir, mas para garantir) -->
+    
+
+
+<string name="error_rate_limit_stopping_retries">Limite de taxa atingido. Parando as tentativas para esta tarefa.</string>
+<string name="dialog_title_confirm_generation">Confirmar Geração</string>
+    <string name="dialog_message_image_batch_cost">A geração das imagens para estas cenas custará %1$d créditos. Deseja continuar?</string>
+    <string name="action_continue">Continuar</string>
+
+    <!-- String para o erro de créditos insuficientes no ViewModel -->
+    <string name="error_insufficient_credits_for_batch">Créditos insuficientes para gerar imagens. Necessários: %1$d, Disponíveis: %2$d.</string>
+<string name="error_api_failed_scenes_unknown">Falha na API ao gerar cenas: erro desconhecido.</string>
+<!-- res/values/strings.xml -->
+<string name="scene_placeholder_title">Esta cena ainda não tem uma imagem ou video definido.</string>
+    <string name="scene_placeholder_instructions">Para proceguir voce precisa:</string>
+    <string name="scene_placeholder_action_generate">Gerar imagem com IA</string>
+    <string name="scene_placeholder_action_select">Usar uma imagem ou vídeo salvo</string>
+    <!-- ... suas strings existentes ... -->
+
+    <!-- Strings para a Tela Premium -->
+    <string name="premium_user_status_title">Status da Conta</string>
+    <string name="premium_label_user_type">Tipo de Usuário</string>
+    <string name="premium_label_credits">Créditos Disponíveis</string>
+    <string name="premium_label_credits_expire">Créditos Expiram em</string>
+    <string name="premium_label_subscription_expires">Assinatura Expira em</string>
+    <string name="premium_label_user_id">ID do Usuário</string>
+    <string name="premium_loading_user_profile">Carregando perfil...</string>
+    <string name="user_type_premium">Premium</string>
+    <string name="user_type_free">Gratuito</string>
+    <string name="user_type_admin">Admin</string>
+    <string name="content_desc_credits_icon">Créditos: </string>
+
+    <string name="premium_already_subscribed_message">Você já é um assinante Premium! Obrigado pelo seu apoio.</string>
+    <string name="premium_unlock_title">Desbloqueie o Premium!</string>
+    <string name="premium_unlock_description">Acesso ilimitado a gerações de IA, sem marca d\'água e muito mais!</string>
+    <string name="premium_label_price">Preço:</string>
+    <string name="premium_action_subscribe_now">Assinar Agora</string>
+    <string name="premium_offer_details_unavailable">Detalhes da assinatura não disponíveis. Verifique sua conexão ou tente mais tarde.</string>
+    <string name="premium_loading_offers">Carregando ofertas...</string>
+
+
+
+
+<!-- res/values/strings.xml -->
+
+    <!-- ... strings existentes ... -->
+
+    <!-- Menu Item -->
+    <string name="drawer_menu_add_gemini_key">Minha Chave Gemini</string>
+
+    <!-- AddGeminiApiKeyScreen -->
+    <string name="add_gemini_key_title">Sua Chave de API do Gemini</string>
+    <string name="add_gemini_key_description">Se você possui sua própria chave de API do Google AI Studio, pode inseri-la aqui para usar sua cota pessoal. Deixe em branco para usar as chaves do aplicativo.</string>
+    <string name="add_gemini_key_textfield_label">Chave de API do Gemini</string>
+    <string name="add_gemini_key_textfield_placeholder">Cole sua chave aqui (AIza...)</string>
+    <string name="add_gemini_key_privacy_warning">Sua chave é salva apenas no seu dispositivo e nunca é compartilhada com nossos servidores.</string>
+    <string name="add_gemini_key_toast_saved">Chave de API salva com sucesso!</string>
+    <string name="add_gemini_key_toast_removed">Chave de API removida.</string>
+    <string name="action_save_key">Salvar Chave</string>
+    <string name="action_remove_key">Remover Chave</string>
+<string name="add_api_key_screen_title">Adicionar Chave de API</string>
+    <string name="gaction_back">Voltar</string>
+    <string name="add_api_key_instruction_header">Registrar Nova Chave</string>
+    <string name="add_api_key_instruction_body">Cole uma nova chave de API do Google AI Studio para adicioná-la ao pool de chaves disponíveis para o sistema.</string>
+    <string name="add_api_key_textfield_label">Chave de API do Gemini</string>
+    <string name="add_api_key_button_save">Salvar Chave no Pool</string>
+<string name="api_key_missing_dialog_title">Chave de API Necessária</string>
+    <string name="api_key_missing_dialog_message">Para gerar vídeos, você precisa configurar sua própria chave de API do Gemini. Isso garante que você use sua cota pessoal.</string>
+    <string name="api_key_missing_dialog_action_go_to_settings">Configurar Chave</string>
+
+
 <string name="error_loading_ref_images_for_scenes">Erro ao carregar imagens de referência para gerar cenas.</string>
 <string name="voice_style_default"></string>
     <string name="app_name">EUIA App</string>

@@ -1,16 +1,24 @@
 // File: euia/api/GeminiMultiSpeakerAudio.kt
 package com.carlex.euia.api
 
+import android.app.Application
 import android.content.Context
 import android.util.Base64
 import android.util.Log
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.ReturnCode
-import com.carlex.euia.BuildConfig
+import com.carlex.euia.managers.GerenciadorDeChavesApi
+import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
+import com.carlex.euia.viewmodel.AuthViewModel
+import com.carlex.euia.viewmodel.TaskType
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -28,15 +36,19 @@ import java.util.concurrent.TimeUnit
 
 object GeminiMultiSpeakerAudio {
     private const val TAG = "GeminiMultiSpeakerAudio"
-    private const val API_KEY = BuildConfig.GEMINI_API_KEY
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-    private const val MODEL_ID = "gemini-2.5-flash-preview-tts"
+    private const val MODEL_ID = "gemini-2.5-flash-preview-tts" // Usando um modelo que aceita texto e pode gerar áudio
     private const val GENERATE_CONTENT_API = "streamGenerateContent"
+    private const val TIPO_DE_CHAVE = "audio"
+
+    // Instanciação interna das dependências
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private val gerenciadorDeChaves: GerenciadorDeChavesApi by lazy { GerenciadorDeChavesApi(firestore) }
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(180, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(360, TimeUnit.SECONDS)
+        .readTimeout(380, TimeUnit.SECONDS)
+        .writeTimeout(360, TimeUnit.SECONDS)
         .build()
 
     private val kotlinJsonParser = Json {
@@ -44,6 +56,8 @@ object GeminiMultiSpeakerAudio {
         isLenient = true
         encodeDefaults = true
     }
+
+    // --- DATA CLASSES COMPLETAS ---
 
     @Serializable
     private data class MultiSpeakerAudioRequest(
@@ -65,7 +79,7 @@ object GeminiMultiSpeakerAudio {
     @Serializable
     private data class MultiSpeakerGenerationConfig(
         val responseModalities: List<String> = listOf("audio"),
-        val temperature: Float? = 1.0f,
+        val temperature: Float? = 2.0f,
         @SerialName("speech_config") val speechConfig: SpeechConfig
     )
 
@@ -94,46 +108,8 @@ object GeminiMultiSpeakerAudio {
     private data class PrebuiltVoice(
         @SerialName("voice_name") val voiceName: String
     )
-
-    @Serializable
-    private data class GeminiApiResponseItem(
-        @SerialName("candidates") val candidates: List<GeminiCandidate>? = null
-    )
-
-    @Serializable
-    private data class GeminiCandidate(
-        @SerialName("content") val content: GeminiContent? = null
-    )
-
-    @Serializable
-    private data class GeminiContent(
-        @SerialName("parts") val parts: List<GeminiPart>? = null,
-        @SerialName("role") val role: String? = null
-    )
-
-    @Serializable
-    private data class GeminiPart(
-        @SerialName("inlineData") val inlineData: GeminiInlineData? = null,
-        @SerialName("text") val text: String? = null
-    )
-
-    @Serializable
-    private data class GeminiInlineData(
-        @SerialName("mimeType") val mimeType: String,
-        @SerialName("data") val data: String
-    )
-
-    @Serializable
-    private data class GeminiErrorResponse(
-        val error: GeminiErrorDetail
-    )
-
-    @Serializable
-    private data class GeminiErrorDetail(
-        val code: Int,
-        val message: String,
-        val status: String
-    )
+    
+    // --- FUNÇÃO PRINCIPAL ---
 
     suspend fun generate(
         dialogText: String,
@@ -141,226 +117,193 @@ object GeminiMultiSpeakerAudio {
         context: Context,
         projectDir: File
     ): Result<String> {
+        val authViewModel = AuthViewModel(context.applicationContext as Application)
+        var creditsDeducted = false
+
         return withContext(Dispatchers.IO) {
-            Log.d(TAG, "🎙️ Initiating multi-speaker audio generation. Dialog: \"${dialogText.take(50)}...\", Speakers: ${speakerVoiceMap.size}")
-
-            if (API_KEY.isBlank() || API_KEY == "YOUR_GEMINI_API_KEY") {
-                val errorMsg = "API Key for Gemini TTS not configured."
-                Log.e(TAG, errorMsg)
-                return@withContext Result.failure(IllegalArgumentException(errorMsg))
-            }
-
-            if (!projectDir.exists() && !projectDir.mkdirs()) {
-                val errorMsg = "Failed to create project directory: ${projectDir.absolutePath}"
-                Log.e(TAG, errorMsg)
-                return@withContext Result.failure(IOException(errorMsg))
-            }
-
-            val speakerVoiceConfigEntries = speakerVoiceMap.map { (speakerTag, voiceName) ->
-                SpeakerVoiceConfigEntry(
-                    speaker = speakerTag,
-                    voiceConfig = PrebuiltVoiceContainer(PrebuiltVoice(voiceName))
-                )
-            }
-
-            if (speakerVoiceConfigEntries.isEmpty()) {
-                val errorMsg = "Speaker-voice map is empty. At least one speaker and voice must be defined."
-                Log.e(TAG, errorMsg)
-                return@withContext Result.failure(IllegalArgumentException(errorMsg))
-            }
-
-            val requestPayload = MultiSpeakerAudioRequest(
-                contents = listOf(
-                    MultiSpeakerContent(
-                        parts = listOf(MultiSpeakerTextPart(text = dialogText))
-                    )
-                ),
-                generationConfig = MultiSpeakerGenerationConfig(
-                    speechConfig = SpeechConfig(
-                        multiSpeakerVoiceConfig = MultiSpeakerVoiceConfig(
-                            speakerVoiceConfigs = speakerVoiceConfigEntries
-                        )
-                    )
-                )
-            )
-
-            val requestJsonString = try {
-                kotlinJsonParser.encodeToString(MultiSpeakerAudioRequest.serializer(), requestPayload)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error serializing multi-speaker request to JSON", e)
-                return@withContext Result.failure(e)
-            }
-
-            Log.d(TAG, "Multi-speaker Request JSON: $requestJsonString")
-
-            val requestBody = requestJsonString.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
-            val url = "$BASE_URL$MODEL_ID:$GENERATE_CONTENT_API?key=$API_KEY"
-            val request = Request.Builder().url(url).post(requestBody).build()
-
-            var rawAudioFile: File? = null
-            var finalWavFile: File? = null
-
             try {
-                val response: Response = client.newCall(request).execute()
-
-                response.use { res ->
-                    if (!res.isSuccessful) {
-                        val errorBodyString = res.body?.string() ?: "No error body"
-                        Log.e(TAG, "HTTP error ${res.code} from Gemini (Multi-Speaker): $errorBodyString")
-                        try {
-                            val errorResponse = kotlinJsonParser.decodeFromString(GeminiErrorResponse.serializer(), errorBodyString)
-                            return@withContext Result.failure(IOException("Gemini API Error ${res.code} (Multi-Speaker): ${errorResponse.error.message} (Status: ${errorResponse.error.status})"))
-                        } catch (e: Exception) {
-                            return@withContext Result.failure(IOException("Gemini API Error ${res.code} (Multi-Speaker): ${errorBodyString.take(500)} (Failed to parse error details)"))
-                        }
-                    }
-
-                    val responseBodyString = res.body?.string()
-                    if (responseBodyString.isNullOrBlank()) {
-                        val errorMsg = "Gemini TTS (Multi-Speaker) response body is empty."
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-
-                    Log.d(TAG, "Raw JSON response (Multi-Speaker, first 300 chars): ${responseBodyString.take(300)}")
-
-                    var audioDataBase64: String? = null
-                    var mimeType: String? = null
-                    try {
-                        // A API Gemini geralmente retorna um array de candidates, mesmo que seja um só
-                        val jsonArray = JSONArray(responseBodyString)
-                        if (jsonArray.length() > 0) {
-                            val firstCandidatePart = jsonArray.optJSONObject(0)
-                                ?.optJSONArray("candidates")?.optJSONObject(0)
-                                ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
-                            audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
-                            mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
-                        }
-                    } catch (e: JSONException) {
-                         Log.w(TAG, "Resposta Gemini Multi-Speaker TTS não é um array JSON. Tentando como objeto. Erro: ${e.message}")
-                        try {
-                            val jsonObject = JSONObject(responseBodyString)
-                             val firstCandidatePart = jsonObject
-                                .optJSONArray("candidates")?.optJSONObject(0)
-                                ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
-                            audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
-                            mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
-                        } catch (e2: JSONException) {
-                            val errorMsg = "Falha ao parsear JSON da resposta Gemini Multi-Speaker TTS (nem array, nem objeto): ${e2.message}. Resposta: ${responseBodyString.take(500)}"
-                            Log.e(TAG, errorMsg, e2)
-                            return@withContext Result.failure(JSONException(errorMsg))
-                        }
-                    }
-
-
-                    if (audioDataBase64.isNullOrBlank()) {
-                        val errorMsg = "Audio Base64 data not found in Multi-Speaker response. Response: ${responseBodyString.take(500)}"
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-                    if (mimeType.isNullOrBlank()) {
-                        Log.w(TAG, "MIME type not found in Multi-Speaker response, assuming audio/L16;codec=pcm;rate=24000")
-                        mimeType = "audio/L16;codec=pcm;rate=24000"
-                    }
-                    Log.d(TAG, "Extracted MIME Type (Multi-Speaker): $mimeType, Audio Data (first 20 chars): ${audioDataBase64.take(20)}...")
-
-                    val audioBytes = try {
-                        Base64.decode(audioDataBase64, Base64.DEFAULT)
-                    } catch (e: IllegalArgumentException) {
-                        val errorMsg = "Failed to decode Base64 audio data (Multi-Speaker): ${e.message}"
-                        Log.e(TAG, errorMsg, e)
-                        return@withContext Result.failure(IllegalArgumentException(errorMsg))
-                    }
-
-                    if (mimeType.startsWith("audio/wav", ignoreCase = true)) {
-                        val wavAudioFileName = "gemini_multispeaker_tts_${System.currentTimeMillis()}.wav"
-                        val localFinalWavFile = File(projectDir, wavAudioFileName) 
-                        FileOutputStream(localFinalWavFile).use { it.write(audioBytes) }
-                        Log.d(TAG, "✅ Multi-speaker WAV audio saved directly: ${localFinalWavFile.absolutePath}")
-                        finalWavFile = localFinalWavFile 
-                    } else if (mimeType.startsWith("audio/L16", ignoreCase = true) || mimeType.startsWith("audio/pcm", ignoreCase = true)) {
-                        val rawAudioFileName = "gemini_multispeaker_raw_${System.currentTimeMillis()}.pcm"
-                        val localRawAudioFile = File(projectDir, rawAudioFileName) 
-                        FileOutputStream(localRawAudioFile).use { it.write(audioBytes) }
-                        rawAudioFile = localRawAudioFile 
-
-                        if (!localRawAudioFile.exists() || localRawAudioFile.length() == 0L) {
-                            val errorMsg = "Saved RAW audio file (Multi-Speaker) is empty or non-existent: ${localRawAudioFile.absolutePath}"
-                            Log.e(TAG, errorMsg)
-                            return@withContext Result.failure(IOException(errorMsg))
-                        }
-                        Log.d(TAG, "✅ Multi-speaker RAW audio saved: ${localRawAudioFile.absolutePath}")
-
-                        val wavAudioFileName = "gemini_multispeaker_tts_${System.currentTimeMillis()}.wav"
-                        val localFinalWavFile = File(projectDir, wavAudioFileName) 
-                        finalWavFile = localFinalWavFile 
-
-                        val sampleRate = if (mimeType.contains("rate=")) mimeType.substringAfter("rate=").substringBefore(';').toIntOrNull() ?: 24000 else 24000
-                        val channels = 1
-                        val format = "s16le"
-
-                        val ffmpegCommand = "-y -f $format -ar $sampleRate -ac $channels -i \"${localRawAudioFile.absolutePath}\" \"${localFinalWavFile.absolutePath}\""
-                        Log.d(TAG, "Executing FFmpeg for PCM to WAV (Multi-Speaker): $ffmpegCommand")
-                        val session = FFmpegKit.execute(ffmpegCommand)
-
-                        if (!ReturnCode.isSuccess(session.returnCode)) {
-                            val errorMsg = "FFmpeg failed to convert RAW to WAV (Multi-Speaker). Code: ${session.returnCode}. Logs:\n${session.allLogsAsString.take(1000)}"
-                            Log.e(TAG, errorMsg)
-                            localFinalWavFile.delete() 
-                            return@withContext Result.failure(Exception(errorMsg))
-                        }
-                        Log.d(TAG, "✅ PCM to WAV conversion successful (Multi-Speaker). WAV: ${localFinalWavFile.absolutePath}")
-                    } else {
-                        val errorMsg = "Unsupported audio format received from API (Multi-Speaker): $mimeType"
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-
-                    val localFinalWavPath = finalWavFile?.absolutePath
-                    if (localFinalWavPath == null || finalWavFile?.exists() == false || finalWavFile?.length() == 0L) {
-                        val errorMsg = "Final WAV file (Multi-Speaker) not created or empty: ${finalWavFile?.absolutePath ?: "null"}"
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-                    // Geração de legenda SRT para áudio multi-speaker pode ser complexa se precisar alinhar com os speakers.
-                    // Por ora, vamos usar o Audio.gerarLegendaSRT que gera uma legenda única para o texto completo.
-                    val srtResult = Audio.gerarLegendaSRT(
-                        cena = finalWavFile!!.nameWithoutExtension,
-                        filePath = localFinalWavPath,
-                        TextoFala = dialogText, // Usa o dialogText completo
-                        context = context,
-                        projectDir = projectDir
-                    )
-                    if (srtResult.isSuccess) {
-                        Log.d(TAG, "✅ Legenda SRT (para áudio multi-speaker) gerada: ${srtResult.getOrNull()}")
-                    } else {
-                        Log.w(TAG, "⚠️ Falha ao gerar legenda SRT para áudio multi-speaker: ${srtResult.exceptionOrNull()?.message}")
-                    }
-
-                    return@withContext Result.success(localFinalWavPath)
+                // ETAPA 1: VERIFICAR E DEDUZIR CRÉDITOS
+                val deductionResult = authViewModel.checkAndDeductCredits(TaskType.AUDIO_MULTI)
+                if (deductionResult.isFailure) {
+                    return@withContext Result.failure(deductionResult.exceptionOrNull()!!)
                 }
-            } catch (e: IOException) {
-                Log.e(TAG, "I/O error during multi-speaker audio generation: ${e.message}", e)
-                rawAudioFile?.delete()
-                finalWavFile?.delete()
+                creditsDeducted = true
+                Log.i(TAG, "Créditos (${TaskType.AUDIO_MULTI.cost}) deduzidos. Prosseguindo com a geração do diálogo.")
+
+                // ETAPA 2: LÓGICA DE GERAÇÃO
+                if (speakerVoiceMap.isEmpty()) {
+                    throw IllegalArgumentException("O mapa de vozes dos locutores não pode estar vazio.")
+                }
+
+                val keyCount = try {
+                    firestore.collection("chaves_api_pool").get().await().size()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Falha ao obter contagem de chaves, usando fallback 10.", e)
+                    10
+                }
+                val MAX_TENTATIVAS = if (keyCount > 0) keyCount else 10
+
+                var tentativas = 0
+                while (tentativas < MAX_TENTATIVAS) {
+                    var chaveAtual: String? = null
+                    try {
+                        chaveAtual = gerenciadorDeChaves.getChave(TIPO_DE_CHAVE)
+                        Log.d(TAG, "Tentativa ${tentativas + 1}/$MAX_TENTATIVAS ($TIPO_DE_CHAVE): Usando chave '${chaveAtual.takeLast(4)}'")
+
+                        val requestPayload = buildRequestPayload(dialogText, speakerVoiceMap)
+                        val requestJsonString = kotlinJsonParser.encodeToString(requestPayload)
+                        val requestBody = requestJsonString.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+                        
+                        val url = "$BASE_URL$MODEL_ID:$GENERATE_CONTENT_API?key=$chaveAtual"
+                        val request = Request.Builder().url(url).post(requestBody).build()
+                        
+                        Log.i(TAG, "==== DEBUG GeminiMultiSpeakerAudio ====")
+                        Log.i(TAG, "dialogText enviado:\n$dialogText")
+                        Log.i(TAG, "speakerVoiceMap enviado: $speakerVoiceMap")
+                        Log.i(TAG, "requestPayload serializado:\n$requestJsonString")
+
+
+                        val response: Response = client.newCall(request).execute()
+
+                        if (response.isSuccessful) {
+                            Log.i(TAG, "SUCESSO na tentativa ${tentativas + 1} ($TIPO_DE_CHAVE) com a chave '${chaveAtual.takeLast(4)}'.")
+                            gerenciadorDeChaves.setChaveEmUso(chaveAtual, TIPO_DE_CHAVE)
+                            
+                            return@withContext processSuccessfulResponse(response, projectDir, context, dialogText)
+                        } else if (response.code == 429) {
+                            Log.w(TAG, "Erro 429 ($TIPO_DE_CHAVE) na chave '${chaveAtual.takeLast(4)}'. Bloqueando...")
+                            response.body?.close()
+                            gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                            tentativas++
+                            if (tentativas < MAX_TENTATIVAS) {
+                                delay(1000)
+                                continue
+                            } else {
+                                throw Exception("Máx. de tentativas ($MAX_TENTATIVAS) atingido.")
+                            }
+                        } else {
+                            val errorBody = response.body?.string() ?: "Erro desconhecido"
+                            response.body?.close()
+                            Log.e(TAG, "Erro de servidor não-retentável ($TIPO_DE_CHAVE), Código: ${response.code}, Corpo: $errorBody")
+                            gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                            throw IOException("Erro da API (${response.code}): $errorBody")
+                        }
+
+                    } catch (e: NenhumaChaveApiDisponivelException) {
+                        Log.e(TAG, "Não há chaves disponíveis para o tipo '$TIPO_DE_CHAVE'.", e)
+                        throw e
+                    }
+                } // Fim do while
+
+                throw Exception("Falha ao gerar áudio para o tipo '$TIPO_DE_CHAVE' após $MAX_TENTATIVAS tentativas.")
+            
+            } catch(e: Exception) {
+                // ETAPA 3: REEMBOLSO EM CASO DE QUALQUER FALHA
+                if (creditsDeducted) {
+                    Log.w(TAG, "Ocorreu um erro durante a geração do áudio multi-speaker. Reembolsando ${TaskType.AUDIO_MULTI.cost} créditos.", e)
+                    authViewModel.refundCredits(TaskType.AUDIO_MULTI)
+                }
                 return@withContext Result.failure(e)
-            } catch (e: JSONException) {
-                Log.e(TAG, "JSON error during multi-speaker audio generation: ${e.message}", e)
-                rawAudioFile?.delete()
-                finalWavFile?.delete()
-                return@withContext Result.failure(e)
-            } catch (e: Exception) {
-                Log.e(TAG, "Unexpected error during multi-speaker audio generation: ${e.message}", e)
-                rawAudioFile?.delete()
-                finalWavFile?.delete()
-                return@withContext Result.failure(e)
-            } finally {
-                rawAudioFile?.delete()
-                Log.d(TAG, "Temporary RAW audio file (Multi-Speaker) cleaned (if existed): ${rawAudioFile?.absolutePath}")
             }
         }
     }
 
+    // --- FUNÇÕES AUXILIARES ---
+
+    private fun buildRequestPayload(dialogText: String, speakerVoiceMap: Map<String, String>): MultiSpeakerAudioRequest {
+        val speakerVoiceConfigEntries = speakerVoiceMap.map { (speakerTag, voiceName) ->
+            SpeakerVoiceConfigEntry(
+                speaker = speakerTag,
+                voiceConfig = PrebuiltVoiceContainer(PrebuiltVoice(voiceName))
+            )
+        }
+        return MultiSpeakerAudioRequest(
+            contents = listOf(MultiSpeakerContent(parts = listOf(MultiSpeakerTextPart(text = dialogText)))),
+            generationConfig = MultiSpeakerGenerationConfig(
+                speechConfig = SpeechConfig(
+                    multiSpeakerVoiceConfig = MultiSpeakerVoiceConfig(speakerVoiceConfigs = speakerVoiceConfigEntries)
+                )
+            )
+        )
+    }
+
+    private suspend fun processSuccessfulResponse(response: Response, projectDir: File, context: Context, dialogText: String): Result<String> {
+        val responseBodyString = response.body?.string()
+        if (responseBodyString.isNullOrBlank()) {
+            return Result.failure(IOException("Corpo da resposta de áudio (Multi-Speaker) está vazio."))
+        }
+
+        var audioDataBase64: String? = null
+        var mimeType: String? = null
+        try {
+            val jsonArray = JSONArray(responseBodyString)
+            if (jsonArray.length() > 0) {
+                val firstCandidatePart = jsonArray.optJSONObject(0)
+                    ?.optJSONArray("candidates")?.optJSONObject(0)
+                    ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
+                audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
+                mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
+            }
+        } catch (e: JSONException) {
+             try {
+                val jsonObject = JSONObject(responseBodyString)
+                 val firstCandidatePart = jsonObject
+                    .optJSONArray("candidates")?.optJSONObject(0)
+                    ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
+                audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
+                mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
+            } catch (e2: JSONException) {
+                return Result.failure(JSONException("Falha ao parsear JSON (nem array, nem objeto): ${e2.message}"))
+            }
+        }
+
+        if (audioDataBase64.isNullOrBlank()) {
+            return Result.failure(IOException("Dados de áudio Base64 não encontrados na resposta."))
+        }
+        
+        val finalWavPath = saveAndProcessAudio(audioDataBase64, mimeType, projectDir)
+            .getOrElse { return Result.failure(it) }
+        
+        Audio.gerarLegendaSRT(
+            cena = File(finalWavPath).nameWithoutExtension,
+            filePath = finalWavPath,
+            TextoFala = dialogText,
+            context = context,
+            projectDir = projectDir
+        ).onFailure { Log.w(TAG, "Falha ao gerar legenda SRT para áudio multi-speaker: ${it.message}") }
+
+        return Result.success(finalWavPath)
+    }
+
+    private suspend fun saveAndProcessAudio(audioBase64: String, mimeType: String?, projectDir: File): kotlin.Result<String> {
+        val audioBytes = try { Base64.decode(audioBase64, Base64.DEFAULT) } catch (e: Exception) { return kotlin.Result.failure(e) }
+        
+        val effectiveMimeType = mimeType ?: "audio/L16;codec=pcm;rate=24000"
+
+        if (effectiveMimeType.startsWith("audio/wav", ignoreCase = true)) {
+            val file = File(projectDir, "gemini_multispeaker_tts_${System.currentTimeMillis()}.wav")
+            FileOutputStream(file).use { it.write(audioBytes) }
+            return kotlin.Result.success(file.absolutePath)
+        } else if (effectiveMimeType.startsWith("audio/L16", ignoreCase = true)) {
+            val rawFile = File(projectDir, "gemini_multispeaker_raw_${System.currentTimeMillis()}.pcm")
+            FileOutputStream(rawFile).use { it.write(audioBytes) }
+
+            val wavFile = File(projectDir, "gemini_multispeaker_tts_${System.currentTimeMillis()}.wav")
+            val sampleRate = if (effectiveMimeType.contains("rate=")) effectiveMimeType.substringAfter("rate=").substringBefore(';').toIntOrNull() ?: 24000 else 24000
+            val ffmpegCommand = "-y -f s16le -ar $sampleRate -ac 1 -i \"${rawFile.absolutePath}\" \"${wavFile.absolutePath}\""
+            
+            val session = FFmpegKit.execute(ffmpegCommand)
+            rawFile.delete()
+            
+            return if (ReturnCode.isSuccess(session.returnCode)) {
+                kotlin.Result.success(wavFile.absolutePath)
+            } else {
+                kotlin.Result.failure(Exception("FFmpeg falhou ao converter RAW para WAV. Código: ${session.returnCode}"))
+            }
+        }
+        return kotlin.Result.failure(IOException("Formato de áudio não suportado: $effectiveMimeType"))
+    }
+    
     fun getAvailableVoices(gender: String? = null): List<Pair<String, String>> {
         val allVoices = listOf(
             Pair("Zephyr", "Masculino - Informativo, neutro"),

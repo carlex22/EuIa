@@ -1,3 +1,4 @@
+// File: euia/data/VideoDataStoreManager.kt
 package com.carlex.euia.data
 
 import android.content.Context
@@ -18,6 +19,7 @@ object VideoPreferencesKeys {
     // REMOVED: val VIDEO_TITULO = stringPreferencesKey("video_titulo")
     val VIDEO_IMAGENS_REFERENCIA = stringPreferencesKey("video_imagens_referencia")
     // REMOVED: val VIDEO_MUSIC_PATH = stringPreferencesKey("video_music_path")
+    val IS_PROCESSING_IMAGES = booleanPreferencesKey("is_processing_images") // <<<< ADICIONADO
 }
 
 // Manager class to interact with the DataStore
@@ -32,11 +34,23 @@ class VideoDataStoreManager(context: Context) {
     val imagensReferenciaJson: Flow<String> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { preferences -> preferences[VideoPreferencesKeys.VIDEO_IMAGENS_REFERENCIA] ?: "[]" }
+    
+    // <<<< ADICIONADO >>>>
+    val isProcessingImages: Flow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { preferences -> preferences[VideoPreferencesKeys.IS_PROCESSING_IMAGES] ?: false }
+
 
     // Esta função salva a string JSON (que representa a lista de ImagemReferencia)
     suspend fun setImagensReferenciaJson(imagensJson: String) {
         dataStore.edit { preferences -> preferences[VideoPreferencesKeys.VIDEO_IMAGENS_REFERENCIA] = imagensJson }
     }
+    
+    // <<<< ADICIONADO >>>>
+    suspend fun setIsProcessingImages(isProcessing: Boolean) {
+        dataStore.edit { preferences -> preferences[VideoPreferencesKeys.IS_PROCESSING_IMAGES] = isProcessing }
+    }
+
 
     // Opcional: Função para limpar todas as configurações
     suspend fun clearAllSettings() {

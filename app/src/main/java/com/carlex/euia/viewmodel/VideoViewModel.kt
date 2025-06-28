@@ -1,3 +1,4 @@
+// File: euia/viewmodel/VideoViewModel.kt
 package com.carlex.euia.viewmodel
 
 import android.app.Application
@@ -16,6 +17,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import androidx.work.*
+import com.carlex.euia.utils.WorkerTags // <<<< Adicionado para consistência
 import com.carlex.euia.worker.ImageProcessingWorker
 // import java.util.UUID // Não usado diretamente aqui
 import java.io.File // Importado para exclusão de arquivo
@@ -23,7 +25,7 @@ import androidx.lifecycle.Observer
 
 // Define TAG for logging
 private const val TAG = "VideoViewModel"
-private const val TAG_IMAGE_PROCESSING_WORK = "image_processing_work"
+// <<<< Removida constante duplicada, usaremos a do WorkerTags
 
 class VideoViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -51,26 +53,32 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
-    private val _isAnyImageProcessing = MutableStateFlow(false)
-    val isAnyImageProcessing: StateFlow<Boolean> = _isAnyImageProcessing.asStateFlow()
+    // <<<< Alterado para usar o Flow do DataStoreManager diretamente
+    val isAnyImageProcessing: StateFlow<Boolean> = dataStoreManager.isProcessingImages
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
 
     private val _toastMessage = MutableSharedFlow<String>()
     val toastMessage: SharedFlow<String> = _toastMessage.asSharedFlow()
 
     private val workInfoObserver = Observer<List<WorkInfo>> { workInfos ->
-        Log.d(TAG, "Lista WorkInfo atualizada para tag $TAG_IMAGE_PROCESSING_WORK. Contagem: ${workInfos.size}")
+        Log.d(TAG, "Lista WorkInfo atualizada para tag ${WorkerTags.IMAGE_PROCESSING_WORK}. Contagem: ${workInfos.size}")
         val isProcessing = workInfos.any {
             it.state == WorkInfo.State.ENQUEUED ||
             it.state == WorkInfo.State.RUNNING ||
             it.state == WorkInfo.State.BLOCKED
         }
-        _isAnyImageProcessing.value = isProcessing
-        Log.d(TAG, "Estado isAnyImageProcessing atualizado para $isProcessing")
+        
+        // <<<< Lógica de atualização do DataStore movida para o worker ou para o ponto de enfileiramento/conclusão
+        if (!isProcessing && isAnyImageProcessing.value) {
+            viewModelScope.launch {
+                dataStoreManager.setIsProcessingImages(false)
+            }
+        }
     }
 
     init {
-        Log.d(TAG, "VideoViewModel init. Observando work tag $TAG_IMAGE_PROCESSING_WORK.")
-        workManager.getWorkInfosByTagLiveData(TAG_IMAGE_PROCESSING_WORK)
+        Log.d(TAG, "VideoViewModel init. Observando work tag ${WorkerTags.IMAGE_PROCESSING_WORK}.")
+        workManager.getWorkInfosByTagLiveData(WorkerTags.IMAGE_PROCESSING_WORK)
             .observeForever(workInfoObserver)
     }
 
@@ -89,8 +97,8 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun processImages(uris: List<Uri>) {
-        Log.d(TAG, "processImages chamado com ${uris.size} URIs. Enfileirando tarefa com tag $TAG_IMAGE_PROCESSING_WORK.")
-        if (_isAnyImageProcessing.value) {
+        Log.d(TAG, "processImages chamado com ${uris.size} URIs. Enfileirando tarefa com tag ${WorkerTags.IMAGE_PROCESSING_WORK}.")
+        if (isAnyImageProcessing.value) { // <<<< Usa o StateFlow
              Log.d(TAG, "Processamento de imagem já em andamento. Ignorando nova requisição.")
              viewModelScope.launch { _toastMessage.emit("Processamento de imagem já em andamento.") }
              return
@@ -100,20 +108,26 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch { _toastMessage.emit("Nenhuma imagem selecionada para processar.") }
             return
         }
-        val uriStrings = uris.map { it.toString() }.toTypedArray()
-        val inputData = Data.Builder()
-            .putStringArray(ImageProcessingWorker.KEY_MEDIA_URIS, uriStrings)
-            .build()
-        val imageProcessingRequest = OneTimeWorkRequestBuilder<ImageProcessingWorker>()
-            .setInputData(inputData)
-            .addTag(TAG_IMAGE_PROCESSING_WORK)
-            .build()
-        workManager.enqueue(imageProcessingRequest)
-        Log.d(TAG, "Tarefa do WorkManager enfileirada com ID: ${imageProcessingRequest.id} e tag: $TAG_IMAGE_PROCESSING_WORK")
-        viewModelScope.launch { _toastMessage.emit("Processamento de imagens iniciado em segundo plano.") }
+        
+        viewModelScope.launch {
+            // <<<< Define a flag como true ANTES de enfileirar
+            dataStoreManager.setIsProcessingImages(true) 
+            
+            val uriStrings = uris.map { it.toString() }.toTypedArray()
+            val inputData = Data.Builder()
+                .putStringArray(ImageProcessingWorker.KEY_MEDIA_URIS, uriStrings)
+                .build()
+            val imageProcessingRequest = OneTimeWorkRequestBuilder<ImageProcessingWorker>()
+                .setInputData(inputData)
+                .addTag(WorkerTags.IMAGE_PROCESSING_WORK) // <<<< Usa a constante
+                .build()
+            workManager.enqueue(imageProcessingRequest)
+            Log.d(TAG, "Tarefa do WorkManager enfileirada com ID: ${imageProcessingRequest.id} e tag: ${WorkerTags.IMAGE_PROCESSING_WORK}")
+            _toastMessage.emit("Processamento de imagens iniciado em segundo plano.")
+        }
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
+     @OptIn(ExperimentalSerializationApi::class)
     fun removeImage(pathToRemove: String) {
          Log.d(TAG, "removeImage chamado para o caminho: $pathToRemove")
          viewModelScope.launch(Dispatchers.IO) { // Usar Dispatchers.IO para operações de arquivo
@@ -192,7 +206,7 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
      override fun onCleared() {
          super.onCleared()
          Log.d(TAG, "VideoViewModel onCleared(). Removendo observador do WorkManager.")
-         workManager.getWorkInfosByTagLiveData(TAG_IMAGE_PROCESSING_WORK)
+         workManager.getWorkInfosByTagLiveData(WorkerTags.IMAGE_PROCESSING_WORK)
              .removeObserver(workInfoObserver)
      }
 }

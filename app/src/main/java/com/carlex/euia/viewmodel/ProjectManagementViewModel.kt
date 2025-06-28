@@ -1,3 +1,4 @@
+// File: euia/viewmodel/ProjectManagementViewModel.kt
 package com.carlex.euia.viewmodel
 
 import android.app.Application
@@ -112,7 +113,10 @@ class ProjectManagementViewModel(
                 refImageDataStoreManager.clearAllRefImagePreferences()
                 videoProjectDataStoreManager.clearProjectState() // Limpa dados de cenas e outros estados do projeto
                 videoDataStoreManager.clearAllSettings()
+                
+                // <<<< INÍCIO DA CORREÇÃO >>>>
                 videoGeneratorDataStoreManager.clearGeneratorState()
+                // <<<< FIM DA CORREÇÃO >>>>
                 
                 videoPreferencesDataStoreManager.setVideoProjectDir(sanitizedProjectName)
                 Log.i("ProjectVM", "Novo diretório do projeto '$sanitizedProjectName' definido como ativo.")
@@ -138,7 +142,25 @@ class ProjectManagementViewModel(
     }
 }
 
-// Factory (mantido como antes, mas certifique-se que SceneDataStoreManager foi removido se não for usado)
+/*// Factory (mantido como antes, mas certifique-se que SceneDataStoreManager foi removido se não for usado)
+class ProjectManagementViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ProjectManagementViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ProjectManagementViewModel(
+                application,
+                VideoPreferencesDataStoreManager(application.applicationContext),
+                AudioDataStoreManager(application.applicationContext),
+                RefImageDataStoreManager(application.applicationContext),
+                VideoDataStoreManager(application.applicationContext),
+                VideoGeneratorDataStoreManager(application.applicationContext),
+                VideoProjectDataStoreManager(application.applicationContext)
+            ) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class for ProjectManagementViewModelFactory")
+    }
+}*/
+
 class ProjectManagementViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ProjectManagementViewModel::class.java)) {

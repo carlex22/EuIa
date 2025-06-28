@@ -1,10 +1,21 @@
 // File: com/carlex/euia/api/GeminiAudio.kt
 package com.carlex.euia.api
 
+import android.app.Application
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
+import com.carlex.euia.api.Audio // Para reusar gerarLegendaSRT
+import com.carlex.euia.managers.GerenciadorDeChavesApi
+import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
+import com.carlex.euia.viewmodel.AuthViewModel
+import com.carlex.euia.viewmodel.TaskType
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -12,38 +23,35 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONArray
-import org.json.JSONObject
 import org.json.JSONException
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.util.concurrent.TimeUnit
-import com.carlex.euia.api.Audio // To reuse gerarLegendaSRT
-import com.carlex.euia.BuildConfig // Import BuildConfig
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 object GeminiAudio {
     private const val TAG = "GeminiAudio"
-    // !! IMPORTANT !! Replace with your actual Gemini API key.
-    // Storing API keys directly in code is not recommended for production apps.
-    // Use secure methods like environment variables or secrets management.
-    private const val API_KEY = BuildConfig.GEMINI_API_KEY // Using BuildConfig
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-    private const val MODEL_ID = "gemini-2.5-flash-preview-tts" // Verifique se este é o modelo TTS mais atual e adequado
-    // NOTA: O nome do modelo pode variar. Anteriormente era "gemini-2.5-flash-preview-tts".
-    // É importante usar o nome de modelo correto fornecido pela documentação do Gemini para TTS.
-    // O endpoint "streamGenerateContent" é usado para streaming, se a API TTS usar um endpoint diferente (ex: "generateContent" para não-streaming)
-    // ou um modelo específico (ex: `models/tts-model-id:synthesizeSpeech`), isso precisaria ser ajustado.
-    // Assumindo que `streamGenerateContent` ainda é o caminho para TTS com os modelos Gemini.
-    private const val GENERATE_CONTENT_API = "streamGenerateContent" // Ou :generateAnswer ou :synthesizeSpeech dependendo da API exata
+    private const val MODEL_ID = //"gemini-2.5-pro-preview-tts"
+                                    "gemini-2.5-flash-preview-tts"
+    private const val GENERATE_CONTENT_API = "streamGenerateContent"
+    
+    // --- CONSTANTES PARA O GERENCIADOR DE CHAVES ---
+    private const val TIPO_DE_CHAVE = "audio"
 
+    // --- INSTANCIAÇÃO INTERNA DAS DEPENDÊNCIAS ---
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private val gerenciadorDeChaves: GerenciadorDeChavesApi by lazy { GerenciadorDeChavesApi(firestore) }
+    
+    // --- CLIENTE HTTP (sem alterações) ---
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(180, TimeUnit.SECONDS) // Increased read timeout for streaming
+        .readTimeout(180, TimeUnit.SECONDS)
         .build()
 
+    // --- DATA CLASSES E LISTA DE VOZES (sem alterações) ---
     private data class GeminiVoiceInfo(
         val name: String,
         val gender: String, // "Masculino", "Feminino", "Neutro"
@@ -51,6 +59,7 @@ object GeminiAudio {
     )
 
     private val allGeminiVoices = listOf(
+        // ... (a lista de vozes permanece a mesma)
         GeminiVoiceInfo("Zephyr", "Masculino", "Informativo, neutro"),
         GeminiVoiceInfo("Puck", "Masculino", "Levemente teatral, expressivo"),
         GeminiVoiceInfo("Charon", "Masculino", "Sério, profundo"),
@@ -90,14 +99,7 @@ object GeminiAudio {
         GeminiVoiceInfo("Breezy", "Neutro", "Descontraído, casual")
     )
 
-    /**
-     * Retorna uma lista de pares (nome da voz, estilo da voz) disponíveis para a API Gemini TTS,
-     * opcionalmente filtrada por gênero.
-     *
-     * @param idioma O idioma desejado (atualmente ignorado, pois a lista é estática e os nomes das vozes são em inglês).
-     * @param gender O gênero desejado ("Masculino", "Feminino", "Neutro", ou vazio/qualquer outro para todas).
-     * @return Result contendo a lista de pares (nome da voz, estilo da voz) em caso de sucesso.
-     */
+    // --- getAvailableVoices (sem alterações) ---
     suspend fun getAvailableVoices(gender: String, locale: String = "pt-BR"): Result<List<Pair<String, String>>> {
         return withContext(Dispatchers.IO) { // Simula IO para consistência com outras APIs de voz
             try {
@@ -131,241 +133,220 @@ object GeminiAudio {
     }
 
 
-    /**
-     * Generates audio from text using the Gemini TTS API and creates an SRT subtitle file.
-     *
-     * @param text The text to convert to speech.
-     * @param voiceName The name of the voice to use (e.g., "Kore").
-     *        Note: The `style` or "emotion" is implied by the `voiceName` chosen from `allGeminiVoices`.
-     *        This function does not currently pass a separate "style" parameter to the Gemini API.
-     * @param context Android Context needed for file operations and SRT generation.
-     * @param projectDir The directory where the audio and SRT files will be saved.
-     * @return Result containing the absolute path of the saved audio file (WAV) on success,
-     *         or an Exception on failure.
-     */
+    // --- FUNÇÃO generate() ATUALIZADA ---
     suspend fun generate(
         text: String,
         voiceName: String,
         context: Context,
         projectDir: File
     ): Result<String> {
+        val authViewModel = AuthViewModel(context.applicationContext as Application)
+        var creditsDeducted = false
+
         return withContext(Dispatchers.IO) {
-            Log.d(TAG, "🔊 Iniciando geração de áudio com Gemini TTS para texto: ${text.take(50)}..., Voz: $voiceName")
+            try {
+                // ETAPA 1: VERIFICAR E DEDUZIR CRÉDITOS
+                val deductionResult = authViewModel.checkAndDeductCredits(TaskType.AUDIO_SINGLE)
+                if (deductionResult.isFailure) {
+                    return@withContext Result.failure(deductionResult.exceptionOrNull()!!)
+                }
+                creditsDeducted = true
+                Log.i(TAG, "Créditos (${TaskType.AUDIO_SINGLE.cost}) deduzidos. Prosseguindo com a geração do áudio.")
 
-            if (API_KEY.isBlank() || API_KEY == "YOUR_GEMINI_API_KEY") {
-                val errorMsg = "API Key para Gemini TTS não configurada."
-                Log.e(TAG, errorMsg)
-                return@withContext Result.failure(IllegalArgumentException(errorMsg))
-            }
+                // ETAPA 2: LÓGICA DE GERAÇÃO COM TENTATIVAS
+                Log.d(TAG, "🔊 Iniciando geração de áudio com Gemini TTS para texto: ${text.take(50)}..., Voz: $voiceName")
 
-            if (!projectDir.exists()) {
-                if (!projectDir.mkdirs()) {
+                if (!projectDir.exists() && !projectDir.mkdirs()) {
                     val errorMsg = "Falha ao criar o diretório do projeto: ${projectDir.absolutePath}"
                     Log.e(TAG, errorMsg)
-                    return@withContext Result.failure(IOException(errorMsg))
+                    throw IOException(errorMsg)
                 }
-            }
 
-            val url = "$BASE_URL$MODEL_ID:$GENERATE_CONTENT_API?key=$API_KEY"
-            
-            val finalRequestBodyJson = JSONObject().apply {
-                put("contents", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("role", "user")
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().apply {
-                                put("text", text)
-                            })
-                        })
-                    })
-                })
-                put("generationConfig", JSONObject().apply {
-                    put("responseModalities", JSONArray().apply {
-                        put("audio") 
-                    })
-                    put("speech_config", JSONObject().apply { 
-                        put("voice_config", JSONObject().apply {
-                            put("prebuilt_voice_config", JSONObject().apply { 
-                                put("voice_name", voiceName) 
-                            })
-                        })
-                    })
-                })
-            }.toString()
+                val keyCount = try {
+                    firestore.collection("chaves_api_pool").get().await().size()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Falha ao obter contagem de chaves, usando fallback 10.", e)
+                    10
+                }
+                val MAX_TENTATIVAS = if (keyCount > 0) keyCount else 10
 
-
-            val requestBody = finalRequestBodyJson.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
-
-            val request = Request.Builder()
-                .url(url)
-                .post(requestBody)
-                .build()
-
-            var rawAudioFile: File? = null
-            var finalWavFile: File? = null
-
-            try {
-                val response: Response = client.newCall(request).execute()
-                val responseCode = response.code
-                val responseMessage = response.message
-
-                response.use { res ->
-                    if (!res.isSuccessful) {
-                        val errorBody = res.body?.string() ?: "Sem corpo de erro"
-                        val errorMsg = "Erro HTTP na geração de áudio Gemini TTS: $responseCode - $responseMessage. Detalhes: ${errorBody.take(500)}"
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-
-                    val responseBodyString = res.body?.string()
-                    if (responseBodyString.isNullOrBlank()) {
-                        val errorMsg = "Corpo da resposta de áudio Gemini TTS está vazio."
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-
-                    Log.d(TAG, "Resposta JSON recebida (primeiros 300 chars): ${responseBodyString.take(300)}")
-                    
-                    var audioDataBase64: String? = null
-                    var mimeType: String? = null
+                var tentativas = 0
+                while (tentativas < MAX_TENTATIVAS) {
+                    var chaveAtual: String? = null
                     try {
-                        val jsonArray = JSONArray(responseBodyString)
-                        if (jsonArray.length() > 0) {
-                             val firstCandidatePart = jsonArray.optJSONObject(0)
-                                ?.optJSONArray("candidates")?.optJSONObject(0)
-                                ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
-                            audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
-                            mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
-                        }
-                    } catch (e: JSONException) {
-                        // Se não for um array, tenta parsear como um objeto direto
-                        Log.w(TAG, "Resposta Gemini TTS não é um array JSON. Tentando como objeto. Erro: ${e.message}")
-                        try {
-                            val jsonObject = JSONObject(responseBodyString)
-                             val firstCandidatePart = jsonObject
-                                .optJSONArray("candidates")?.optJSONObject(0)
-                                ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
-                            audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
-                            mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
-                        } catch (e2: JSONException) {
-                            val errorMsg = "Falha ao parsear JSON da resposta Gemini TTS (nem array, nem objeto): ${e2.message}. Resposta: ${responseBodyString.take(500)}"
-                            Log.e(TAG, errorMsg, e2)
-                            return@withContext Result.failure(JSONException(errorMsg))
-                        }
-                    }
+                        chaveAtual = gerenciadorDeChaves.getChave(TIPO_DE_CHAVE)
+                        Log.d(TAG, "Tentativa ${tentativas + 1}/$MAX_TENTATIVAS ($TIPO_DE_CHAVE): Usando chave '${chaveAtual.takeLast(4)}'")
 
-                    if (audioDataBase64.isNullOrBlank()) {
-                        val errorMsg = "Dados de áudio Base64 não encontrados na resposta JSON. Resposta: ${responseBodyString.take(500)}"
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-                     if (mimeType.isNullOrBlank()) {
-                        Log.w(TAG, "MIME type não encontrado na resposta, usando default: audio/L16;codec=pcm;rate=24000")
-                        mimeType = "audio/L16;codec=pcm;rate=24000"
-                    }
-                    Log.d(TAG, "MIME Type extraído: $mimeType. Dados de áudio (início): ${audioDataBase64.take(30)}...")
-
-
-                    val audioBytes = try {
-                        Base64.decode(audioDataBase64, Base64.DEFAULT)
-                    } catch (e: IllegalArgumentException) {
-                        val errorMsg = "Falha ao decodificar dados Base64: ${e.message}"
-                        Log.e(TAG, errorMsg, e)
-                        return@withContext Result.failure(IllegalArgumentException(errorMsg))
-                    }
-
-                    if (mimeType.startsWith("audio/wav", ignoreCase = true)) {
-                        val wavAudioFileName = "gemini_tts_audio_${System.currentTimeMillis()}.wav"
-                        finalWavFile = File(projectDir, wavAudioFileName)
-                        FileOutputStream(finalWavFile).use { outputStream ->
-                            outputStream.write(audioBytes)
-                        }
-                        Log.d(TAG, "✅ Áudio WAV Gemini TTS salvo diretamente em: ${finalWavFile!!.absolutePath}")
-                    } else if (mimeType.startsWith("audio/L16", ignoreCase = true) || mimeType.startsWith("audio/pcm", ignoreCase = true)) {
-                        val rawAudioFileName = "gemini_tts_audio_raw_${System.currentTimeMillis()}.pcm"
-                        rawAudioFile = File(projectDir, rawAudioFileName)
-                        FileOutputStream(rawAudioFile).use { outputStream ->
-                            outputStream.write(audioBytes)
-                        }
-
-                        if (rawAudioFile == null || !rawAudioFile!!.exists() || rawAudioFile!!.length() == 0L) {
-                            val errorMsg = "Arquivo de áudio RAW salvo está vazio ou não existe: ${rawAudioFile?.absolutePath ?: "null"}"
-                            Log.e(TAG, errorMsg)
-                            return@withContext Result.failure(IOException(errorMsg))
-                        }
-                        Log.d(TAG, "✅ Áudio RAW Gemini TTS salvo em: ${rawAudioFile!!.absolutePath}")
-
-                        val wavAudioFileName = "gemini_tts_audio_${System.currentTimeMillis()}.wav"
-                        finalWavFile = File(projectDir, wavAudioFileName)
+                        val url = "$BASE_URL$MODEL_ID:$GENERATE_CONTENT_API?key=$chaveAtual"
+                        val requestBody = buildRequestBody(text, voiceName)
+                        val request = Request.Builder().url(url).post(requestBody).build()
                         
-                        val sampleRate = if (mimeType.contains("rate=")) mimeType.substringAfter("rate=").substringBefore(';').toIntOrNull() ?: 24000 else 24000
-                        val channels = 1 
-                        val format = "s16le" 
+                        val response = client.newCall(request).execute()
 
-                        val ffmpegCommand = "-y -f $format -ar $sampleRate -ac $channels -i \"${rawAudioFile!!.absolutePath}\" \"${finalWavFile!!.absolutePath}\""
-                        Log.d(TAG, "Executando comando FFmpeg para converter PCM para WAV: $ffmpegCommand")
-
-                        val session = FFmpegKit.execute(ffmpegCommand)
-                        val returnCode = session.returnCode
-
-                        if (!ReturnCode.isSuccess(returnCode)) {
-                            val errorMsg = "FFmpeg falhou ao converter RAW para WAV. Código: $returnCode. Logs:\n${session.allLogsAsString.take(1000)}"
-                            Log.e(TAG, errorMsg)
-                            finalWavFile?.delete()
-                            return@withContext Result.failure(Exception(errorMsg))
+                        if (response.isSuccessful) {
+                            Log.i(TAG, "SUCESSO na tentativa ${tentativas + 1} com a chave '${chaveAtual.takeLast(4)}'.")
+                            gerenciadorDeChaves.setChaveEmUso(chaveAtual, TIPO_DE_CHAVE)
+                            
+                            return@withContext processSuccessfulResponse(response, projectDir, context, text)
+                        
+                        } else if (response.code == 429) {
+                            response.body?.close()
+                            Log.w(TAG, "Erro 429 (Rate Limit) ($TIPO_DE_CHAVE) na chave '${chaveAtual.takeLast(4)}'. Bloqueando...")
+                            gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                            tentativas++
+                            if (tentativas < MAX_TENTATIVAS) {
+                                delay(1000)
+                                continue 
+                            } else {
+                                throw Exception("Máximo de tentativas ($MAX_TENTATIVAS) atingido.")
+                            }
+                        } else {
+                            val errorBody = response.body?.string() ?: "Erro desconhecido"
+                            Log.e(TAG, "Erro de API não recuperável ($TIPO_DE_CHAVE), Código: ${response.code}, Corpo: $errorBody")
+                            gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                            throw IOException("Erro da API (${response.code}): $errorBody")
                         }
-                        Log.d(TAG, "✅ Conversão PCM para WAV bem-sucedida. Arquivo WAV: ${finalWavFile!!.absolutePath}")
-                    } else {
-                         val errorMsg = "Formato de áudio não suportado recebido da API: $mimeType"
-                         Log.e(TAG, errorMsg)
-                         return@withContext Result.failure(IOException(errorMsg))
+
+                    } catch (e: NenhumaChaveApiDisponivelException) {
+                        Log.e(TAG, "Não há chaves de API disponíveis para o tipo '$TIPO_DE_CHAVE'.", e)
+                        throw e
                     }
+                } // Fim do while
 
-
-                    if (finalWavFile == null || !finalWavFile!!.exists() || finalWavFile!!.length() == 0L) {
-                        val errorMsg = "Arquivo WAV final não foi criado ou está vazio: ${finalWavFile?.absolutePath ?: "null"}"
-                        Log.e(TAG, errorMsg)
-                        return@withContext Result.failure(IOException(errorMsg))
-                    }
-
-                    val srtResult = Audio.gerarLegendaSRT(
-                        cena = finalWavFile!!.nameWithoutExtension,
-                        filePath = finalWavFile!!.absolutePath,
-                        TextoFala = text,
-                        context = context,
-                        projectDir = projectDir
-                    )
-
-                    if (srtResult.isSuccess) {
-                        Log.d(TAG, "✅ Legenda SRT gerada com sucesso: ${srtResult.getOrNull()}")
-                    } else {
-                        Log.w(TAG, "⚠️ Falha ao gerar legenda SRT para o áudio Gemini TTS: ${srtResult.exceptionOrNull()?.message}. O áudio ainda foi gerado.")
-                    }
-
-                    return@withContext Result.success(finalWavFile!!.absolutePath)
-                }
-            } catch (e: IOException) {
-                val errorMsg = "Erro de I/O durante a geração de áudio Gemini TTS: ${e.message}"
-                Log.e(TAG, errorMsg, e)
-                rawAudioFile?.delete()
-                finalWavFile?.delete()
-                return@withContext Result.failure(e)
-            } catch (e: JSONException) {
-                val errorMsg = "Erro de JSON durante a geração de áudio Gemini TTS: ${e.message}"
-                Log.e(TAG, errorMsg, e)
-                rawAudioFile?.delete()
-                finalWavFile?.delete()
-                return@withContext Result.failure(e)
+                throw Exception("Falha ao gerar áudio do tipo '$TIPO_DE_CHAVE' após $MAX_TENTATIVAS tentativas.")
+            
             } catch (e: Exception) {
-                val errorMsg = "Erro inesperado durante a geração de áudio Gemini TTS: ${e.message}"
-                Log.e(TAG, errorMsg, e)
-                rawAudioFile?.delete()
-                finalWavFile?.delete()
+                // ETAPA 3: REEMBOLSO EM CASO DE QUALQUER FALHA
+                if (creditsDeducted) {
+                    Log.w(TAG, "Ocorreu um erro durante a geração do áudio. Reembolsando ${TaskType.AUDIO_SINGLE.cost} créditos.", e)
+                    authViewModel.refundCredits(TaskType.AUDIO_SINGLE)
+                }
                 return@withContext Result.failure(e)
-            } finally {
-                rawAudioFile?.delete()
-                Log.d(TAG, "Arquivo RAW temporário limpo (se existiu): ${rawAudioFile?.absolutePath}")
             }
+        }
+    }
+
+    private fun buildRequestBody(text: String, voiceName: String): okhttp3.RequestBody {
+        val finalRequestBodyJson = JSONObject().apply {
+            put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("text", text)
+                        })
+                    })
+                })
+            })
+            put("generationConfig", JSONObject().apply {
+                put("responseModalities", JSONArray().apply {
+                    put("audio")
+                })
+                put("temperature", 2)
+                put("speech_config", JSONObject().apply {
+                    put("voice_config", JSONObject().apply {
+                        put("prebuilt_voice_config", JSONObject().apply {
+                            put("voice_name", voiceName)
+                        })
+                    })
+                })
+            })
+        }.toString()
+        return finalRequestBodyJson.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+    }
+
+    private suspend fun processSuccessfulResponse(
+        response: Response,
+        projectDir: File,
+        context: Context,
+        originalText: String
+    ): Result<String> {
+        var rawAudioFile: File? = null
+        var finalWavFile: File? = null
+
+        try {
+            val responseBodyString = response.body?.string()
+            if (responseBodyString.isNullOrBlank()) {
+                return Result.failure(IOException("Corpo da resposta de áudio Gemini TTS está vazio."))
+            }
+
+            Log.d(TAG, "Resposta JSON recebida (primeiros 300 chars): ${responseBodyString.take(300)}")
+
+            var audioDataBase64: String? = null
+            var mimeType: String? = null
+            try {
+                // ... (lógica de parsing JSON inalterada)
+                val jsonArray = JSONArray(responseBodyString)
+                if (jsonArray.length() > 0) {
+                     val firstCandidatePart = jsonArray.optJSONObject(0)
+                        ?.optJSONArray("candidates")?.optJSONObject(0)
+                        ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
+                    audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
+                    mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
+                }
+            } catch (e: JSONException) {
+                try {
+                    val jsonObject = JSONObject(responseBodyString)
+                     val firstCandidatePart = jsonObject
+                        .optJSONArray("candidates")?.optJSONObject(0)
+                        ?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)
+                    audioDataBase64 = firstCandidatePart?.optJSONObject("inlineData")?.optString("data")
+                    mimeType = firstCandidatePart?.optJSONObject("inlineData")?.optString("mimeType")
+                } catch (e2: JSONException) {
+                     return Result.failure(JSONException("Falha ao parsear JSON da resposta Gemini TTS (nem array, nem objeto): ${e2.message}"))
+                }
+            }
+
+            if (audioDataBase64.isNullOrBlank()) {
+                return Result.failure(IOException("Dados de áudio Base64 não encontrados na resposta JSON."))
+            }
+            mimeType = mimeType.takeIf { !it.isNullOrBlank() } ?: "audio/L16;codec=pcm;rate=24000"
+            Log.d(TAG, "MIME Type: $mimeType. Dados (início): ${audioDataBase64.take(30)}...")
+
+            val audioBytes = Base64.decode(audioDataBase64, Base64.DEFAULT)
+
+            if (mimeType.startsWith("audio/wav", ignoreCase = true)) {
+                val wavAudioFileName = "gemini_tts_audio_${System.currentTimeMillis()}.wav"
+                finalWavFile = File(projectDir, wavAudioFileName)
+                FileOutputStream(finalWavFile).use { it.write(audioBytes) }
+                Log.d(TAG, "✅ Áudio WAV Gemini TTS salvo diretamente em: ${finalWavFile!!.absolutePath}")
+            } else if (mimeType.startsWith("audio/L16", ignoreCase = true) || mimeType.startsWith("audio/pcm", ignoreCase = true)) {
+                // ... (lógica de conversão PCM para WAV com FFmpeg inalterada)
+                rawAudioFile = File(projectDir, "gemini_tts_audio_raw_${System.currentTimeMillis()}.pcm")
+                FileOutputStream(rawAudioFile).use { it.write(audioBytes) }
+
+                finalWavFile = File(projectDir, "gemini_tts_audio_${System.currentTimeMillis()}.wav")
+                val sampleRate = if (mimeType.contains("rate=")) mimeType.substringAfter("rate=").substringBefore(';').toIntOrNull() ?: 24000 else 24000
+                
+                val ffmpegCommand = "-y -f s16le -ar $sampleRate -ac 1 -i \"${rawAudioFile.absolutePath}\" \"${finalWavFile.absolutePath}\""
+                val session = FFmpegKit.execute(ffmpegCommand)
+
+                if (!ReturnCode.isSuccess(session.returnCode)) {
+                    return Result.failure(Exception("FFmpeg falhou ao converter RAW para WAV. Código: ${session.returnCode}"))
+                }
+            } else {
+                return Result.failure(IOException("Formato de áudio não suportado: $mimeType"))
+            }
+
+            if (finalWavFile == null || !finalWavFile!!.exists() || finalWavFile!!.length() == 0L) {
+                return Result.failure(IOException("Arquivo WAV final não foi criado ou está vazio."))
+            }
+
+            // Geração de legenda (movida para dentro desta função de sucesso)
+            val srtResult = Audio.gerarLegendaSRT(
+                cena = finalWavFile!!.nameWithoutExtension,
+                filePath = finalWavFile!!.absolutePath,
+                TextoFala = originalText,
+                context = context,
+                projectDir = projectDir
+            )
+            srtResult.onFailure { Log.w(TAG, "⚠️ Falha ao gerar legenda SRT para o áudio Gemini TTS: ${it.message}") }
+
+            return Result.success(finalWavFile!!.absolutePath)
+        } catch (e: Exception) {
+            return Result.failure(e)
+        } finally {
+            rawAudioFile?.delete()
         }
     }
 }

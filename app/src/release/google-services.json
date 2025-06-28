@@ -14,7 +14,15 @@
       },
       "oauth_client": [
         {
-          "client_id": "229195560996-4m38nh0foniki8dtfholkps5vnu6ksnt.apps.googleusercontent.com",
+          "client_id": "229195560996-kfgmp5qo56oa7vsmsdkvrtrl56l0e168.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.carlex.euia",
+            "certificate_hash": "decd8c011d8979a51558bfc9a6e8549b32c3cc2d"
+          }
+        },
+        {
+          "client_id": "229195560996-g6jpabo0f0j278bshscnl7l0gpekp7mj.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -27,7 +35,7 @@
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "229195560996-4m38nh0foniki8dtfholkps5vnu6ksnt.apps.googleusercontent.com",
+              "client_id": "229195560996-g6jpabo0f0j278bshscnl7l0gpekp7mj.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

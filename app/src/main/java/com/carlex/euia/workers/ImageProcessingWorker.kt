@@ -1,8 +1,10 @@
 // File: euia/workers/ImageProcessingWorker.kt
 package com.carlex.euia.worker
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
@@ -17,13 +19,14 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.work.*
+import com.carlex.euia.MainActivity
 import com.carlex.euia.R
 import com.carlex.euia.api.GeminiTextAndVisionStandardApi
 import com.carlex.euia.data.ImagemReferencia
 import com.carlex.euia.data.VideoDataStoreManager
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.carlex.euia.prompts.CreateaDescriptionImagem
-import com.carlex.euia.utils.BitmapUtils // Importado
+import com.carlex.euia.utils.BitmapUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -50,12 +53,13 @@ import kotlin.math.min
 // Define TAG for logging
 private const val TAG_WORKER = "ImageProcWorker"
 
-// Constantes para a notificação
+// <<< CORREÇÃO 1: Definir constantes de notificação específicas para ESTE worker >>>
 private const val NOTIFICATION_ID_IMAGE = 4
 private const val NOTIFICATION_CHANNEL_ID_IMAGE = "ImageProcessingChannelEUIA"
 
 private const val DEFAULT_IMAGE_WIDTH = 720
 private const val DEFAULT_IMAGE_HEIGHT = 1280
+
 
 private data class GeminiImageAnalysisResult(
     val description: String,
@@ -70,93 +74,91 @@ class ImageProcessingWorker(
     private val dataStoreManager = VideoDataStoreManager(applicationContext)
     private val videoPreferencesDataStoreManager = VideoPreferencesDataStoreManager(applicationContext)
     private val kotlinJson = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     companion object {
         const val KEY_MEDIA_URIS = "media_uris"
-        val TAG_IMAGE_PROCESSING_WORK = "image_processing_work"
         const val KEY_ERROR_MESSAGE = "error_message"
+        // Mantém a tag original para consistência com o que já existe no seu código
+        const val TAG_IMAGE_PROCESSING_WORK = "image_processing_work"
+    }
+
+    // <<< CORREÇÃO 2: Funções de notificação autossuficientes dentro do worker >>>
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = appContext.getString(R.string.notification_channel_name_image)
+            val descriptionText = appContext.getString(R.string.notification_channel_description_image)
+            val importance = NotificationManager.IMPORTANCE_LOW
+            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID_IMAGE, name, importance).apply {
+                description = descriptionText
+            }
+            notificationManager.createNotificationChannel(channel)
+            Log.d(TAG_WORKER, "Canal de notificação '$NOTIFICATION_CHANNEL_ID_IMAGE' criado/verificado.")
+        }
+    }
+    
+    private fun createNotification(message: String, isFinished: Boolean = false, isError: Boolean = false): Notification {
+        val intent = Intent(appContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            appContext, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(appContext, NOTIFICATION_CHANNEL_ID_IMAGE)
+            .setContentTitle(appContext.getString(R.string.notification_title_media_processing))
+            .setTicker(appContext.getString(R.string.notification_title_media_processing))
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_notification_icon)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(isFinished || isError)
+
+        if (isFinished || isError) {
+            builder.setProgress(0, 0, false).setOngoing(false)
+        } else {
+            builder.setProgress(0, 0, true).setOngoing(true) // Indeterminado
+        }
+        return builder.build()
+    }
+
+    private fun updateNotificationProgress(contentText: String, makeDismissible: Boolean = false, isError: Boolean = false) {
+        val notification = createNotification(contentText, isFinished = makeDismissible, isError = isError)
+        notificationManager.notify(NOTIFICATION_ID_IMAGE, notification)
+        Log.d(TAG_WORKER, "Notificação de Processamento de Mídia atualizada: $contentText")
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val uriStrings = inputData.getStringArray(KEY_MEDIA_URIS)
         val mediaCount = uriStrings?.size ?: 0
-        val title = appContext.getString(R.string.notification_title_media_processing)
         var contentText = appContext.getString(R.string.notification_content_media_starting_multiple, mediaCount)
-        if (mediaCount == 0) {
-            contentText = appContext.getString(R.string.notification_content_media_none_to_process)
-        } else if (mediaCount == 1) {
-            contentText = appContext.getString(R.string.notification_content_media_starting_single)
-        }
+        if (mediaCount == 0) contentText = appContext.getString(R.string.notification_content_media_none_to_process)
+        else if (mediaCount == 1) contentText = appContext.getString(R.string.notification_content_media_starting_single)
 
+        // <<< CORREÇÃO 3: Chamar a criação do canal ANTES de criar a notificação >>>
         createNotificationChannel()
 
-        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID_IMAGE)
-            .setContentTitle(title)
-            .setTicker(title)
-            .setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_notification_icon)
-            .setOngoing(true)
-            .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-
+        val notification = createNotification(contentText)
         return ForegroundInfo(NOTIFICATION_ID_IMAGE, notification)
     }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = appContext.getString(R.string.notification_channel_name_media)
-            val descriptionText = appContext.getString(R.string.notification_channel_description_media)
-            val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID_IMAGE, name, importance).apply {
-                description = descriptionText
-            }
-            val notificationManager: NotificationManager =
-                applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-            Log.d(TAG_WORKER, "Canal de notificação '$NOTIFICATION_CHANNEL_ID_IMAGE' criado/verificado.")
-        }
-    }
-
-    private fun updateNotificationProgress(contentText: String, makeDismissible: Boolean = false) {
-        val title = appContext.getString(R.string.notification_title_media_processing)
-        val notificationManager =
-            appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        val notificationBuilder = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID_IMAGE)
-            .setContentTitle(title)
-            .setTicker(title)
-            .setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_notification_icon)
-            .setOngoing(!makeDismissible)
-            .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-
-        notificationManager.notify(NOTIFICATION_ID_IMAGE, notificationBuilder.build())
-        Log.d(TAG_WORKER, "Notificação de Processamento de Mídia atualizada: $contentText")
-    }
-
 
     @OptIn(ExperimentalSerializationApi::class)
     override suspend fun doWork(): Result = coroutineScope {
         Log.d(TAG_WORKER, "doWork started.")
-
         val uriStrings = inputData.getStringArray(KEY_MEDIA_URIS)
 
         if (uriStrings.isNullOrEmpty()) {
-            Log.e(TAG_WORKER, "No media URIs provided in input data or list is empty.")
             val errorMsg = appContext.getString(R.string.error_no_media_to_process)
-            updateNotificationProgress(errorMsg, true)
+            updateNotificationProgress(errorMsg, true, isError = true)
             return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
         }
 
         Log.d(TAG_WORKER, "Received ${uriStrings.size} URIs for processing.")
-
         val larguraPreferida = videoPreferencesDataStoreManager.videoLargura.first()
         val alturaPreferida = videoPreferencesDataStoreManager.videoAltura.first()
-        Log.d(TAG_WORKER, "Dimensões preferidas para processamento (LxA): ${larguraPreferida ?: "Padrão"}x${alturaPreferida ?: "Padrão"}")
-
-
         val uris = uriStrings.map { Uri.parse(it) }
         val processedImages = mutableListOf<ImagemReferencia>()
         var failedCount = 0
@@ -164,10 +166,7 @@ class ImageProcessingWorker(
 
         try {
             uris.forEachIndexed { index, uri ->
-                if (!coroutineContext.isActive) {
-                    Log.w(TAG_WORKER, "Worker cancelado durante o processamento da mídia ${index + 1}.")
-                    throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_processing_cancelled_by_user))
-                }
+                if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_processing_cancelled_by_user))
 
                 val progressText = appContext.getString(R.string.notification_content_media_processing_progress, index + 1, uris.size)
                 updateNotificationProgress(progressText)
@@ -177,14 +176,8 @@ class ImageProcessingWorker(
                 val mimeType = getMimeType(uri)
 
                 val processedMedia: ImagemReferencia? = when {
-                    mimeType?.startsWith("image/") == true -> {
-                        Log.d(TAG_WORKER, "Processing image URI: $uri")
-                        processAndCreateReferenceImage(uri, currentProjectDirName, larguraPreferida, alturaPreferida)
-                    }
-                    mimeType?.startsWith("video/") == true -> {
-                        Log.d(TAG_WORKER, "Processing video URI: $uri")
-                        processVideoAndCreateReferenceImage(uri, currentProjectDirName, larguraPreferida, alturaPreferida)
-                    }
+                    mimeType?.startsWith("image/") == true -> processAndCreateReferenceImage(uri, currentProjectDirName, larguraPreferida, alturaPreferida)
+                    mimeType?.startsWith("video/") == true -> processVideoAndCreateReferenceImage(uri, currentProjectDirName, larguraPreferida, alturaPreferida)
                     else -> {
                         Log.w(TAG_WORKER, "Unsupported media type for URI: $uri (MIME: $mimeType). Skipping.")
                         null
@@ -194,79 +187,63 @@ class ImageProcessingWorker(
                 if (processedMedia != null) {
                     processedImages.add(processedMedia)
                     successfulCount++
-                    Log.d(TAG_WORKER, "Successfully processed media from URI: $uri")
                 } else {
                     failedCount++
-                    Log.w(TAG_WORKER, "Failed to process media from URI: $uri")
                 }
             }
 
-            if (!coroutineContext.isActive) {
-                Log.w(TAG_WORKER, "Worker cancelado antes de salvar a lista de mídias.")
-                throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_saving_media_cancelled))
-            }
+            if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_saving_media_cancelled))
 
             updateNotificationProgress(appContext.getString(R.string.notification_content_media_saving))
 
             val currentListJson = dataStoreManager.imagensReferenciaJson.first()
             val currentList: List<ImagemReferencia> = try {
-                if (currentListJson.isNotBlank() && currentListJson != "[]") {
-                    kotlinJson.decodeFromString(ListSerializer(ImagemReferencia.serializer()), currentListJson)
-                } else {
-                    emptyList()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG_WORKER, "Error deserializing current media list from DataStore", e)
-                emptyList()
-            }
-
+                if (currentListJson.isNotBlank() && currentListJson != "[]") kotlinJson.decodeFromString(ListSerializer(ImagemReferencia.serializer()), currentListJson) else emptyList()
+            } catch (e: Exception) { emptyList() }
+            
             val listWithNewItems = currentList + processedImages
-            Log.d(TAG_WORKER, "Finished processing batch. Added $successfulCount new items. Total in list: ${listWithNewItems.size}")
-
             val updatedListJson = try {
                 kotlinJson.encodeToString(ListSerializer(ImagemReferencia.serializer()), listWithNewItems)
             } catch (e: Exception) {
-                Log.e(TAG_WORKER, "Error encoding updated media list to JSON for saving to DataStore", e)
                 val errorMsg = appContext.getString(R.string.error_serializing_final_media_list)
-                updateNotificationProgress(errorMsg, true)
+                updateNotificationProgress(errorMsg, true, isError = true)
                 return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
             }
             dataStoreManager.setImagensReferenciaJson(updatedListJson)
-            Log.d(TAG_WORKER, "Lista de mídias salva no DataStore por Worker. Tamanho: ${listWithNewItems.size}")
 
             val finalMessage: String
             val result: Result
             if (failedCount == uris.size) {
                 finalMessage = appContext.getString(R.string.error_all_media_failed_processing, uris.size)
-                Log.w(TAG_WORKER, finalMessage)
                 result = Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalMessage))
+                updateNotificationProgress(finalMessage, true, isError = true)
             } else if (failedCount > 0) {
                 finalMessage = appContext.getString(R.string.status_media_processed_partial_failure, successfulCount, uris.size, failedCount)
-                Log.w(TAG_WORKER, finalMessage)
-                result = Result.success(workDataOf(KEY_ERROR_MESSAGE to finalMessage)) // Success but with a message
+                result = Result.success(workDataOf("warning" to finalMessage))
+                updateNotificationProgress(finalMessage, true)
             } else {
                 finalMessage = appContext.getString(R.string.status_media_processed_successfully, successfulCount)
-                Log.d(TAG_WORKER, finalMessage)
                 result = Result.success()
+                updateNotificationProgress(finalMessage, true)
             }
-            updateNotificationProgress(finalMessage, true)
             return@coroutineScope result
 
         } catch (e: kotlinx.coroutines.CancellationException) {
-            Log.w(TAG_WORKER, "Processamento de mídia explicitamente cancelado.", e)
             val cancelMsg = e.message ?: appContext.getString(R.string.error_processing_cancelled)
-            updateNotificationProgress(cancelMsg, true)
+            updateNotificationProgress(cancelMsg, true, isError = true)
             return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to cancelMsg))
         } catch (e: Exception) {
-            Log.e(TAG_WORKER, "Error during media processing batch in Worker", e)
             val errorMsg = appContext.getString(R.string.error_unexpected_media_processing, e.message)
-            updateNotificationProgress(errorMsg, true)
+            updateNotificationProgress(errorMsg, true, isError = true)
             return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
         } finally {
+            dataStoreManager.setIsProcessingImages(false) // Garante que a flag seja resetada
             Log.d(TAG_WORKER, "doWork finished.")
         }
     }
 
+    // --- O restante das funções auxiliares (processAndCreateReferenceImage, etc.) permanece o mesmo ---
+    // ... (copie o resto do seu arquivo ImageProcessingWorker.kt a partir daqui)
     private suspend fun processAndCreateReferenceImage(
         uri: Uri,
         projectDirName: String,
@@ -554,7 +531,7 @@ class ImageProcessingWorker(
             val alturaFinal = alturaPreferida ?: DEFAULT_IMAGE_HEIGHT
             Log.d(TAG_WORKER, "saveImageToStorage: Target dimensions for resize: ${larguraFinal}x${alturaFinal}")
 
-            editedBitmap = redimensionarComFundoTransparente(originalBitmap, larguraFinal, alturaFinal)
+            editedBitmap = originalBitmap//redimensionarComFundoTransparente(originalBitmap, larguraFinal, alturaFinal)
 
             // Não reciclar originalBitmap aqui se ele for o mesmo que editedBitmap (caso não haja redimensionamento)
             if (originalBitmap != editedBitmap && !originalBitmap.isRecycled) {

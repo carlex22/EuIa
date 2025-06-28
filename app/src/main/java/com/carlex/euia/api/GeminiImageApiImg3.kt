@@ -4,13 +4,17 @@ package com.carlex.euia.api
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Build
+import com.carlex.euia.data.ImagemReferencia
 import android.util.Log
-import com.carlex.euia.BuildConfig
-import com.carlex.euia.data.AudioDataStoreManager // <<<--- ADICIONAR/GARANTIR IMPORTAÇÃO
+import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
+import com.carlex.euia.managers.GerenciadorDeChavesApi
+import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
 import com.carlex.euia.utils.BitmapUtils
+import com.google.firebase.firestore.FirebaseFirestore
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -22,110 +26,42 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.Body
+import java.text.SimpleDateFormat
+import java.util.*
+import java.io.*
 import retrofit2.http.POST
 import retrofit2.http.Query
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-// --- Data Classes (Modelos para Requisição e Resposta API Imagen 3) ---
-// ... (Data classes permanecem as mesmas da versão anterior) ...
-/**
- * Representa a requisição para a API Gemini Imagen 3.
- * @property instances Lista de instâncias de entrada, cada uma contendo um prompt.
- * @property parameters Parâmetros de configuração para a geração da imagem.
- */
-@Serializable
-data class GeminiImageRequest( // Nome mantido para consistência, mas representa uma requisição para Imagen 3
-    val instances: List<InstanceBody>,
-    val parameters: ImageParametersBody
-)
+// --- Data Classes (Modelos para Requisição e Resposta API Imagen 3) --- (INALTEIRADOS)
+@Serializable data class GeminiImageRequest( val instances: List<InstanceBody>, val parameters: ImageParametersBody )
+@Serializable data class InstanceBody( val prompt: String )
+@Serializable data class ImageParametersBody( val sampleCount: Int = 1, val aspectRatio: String = "9:16" )
+@Serializable data class GeminiImageResponse( val predictions: List<PredictionBody> )
+@Serializable data class PredictionBody( @SerialName("bytesBase64Encoded") val bytesBase64Encoded: String? = null )
+@Serializable data class GeminiApiErrorResponse( val error: ApiErrorDetail )
+@Serializable data class ApiErrorDetail( val code: Int, val message: String, val status: String )
 
-/**
- * Corpo da instância para a requisição Imagen 3, contendo o prompt textual.
- * @property prompt O prompt de texto para a geração da imagem.
- */
-@Serializable
-data class InstanceBody(
-    val prompt: String
-)
-
-/**
- * Parâmetros de configuração para a geração de imagem com Imagen 3, conforme estrutura original.
- * @property sampleCount Número de imagens a serem geradas por prompt.
- * @property aspectRatio Proporção da imagem a ser gerada (ex: "1:1", "9:16").
- */
-@Serializable
-data class ImageParametersBody(
-    val sampleCount: Int = 1,       // Valor padrão original
-    val aspectRatio: String = "9:16" // Valor padrão original
-)
-
-/**
- * Resposta da API Gemini Imagen 3.
- * @property predictions Lista de predições, cada uma contendo os bytes da imagem gerada.
- */
-@Serializable
-data class GeminiImageResponse( // Nome mantido para consistência
-    val predictions: List<PredictionBody>
-)
-
-/**
- * Corpo da predição contendo a imagem gerada em Base64.
- * @property bytesBase64Encoded String contendo os bytes da imagem codificados em Base64.
- */
-@Serializable
-data class PredictionBody(
-    @SerialName("bytesBase64Encoded") // SerialName para corresponder ao JSON da API Imagen
-    val bytesBase64Encoded: String? = null
-)
-
-/**
- * Estrutura para um erro retornado pela API.
- * (Pode ser específica para Imagen 3, verificar documentação).
- */
-@Serializable
-data class GeminiApiErrorResponse( // Nome mantido
-    val error: ApiErrorDetail
-)
-
-/**
- * Detalhes de um erro da API.
- */
-@Serializable
-data class ApiErrorDetail(
-    val code: Int,
-    val message: String,
-    val status: String
-)
-
-// --- Interface do Serviço Retrofit ---
-/**
- * Interface Retrofit para interagir com a API Gemini Imagen 3.
- */
+// --- Interface do Serviço Retrofit --- (MANTIDA COMO A ORIGINAL)
 internal interface GeminiApiServiceImg3 {
+    // Usando o endpoint correto da API generativelanguage
     @POST("v1beta/models/imagen-3.0-generate-002:predict")
     suspend fun generateImage(
-        @Query("key") apiKey: String,
+        @Query("key") apiKey: String, // A chave é um parâmetro de query
         @Body requestBody: GeminiImageRequest
     ): Response<GeminiImageResponse>
 }
-// --- FIM: Interface do Serviço Retrofit ---
 
-// --- Objeto Principal da API ---
-/**
- * Objeto singleton responsável por interagir com a API Gemini Imagen 3 para gerar imagens.
- * Lida com a construção da requisição, chamada à API, processamento da resposta
- * e salvamento da imagem gerada.
- */
 object GeminiImageApiImg3 {
-
     private const val TAG = "GeminiImageApiImg3"
+    // URL base correta para o endpoint acima
     private const val BASE_URL = "https://generativelanguage.googleapis.com/"
-    private val apiKey = BuildConfig.GEMINI_API_KEY
-
+    private const val TIPO_DE_CHAVE = "img"
+    private const val MAX_TENTATIVAS = 10
+    
     private const val DEFAULT_SAVE_WIDTH = 720
     private const val DEFAULT_SAVE_HEIGHT = 1280
-
-    private const val API_SAMPLE_COUNT_INTERNAL: Int = 1
     private const val API_ASPECT_RATIO_INTERNAL: String = "9:16"
 
     private val jsonParser = Json {
@@ -134,6 +70,11 @@ object GeminiImageApiImg3 {
         encodeDefaults = true
     }
 
+    // <<<<< INSTANCIAÇÃO INTERNA DAS DEPENDÊNCIAS >>>>>
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private val gerenciadorDeChaves: GerenciadorDeChavesApi by lazy { GerenciadorDeChavesApi(firestore) }
+
+    // Cliente Retrofit (única instância, como no seu original)
     @Volatile
     private var apiServiceInstance: GeminiApiServiceImg3? = null
 
@@ -144,7 +85,6 @@ object GeminiImageApiImg3 {
     }
 
     private fun buildRetrofitService(): GeminiApiServiceImg3 {
-        // ... (buildRetrofitService permanece o mesmo)
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.NONE
         }
@@ -162,33 +102,98 @@ object GeminiImageApiImg3 {
             .create(GeminiApiServiceImg3::class.java)
     }
 
-    /**
-     * Gera uma imagem usando a API Gemini Imagen 3 com base em um prompt textual.
-     * O prompt principal é enriquecido com `videoExtrasAudio` do [AudioDataStoreManager].
-     *
-     * @param cena Prefixo para o nome do arquivo da imagem gerada.
-     * @param prompt O prompt textual principal para guiar a geração da imagem.
-     * @param context Contexto da aplicação.
-     * @param imagensReferencia Lista de caminhos de arquivos de imagem de referência (atualmente não usada na requisição para Imagen 3 com esta estrutura).
-     * @return Um [Result] contendo o caminho absoluto da imagem salva em caso de sucesso, ou uma exceção em caso de falha.
-     */
     suspend fun gerarImagem(
         cena: String,
         prompt: String,
         context: Context,
-        imagensReferencia: List<String> // Mantido na assinatura
+        imagensParaUpload: List<ImagemReferencia>
     ): Result<String> {
-        // Instanciar AudioDataStoreManager para obter videoExtrasAudio
+        return withContext(Dispatchers.IO) {
+            var tentativas = 0
+            var apiBitmap: Bitmap? = null
+
+            while(tentativas < MAX_TENTATIVAS) {
+                var chaveAtual: String? = null
+                try {
+                    // 1. OBTER CHAVE
+                    chaveAtual = gerenciadorDeChaves.getChave(TIPO_DE_CHAVE)
+                    Log.d(TAG, "Tentativa ${tentativas + 1}/$MAX_TENTATIVAS ($TIPO_DE_CHAVE): Chave '${chaveAtual.takeLast(4)}'")
+
+                    // 2. PREPARAR DADOS
+                    val (_, request) = prepararDadosParaApi(context, prompt)
+
+                    // 3. CHAMAR API
+                    Log.i(TAG, "Enviando request à API Imagen 3 (Retrofit)...")
+                    val response = getService().generateImage(chaveAtual, request)
+                    Log.i(TAG, "Resposta da API recebida. Código: ${response.code()}, Sucesso: ${response.isSuccessful}")
+
+                    // 4. TRATAR RESPOSTA
+                    if (response.isSuccessful) {
+                        val responseBody = response.body()
+                        val base64Image = responseBody?.predictions?.firstOrNull()?.bytesBase64Encoded
+
+                        if (base64Image.isNullOrEmpty()) {
+                            throw Exception("API retornou sucesso, mas sem dados de imagem. Predictions: ${responseBody?.predictions}")
+                        }
+                        
+                        // SUCESSO!
+                        Log.i(TAG, "SUCESSO na tentativa ${tentativas + 1} com a chave '${chaveAtual.takeLast(4)}'.")
+                        gerenciadorDeChaves.setChaveEmUso(chaveAtual, TIPO_DE_CHAVE)
+                        
+                        apiBitmap = BitmapUtils.decodeBitmapFromBase64(base64Image, DEFAULT_SAVE_WIDTH, DEFAULT_SAVE_HEIGHT)
+                            ?: throw Exception("Falha ao decodificar bitmap da resposta da API.")
+
+                        //val cena = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date()).toString()
+                          
+                        val caminhoImagem = saveGeneratedBitmap(cena, apiBitmap, context)
+                            ?: throw Exception("Falha ao salvar a imagem gerada localmente.")
+                        
+                        return@withContext Result.success(caminhoImagem)
+
+                    } else if (response.code() == 429) {
+                        Log.w(TAG, "Erro 429 ($TIPO_DE_CHAVE) na chave '${chaveAtual.takeLast(4)}'. Bloqueando...")
+                        response.errorBody()?.close()
+                        gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                        tentativas++
+                        if (tentativas < MAX_TENTATIVAS) {
+                            delay(1000)
+                            continue
+                        } else {
+                             return@withContext Result.failure(Exception("Máx. de tentativas ($MAX_TENTATIVAS) atingido."))
+                        }
+                    } else {
+                        val errorBody = response.errorBody()?.string() ?: "Erro desconhecido"
+                        response.errorBody()?.close()
+                        throw IOException("Erro da API (${response.code()}): $errorBody")
+                    }
+
+                } catch (e: NenhumaChaveApiDisponivelException) {
+                    Log.e(TAG, "Não há chaves disponíveis para o tipo '$TIPO_DE_CHAVE'.", e)
+                    return@withContext Result.failure(e)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro inesperado ($TIPO_DE_CHAVE) na tentativa ${tentativas + 1}", e)
+                    if (chaveAtual != null) {
+                       gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                    }
+                    return@withContext Result.failure(e)
+                } finally {
+                    BitmapUtils.safeRecycle(apiBitmap, "gerarImagem_Imagen3 (apiBitmap final)")
+                }
+            } // Fim do while
+
+            Result.failure(Exception("Falha ao gerar imagem para o tipo '$TIPO_DE_CHAVE' após $MAX_TENTATIVAS tentativas."))
+        }
+    }
+
+    private suspend fun prepararDadosParaApi(context: Context, prompt: String): Pair<String, GeminiImageRequest> {
         val audioDataStoreManager = AudioDataStoreManager(context)
         val videoExtrasFromDataStore = audioDataStoreManager.videoExtrasAudio.first()
 
-        val promptLimpo = prompt.replace("\"", "")
         val promptFinalParaApi = buildString {
-            append(promptLimpo)
+            append(prompt.replace("\"", ""))
             if (videoExtrasFromDataStore.isNotBlank()) {
-                appendLine() // Adiciona uma nova linha para separar
                 appendLine()
-                append("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES DE OBJETOS OU ROUPAS DA IMAGEN ---") // Separador claro
+                appendLine("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES DE OBJETOS OU ROUPAS DA IMAGEN ---")
                 appendLine()
                 append(videoExtrasFromDataStore)
                 appendLine()
@@ -196,122 +201,30 @@ object GeminiImageApiImg3 {
             }
         }
 
-       // Log.i(TAG, "Gerando imagem (Imagen 3) para cena: '$cena' | Usando config interna: SampleCount=${API_SAMPLE_COUNT_INTERNAL}, AspectRatio=${API_ASPECT_RATIO_INTERNAL} | Prompt Final (com extras de áudio): '${promptFinalParaApi.take(15000)}...' | Refs (não usadas na API call): ${imagensReferencia.size}")
-
-        return withContext(Dispatchers.IO) {
-            var apiBitmap: Bitmap? = null
-            try {
-                val videoPreferencesManager = VideoPreferencesDataStoreManager(context)
-                val projectDirName = videoPreferencesManager.videoProjectDir.first()
-                val larguraSalvarPreferida = videoPreferencesManager.videoLargura.first()
-                val alturaSalvarPreferida = videoPreferencesManager.videoAltura.first()
-
-                val request = GeminiImageRequest(
-                    instances = listOf(InstanceBody(prompt = promptFinalParaApi)), // Usa o promptFinalParaApi
-                    parameters = ImageParametersBody(
-                        sampleCount = API_SAMPLE_COUNT_INTERNAL,
-                        aspectRatio = API_ASPECT_RATIO_INTERNAL
-                    )
-                )
-                //Log.d(TAG, "Enviando requisição para Gemini API (Imagen 3) com config: ${request.parameters} e prompt (início): ${promptFinalParaApi.take(150)}")
-
-                val response = getService().generateImage(apiKey, request)
-
-                if (response.isSuccessful) {
-                    val responseBody = response.body() // Pode ser null
-                    if (responseBody == null) {
-                        Log.e(TAG, "Resposta da API (Imagen 3) OK, mas corpo está nulo.")
-                        return@withContext Result.failure(Exception("API (Imagen 3) retornou sucesso, mas com corpo de resposta nulo."))
-                    }
-                    val base64Image = responseBody?.predictions?.firstOrNull()?.bytesBase64Encoded
-
-                    if (!base64Image.isNullOrEmpty()) {
-                        Log.i(TAG, "Imagem recebida com sucesso da API (Imagen 3 Base64).")
-                        apiBitmap = BitmapUtils.decodeBitmapFromBase64(
-                            base64Image,
-                            larguraSalvarPreferida ?: DEFAULT_SAVE_WIDTH,
-                            alturaSalvarPreferida ?: DEFAULT_SAVE_HEIGHT
-                        )
-                        if (apiBitmap == null) {
-                            return@withContext Result.failure(Exception("Falha ao decodificar bitmap da API (Imagen 3)."))
-                        }
-
-                        val caminhoImagem = saveGeneratedBitmap(
-                            prefixo = cena,
-                            apiBitmap = apiBitmap,
-                            context = context,
-                            projectDirName = projectDirName,
-                            targetSaveWidth = larguraSalvarPreferida,
-                            targetSaveHeight = alturaSalvarPreferida
-                        )
-
-                        if (caminhoImagem.isNotEmpty()) {
-                            Log.i(TAG, "Imagem (Imagen 3) salva em: $caminhoImagem")
-                            Result.success(caminhoImagem)
-                        } else {
-                            Log.e(TAG, "Falha ao salvar a imagem (Imagen 3) decodificada.")
-                            Result.failure(Exception("Falha ao salvar a imagem (Imagen 3) gerada."))
-                        }
-                    } else {
-                        Log.w(TAG, "Resposta da API (Imagen 3) OK, mas sem dados de imagem Base64. Predictions: ${responseBody?.predictions}")
-                        Result.failure(Exception("API (Imagen 3) retornou sucesso, mas a imagem não foi encontrada na resposta."))
-                    }
-                } else {
-                    val errorCode = response.code()
-                    var errorBodyString: String? = null
-                    try {
-                        errorBodyString = response.errorBody()?.string()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Falha ao ler o corpo do erro (Imagen 3): ${e.message}")
-                    }
-                    Log.e(TAG, "Erro da API Gemini (Imagen 3): Código $errorCode. Corpo: ${errorBodyString?.take(500)}")
-                    if (!errorBodyString.isNullOrBlank()) {
-                        // Log.e(TAG, "Corpo do erro (Imagen 3): $errorBodyString") // Log já feito acima
-                        try {
-                            val apiError = jsonParser.decodeFromString<GeminiApiErrorResponse>(errorBodyString)
-                            Result.failure(Exception("Erro da API Gemini (Imagen 3) ($errorCode): ${apiError.error.message} (Status: ${apiError.error.status})"))
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Falha ao parsear corpo do erro JSON da API (Imagen 3): ", e)
-                            Result.failure(Exception("Erro da API Gemini (Imagen 3) ($errorCode): ${errorBodyString.take(200)} (Não foi possível parsear detalhes do erro)"))
-                        }
-                    } else {
-                        Result.failure(Exception("Erro da API Gemini (Imagen 3) ($errorCode) sem corpo de resposta."))
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Exceção durante a chamada à API Gemini (Imagen 3) ou processamento da resposta: ${e.message}", e)
-                Result.failure(Exception("Falha na comunicação com a API Gemini (Imagen 3): ${e.message}", e))
-            } finally {
-                BitmapUtils.safeRecycle(apiBitmap, "gerarImagem_Imagen3 (apiBitmap final)")
-            }
-        }
+        val request = GeminiImageRequest(
+            instances = listOf(InstanceBody(prompt = promptFinalParaApi)),
+            parameters = ImageParametersBody(
+                sampleCount = 1,
+                aspectRatio = API_ASPECT_RATIO_INTERNAL
+            )
+        )
+        
+        return Pair(promptFinalParaApi, request)
     }
 
-    /**
-     * Salva o Bitmap gerado pela API Imagen 3 após redimensioná-lo para as dimensões de salvamento alvo.
-     * O Bitmap da API original NÃO é reciclado por esta função.
-     */
-    private suspend fun saveGeneratedBitmap(
-        prefixo: String,
-        apiBitmap: Bitmap,
-        context: Context,
-        projectDirName: String,
-        targetSaveWidth: Int?,
-        targetSaveHeight: Int?
-    ): String {
-        // ... (saveGeneratedBitmap permanece o mesmo)
+    private suspend fun saveGeneratedBitmap(prefixo: String, apiBitmap: Bitmap, context: Context): String? {
+        val videoPreferencesManager = VideoPreferencesDataStoreManager(context)
+        val projectDirName = videoPreferencesManager.videoProjectDir.first()
+        val targetSaveWidth = videoPreferencesManager.videoLargura.first()
+        val targetSaveHeight = videoPreferencesManager.videoAltura.first()
+        
         var resizedBitmap: Bitmap? = null
         try {
             val finalSaveWidth = targetSaveWidth ?: DEFAULT_SAVE_WIDTH
             val finalSaveHeight = targetSaveHeight ?: DEFAULT_SAVE_HEIGHT
 
-            Log.d(TAG, "Redimensionando bitmap da API (Imagen 3) de ${apiBitmap.width}x${apiBitmap.height} para ${finalSaveWidth}x${finalSaveHeight} (prefixo: $prefixo)")
             resizedBitmap = BitmapUtils.resizeWithTransparentBackground(apiBitmap, finalSaveWidth, finalSaveHeight)
-
-            if (resizedBitmap == null) {
-                Log.e(TAG, "Falha ao redimensionar bitmap da API (Imagen 3) para prefixo '$prefixo'.")
-                return ""
-            }
+                ?: return null
 
             val saveFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Bitmap.CompressFormat.WEBP_LOSSLESS
@@ -322,17 +235,10 @@ object GeminiImageApiImg3 {
             val quality = if (saveFormat == Bitmap.CompressFormat.WEBP_LOSSLESS) 100 else 95
 
             return BitmapUtils.saveBitmapToFile(
-                context = context,
-                bitmap = resizedBitmap,
-                projectDirName = projectDirName,
-                subDir = "gemini_img3_generated_images",
-                baseName = prefixo,
-                format = saveFormat,
-                quality = quality
-            ) ?: ""
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao salvar bitmap gerado (Imagen 3, prefixo '$prefixo'): ${e.message}", e)
-            return ""
+                context = context, bitmap = resizedBitmap, projectDirName = projectDirName,
+                subDir = "gemini_img3_generated_images", baseName = prefixo,
+                format = saveFormat, quality = quality
+            )
         } finally {
             BitmapUtils.safeRecycle(resizedBitmap, "saveGeneratedBitmap_Imagen3 (resized for $prefixo)")
         }

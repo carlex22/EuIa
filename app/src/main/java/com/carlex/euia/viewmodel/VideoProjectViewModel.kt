@@ -7,10 +7,12 @@ import android.media.MediaPlayer
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.arthenica.ffmpegkit.FFmpegKit
@@ -21,16 +23,17 @@ import com.carlex.euia.data.*
 import com.carlex.euia.prompts.CreateScenes
 import com.carlex.euia.prompts.CreateScenesChat
 import com.carlex.euia.utils.WorkerTags
-import com.carlex.euia.worker.VideoProcessingWorker
+import com.carlex.euia.worker.VideoProcessingWorker // Import da classe
+// Importações Corretas das Constantes do VideoProcessingWorker
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_CHOSEN_REFERENCE_IMAGE_PATH
-import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_IMAGE_GEN_PROMPT
+import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_IMAGE_GEN_PROMPT // Continuará sendo usado para a task de imagem
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_SCENE_ID
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_TASK_TYPE
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.TASK_TYPE_CHANGE_CLOTHES
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.TASK_TYPE_GENERATE_IMAGE
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.TASK_TYPE_GENERATE_VIDEO
-import com.carlex.euia.worker.VideoProcessingWorker.Companion.TAG_PREFIX_SCENE_CLOTHES_PROCESSING
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.TAG_PREFIX_SCENE_PROCESSING
+import com.carlex.euia.worker.VideoProcessingWorker.Companion.TAG_PREFIX_SCENE_CLOTHES_PROCESSING
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.TAG_PREFIX_SCENE_VIDEO_PROCESSING
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_IMAGENS_REFERENCIA_JSON_INPUT
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_SOURCE_IMAGE_PATH_FOR_VIDEO
@@ -59,6 +62,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
 
     private val TAG = "VideoProjectViewModel"
 
+    private val authViewModel = AuthViewModel(application)
     private val userInfoDataStoreManager = UserInfoDataStoreManager(application)
     private val projectDataStoreManager = VideoProjectDataStoreManager(application)
     private val audioDataStoreManager = AudioDataStoreManager(application)
@@ -76,8 +80,21 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     private val _isProcessingGlobalScenes = MutableStateFlow(false)
     val isProcessingGlobalScenes: StateFlow<Boolean> = _isProcessingGlobalScenes.asStateFlow()
 
+    private val _globalSceneError = MutableStateFlow<String?>(null)
+    val globalSceneError: StateFlow<String?> = _globalSceneError.asStateFlow()
+
     private val _showSceneConfirmationDialogVM = MutableStateFlow(false)
     val showSceneGenerationConfirmationDialog: StateFlow<Boolean> = _showSceneConfirmationDialogVM.asStateFlow()
+
+    private val _showImageBatchCostConfirmationDialog = MutableStateFlow(false)
+    val showImageBatchCostConfirmationDialog: StateFlow<Boolean> = _showImageBatchCostConfirmationDialog.asStateFlow()
+
+    private val _pendingImageBatchCost = MutableStateFlow(0L)
+    val pendingImageBatchCost: StateFlow<Long> = _pendingImageBatchCost.asStateFlow()
+    
+    // <<<< CORREÇÃO: Variável movida para o escopo da classe >>>>
+    private var _pendingSceneListForGeneration: List<SceneLinkData>? = null
+
 
     val sceneLinkDataList: StateFlow<List<SceneLinkData>> = projectDataStoreManager.sceneLinkDataList
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
@@ -126,9 +143,20 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     val promptForRecreateImage: StateFlow<String?> = _promptForRecreateImage.asStateFlow()
     private val _sceneIdForReferenceChangeDialog = MutableStateFlow<String?>(null)
     val sceneIdForReferenceChangeDialog: StateFlow<String?> = _sceneIdForReferenceChangeDialog.asStateFlow()
+    private val workInfoObserver = Observer<List<WorkInfo>> { workInfos ->
+        val isAnyWorkRunning = workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+        Log.d(TAG, "Observador de WorkInfo (tag ${WorkerTags.VIDEO_PROCESSING}): ${workInfos.size} trabalhos. Algum rodando? $isAnyWorkRunning")
+    }
+
 
     init {
         Log.d(TAG, "VideoProjectViewModel inicializado.")
+        workManager.getWorkInfosByTagLiveData(WorkerTags.VIDEO_PROCESSING)
+            .observeForever(workInfoObserver)
+    }
+
+    fun clearGlobalSceneError() {
+        _globalSceneError.value = null
     }
 
     fun playAudioSnippetForScene(scene: SceneLinkData) {
@@ -288,13 +316,13 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             if (legendaPathValue.isBlank()) {
                 val errorMsg = applicationContext.getString(R.string.error_subtitle_path_not_set_for_scenes)
                 Log.w(TAG, "Não é possível gerar cenas: $errorMsg")
-                Toast.makeText(applicationContext, errorMsg, Toast.LENGTH_LONG).show()
+                _globalSceneError.value = errorMsg
                 return@launch
             }
             if (narrativaValue.isBlank()) {
                 val errorMsg = applicationContext.getString(if (isChat) R.string.error_dialog_script_not_set_for_scenes else R.string.error_narrative_not_set_for_scenes)
                 Log.w(TAG, "Não é possível gerar cenas: $errorMsg")
-                Toast.makeText(applicationContext, errorMsg, Toast.LENGTH_LONG).show()
+                _globalSceneError.value = errorMsg
                 return@launch
             }
 
@@ -353,12 +381,12 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             return
         }
         _isProcessingGlobalScenes.value = true
-        Log.i(TAG, "performFullSceneGeneration: Iniciando. Modo Chat: $isChat. Legenda: $legendaPathParaApi")
+        _globalSceneError.value = null
+        Log.i(TAG, "performFullSceneGeneration: Iniciando...")
 
         if (legendaPathParaApi.isBlank()) {
             _isProcessingGlobalScenes.value = false
-            Log.e(TAG, "performFullSceneGeneration: Caminho da legenda está vazio.")
-            withContext(Dispatchers.Main) { Toast.makeText(applicationContext, R.string.error_subtitle_path_not_set_for_scenes, Toast.LENGTH_LONG).show() }
+            _globalSceneError.value = applicationContext.getString(R.string.error_subtitle_path_not_set_for_scenes)
             return
         }
 
@@ -375,7 +403,6 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 videoObjectiveContent = videoObjectiveContent.value,
                 videoObjectiveOutcome = videoObjectiveOutcome.value
             ).prompt
-            Log.d(TAG, "Usando CreateScenesChat prompt.")
         } else {
             promptGerarCenas = CreateScenes(
                 textNarrative = narrativaOuDialogo,
@@ -389,14 +416,13 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 videoObjectiveContent = videoObjectiveContent.value,
                 videoObjectiveOutcome = videoObjectiveOutcome.value
             ).prompt
-            Log.d(TAG, "Usando CreateScenes prompt (narrador único).")
         }
 
         val imagensReferenciasAtuais = currentImagensReferenciaStateFlow.value
         val imagePathsForGemini = imagensReferenciasAtuais.map { it.path }
 
 
-        Log.d(TAG, "Chamando GeminiTextAndVisionProApi.perguntarAoGemini com ${imagePathsForGemini.size} imagens de ref (para contexto do prompt de cenas) e legenda: $legendaPathParaApi. Prompt (início): ${promptGerarCenas.take(100)}")
+        Log.d(TAG, "Chamando GeminiTextAndVisionProApi para gerar estrutura de cenas...")
         val respostaResult = GeminiTextAndVisionProApi.perguntarAoGemini(
             pergunta = promptGerarCenas,
             imagens = imagePathsForGemini,
@@ -406,19 +432,21 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         if (respostaResult.isSuccess) {
             val resposta = respostaResult.getOrNull()
             if (resposta.isNullOrBlank()){
-                Log.e(TAG, "Resposta da API para gerar cenas vazia.")
-                withContext(Dispatchers.Main) { Toast.makeText(applicationContext, applicationContext.getString(R.string.error_ai_empty_response_scenes), Toast.LENGTH_SHORT).show() }
+                _globalSceneError.value = applicationContext.getString(R.string.error_ai_empty_response_scenes)
                 _isProcessingGlobalScenes.value = false
                 return
             }
 
             val respostaAjustada = ajustarRespostaLocalViewModel(resposta)
-            Log.d(TAG, "Resposta Ajustada API (${respostaAjustada.length} chars): ${respostaAjustada.take(100)}...")
-
             try {
+                // <<< DELAY 1: AQUI, APÓS RECEBER A RESPOSTA E ANTES DE CRIAR OS OBJETOS E ATUALIZAR A UI >>>
+                Log.d(TAG, "Resposta da IA recebida. Aguardando 0.5 segundos antes de processar e exibir as cenas.")
+                delay(100)
+
                 val roteiroCenasFinal = JSONArray(respostaAjustada)
                 val generatedSceneDataList = mutableListOf<SceneLinkData>()
-
+                
+                var temoIni : Double? = 0.0
                 for (i in 0 until roteiroCenasFinal.length()) {
                     val cenaObj = roteiroCenasFinal.getJSONObject(i)
                     val originalImageIndexFromApi = cenaObj.optString("FOTO_REFERENCIA", null)?.toIntOrNull()
@@ -443,21 +471,18 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                                  videoPathFromRef = originalRefImage.pathVideo
                                  thumbPathFromRef = originalRefImage.path
                                  refIsVideo = true
-                                 Log.i(TAG, "Cena ${cenaObj.optString("CENA", "")} usará vídeo diretamente da ImagemReferencia: ${originalRefImage.pathVideo}")
                              }
                         } else if (originalImageIndexFromApi != null) {
                             Log.w(TAG, "Índice FOTO_REFERENCIA da API ($originalImageIndexFromApi) inválido para ${imagensReferenciasAtuais.size} imagens.")
                         }
                     }
-                    
-                      // Ajuste o valor conforme desejar (800ms aqui é só um exemplo)
-
-                 
-
+                     
+                     
+                     
                      generatedSceneDataList.add(SceneLinkData(
-                         id = cenaObj.optString("CENA", null),
+                         id = UUID.randomUUID().toString(),
                          cena = cenaObj.optString("CENA", null),
-                         tempoInicio = if (cenaObj.has("TEMPO_INICIO")) cenaObj.optDouble("TEMPO_INICIO") else null,
+                         tempoInicio = temoIni,
                          tempoFim = if (cenaObj.has("TEMPO_FIM")) cenaObj.optDouble("TEMPO_FIM") else null,
                          imagemReferenciaPath = refImagePathForScene,
                          descricaoReferencia = refDescriptionForScene,
@@ -465,26 +490,78 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                          exibirProduto = if (cenaObj.has("EXIBIR_PRODUTO")) cenaObj.optBoolean("EXIBIR_PRODUTO") else null,
                          imagemGeradaPath = videoPathFromRef,
                          pathThumb = thumbPathFromRef,
-                         isGenerating = if (refIsVideo) false else !cenaObj.optString("PROMPT_PARA_IMAGEM", "").isNullOrBlank(),
+                         isGenerating = false,
                          aprovado = refIsVideo,
                          promptVideo = null,
                          audioPathSnippet = null,
                          isGeneratingVideo = false
                      ))
+                     
+                     temoIni = if (cenaObj.has("TEMPO_FIM")) cenaObj.optDouble("TEMPO_FIM") else null
+
                 }
-                replaceSceneLinkListAndTriggerWorkers(generatedSceneDataList)
-                withContext(Dispatchers.Main) { Toast.makeText(applicationContext, applicationContext.getString(R.string.toast_scene_prompts_and_images_queued), Toast.LENGTH_SHORT).show()}
+
+                projectDataStoreManager.setSceneLinkDataList(generatedSceneDataList)
+                Log.i(TAG, "Estrutura de ${generatedSceneDataList.size} cenas salva no DataStore.")
+                _isProcessingGlobalScenes.value = false
+
+                val scenesThatNeedGeneration = generatedSceneDataList.filter {
+                    it.promptGeracao?.isNotBlank() == true && it.imagemGeradaPath == null
+                }
+
+                if (scenesThatNeedGeneration.isNotEmpty()) {
+                    val totalCost = scenesThatNeedGeneration.size * TaskType.IMAGE.cost
+                    val user = authViewModel.userProfile.value
+
+                    if (user != null && !user.isPremium && user.creditos < totalCost) {
+                        _globalSceneError.value = applicationContext.getString(R.string.error_insufficient_credits_for_batch, totalCost, user.creditos)
+                    } else {
+                        _pendingImageBatchCost.value = totalCost
+                        _pendingSceneListForGeneration = generatedSceneDataList
+                        _showImageBatchCostConfirmationDialog.value = true
+                        Log.d(TAG, "Disparando diálogo de confirmação para ${scenesThatNeedGeneration.size} imagens com custo de $totalCost créditos.")
+                    }
+                } else {
+                    Toast.makeText(applicationContext, "Estrutura de cenas criada. Nenhuma imagem nova para gerar via IA.", Toast.LENGTH_SHORT).show()
+                }
+
             } catch (e: JSONException) {
-                Log.e(TAG, "Erro de JSON ao processar resposta de cenas: ${e.message}\nResposta ajustada: $respostaAjustada", e)
-                withContext(Dispatchers.Main) { Toast.makeText(applicationContext, applicationContext.getString(R.string.error_processing_ai_json_response_scenes), Toast.LENGTH_LONG).show()}
+                _globalSceneError.value = applicationContext.getString(R.string.error_processing_ai_json_response_scenes)
                 _isProcessingGlobalScenes.value = false
             }
         } else {
             val exception = respostaResult.exceptionOrNull()
-            Log.e(TAG, "Falha na API ao gerar cenas: ${exception?.message}", exception)
-            withContext(Dispatchers.Main) { Toast.makeText(applicationContext, applicationContext.getString(R.string.error_api_failed_scenes, exception?.message ?: applicationContext.getString(R.string.unknown_error)), Toast.LENGTH_LONG).show()}
+            _globalSceneError.value = exception?.message ?: applicationContext.getString(R.string.error_api_failed_scenes_unknown)
             _isProcessingGlobalScenes.value = false
+            Log.e(TAG, "Falha na API ao gerar cenas: ${_globalSceneError.value}", exception)
         }
+    }
+
+    fun confirmImageBatchGeneration() {
+        viewModelScope.launch {
+            _showImageBatchCostConfirmationDialog.value = false
+
+            val scenesToProcess = _pendingSceneListForGeneration
+            if (scenesToProcess.isNullOrEmpty()) {
+                Log.w(TAG, "Confirmação de geração em lote, mas nenhuma cena pendente encontrada.")
+                cancelImageBatchGeneration()
+                return@launch
+            }
+
+            // Inicia o processo real
+            Toast.makeText(applicationContext, applicationContext.getString(R.string.toast_scene_prompts_and_images_queued), Toast.LENGTH_SHORT).show()
+
+            triggerBatchImageGenerationForScenes(scenesToProcess)
+
+            cancelImageBatchGeneration()
+        }
+    }
+
+    fun cancelImageBatchGeneration() {
+        _isProcessingGlobalScenes.value = false
+        _showImageBatchCostConfirmationDialog.value = false
+        _pendingImageBatchCost.value = 0
+        _pendingSceneListForGeneration = null
     }
 
     private fun ajustarRespostaLocalViewModel(resposta: String, tag: String = TAG): String {
@@ -521,90 +598,80 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     fun generateImageForScene(sceneId: String, prompt: String) {
-        val sceneToUpdate = sceneLinkDataList.value.find { it.id == sceneId }
-        if (sceneToUpdate == null) {
-            Toast.makeText(applicationContext, applicationContext.getString(R.string.error_scene_not_found_for_image_gen), Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // --- INÍCIO DA VERIFICAÇÃO DE TAREFA ATIVA ---
-        if (sceneToUpdate.isGenerating || sceneToUpdate.isChangingClothes || sceneToUpdate.isGeneratingVideo) {
-            // Usa a nova mensagem de status da fila se disponível, senão uma mensagem genérica.
-            val statusMessage = sceneToUpdate.queueStatusMessage ?: applicationContext.getString(R.string.status_scene_already_processing_simple)
-            Toast.makeText(applicationContext, statusMessage, Toast.LENGTH_LONG).show() // Long para dar tempo de ler
-            return
-        }
-        // --- FIM DA VERIFICAÇÃO DE TAREFA ATIVA ---
-
-        if (prompt.isBlank()) {
-            Toast.makeText(applicationContext, applicationContext.getString(R.string.error_empty_prompt_for_image_gen), Toast.LENGTH_SHORT).show()
-            return
-        }
-
         viewModelScope.launch {
-            // --- ATUALIZAÇÃO INICIAL DA UI ---
-            internalUpdateSceneState(sceneId) {
-                it.copy(
-                    isGenerating = true,
-                    generationAttempt = 1,
-                    generationErrorMessage = null,
-                    queueStatusMessage = applicationContext.getString(R.string.status_enqueuing),
-                    queueRequestId = null // O worker vai gerar e salvar o ID real.
-                )
+            val sceneToUpdate = sceneLinkDataList.value.find { it.id == sceneId }
+            if (sceneToUpdate == null) {
+                Toast.makeText(applicationContext, applicationContext.getString(R.string.error_scene_not_found_for_image_gen), Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            if (sceneToUpdate.isGenerating || sceneToUpdate.isChangingClothes || sceneToUpdate.isGeneratingVideo) {
+                Toast.makeText(applicationContext, applicationContext.getString(R.string.status_scene_already_processing, sceneToUpdate.cena ?: sceneId.take(4)), Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            if (prompt.isBlank()) {
+                Toast.makeText(applicationContext, applicationContext.getString(R.string.error_empty_prompt_for_image_gen), Toast.LENGTH_SHORT).show()
+                return@launch
             }
 
-            // --- LÓGICA DE PREPARAÇÃO DO WORKER (EXISTENTE) ---
+            enqueueImageGenerationWorker(sceneId, prompt)
+        }
+     }
+
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private fun enqueueImageGenerationWorker(sceneId: String, prompt: String) {
+        viewModelScope.launch {
             val globalImages = currentImagensReferenciaStateFlow.first()
             var imagesJsonForWorker = "[]"
+            val sceneToUpdate = sceneLinkDataList.value.find { it.id == sceneId } ?: return@launch
 
             if (sceneToUpdate.imagemReferenciaPath.isNotBlank()) {
                 val specificRefImage = globalImages.find { it.path == sceneToUpdate.imagemReferenciaPath }
                 if (specificRefImage != null) {
                     try {
                         imagesJsonForWorker = json.encodeToString(ListSerializer(ImagemReferencia.serializer()), listOf(specificRefImage))
-                        Log.d(TAG, "Enviando imagem de referência específica para Worker: ${specificRefImage.path}")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Falha ao serializar imagem de referência específica para cena $sceneId.", e)
+                        Log.e(TAG, "Falha ao serializar imagem de referência para cena $sceneId.", e)
                     }
-                } else {
-                    Log.w(TAG, "Imagem de referência específica '${sceneToUpdate.imagemReferenciaPath}' para cena $sceneId não encontrada. Worker usará lista vazia.")
                 }
-            } else {
-                Log.d(TAG, "Nenhuma imagem de referência específica para cena $sceneId. Worker usará lista vazia.")
             }
 
             val inputData = workDataOf(
-                KEY_SCENE_ID to sceneId,
-                KEY_TASK_TYPE to TASK_TYPE_GENERATE_IMAGE,
-                KEY_IMAGE_GEN_PROMPT to prompt,
-                KEY_IMAGENS_REFERENCIA_JSON_INPUT to imagesJsonForWorker
+                VideoProcessingWorker.KEY_SCENE_ID to sceneId,
+                VideoProcessingWorker.KEY_TASK_TYPE to VideoProcessingWorker.TASK_TYPE_GENERATE_IMAGE,
+                VideoProcessingWorker.KEY_IMAGE_GEN_PROMPT to prompt,
+                VideoProcessingWorker.KEY_IMAGENS_REFERENCIA_JSON_INPUT to imagesJsonForWorker
             )
-            val sceneSpecificTag = TAG_PREFIX_SCENE_PROCESSING + sceneId
-            
-            
-delay(500L) 
-            
+            val sceneSpecificTag = VideoProcessingWorker.TAG_PREFIX_SCENE_PROCESSING + sceneId
             val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
                 .setInputData(inputData)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .addTag(sceneSpecificTag)
                 .addTag(WorkerTags.VIDEO_PROCESSING)
                 .build()
+
             workManager.enqueue(workRequest)
+
+            internalUpdateSceneState(sceneId) {
+                it.copy(
+                    isGenerating = true,
+                    generationAttempt = 1,
+                    generationErrorMessage = null
+                )
+            }
         }
     }
-    
+
     private suspend fun internalUpdateSceneState(sceneId: String, updateAction: (SceneLinkData) -> SceneLinkData) {
         val currentList = projectDataStoreManager.sceneLinkDataList.first()
         val originalScene = currentList.find { it.id == sceneId }
-        Log.d(TAG, "internalUpdateSceneState - ANTES para cena $sceneId: isGenImg=${originalScene?.isGenerating}, errMsg=${originalScene?.generationErrorMessage}, queueMsg=${originalScene?.queueStatusMessage}, queueId=${originalScene?.queueRequestId}")
+        Log.d(TAG, "internalUpdateSceneState - ANTES para cena $sceneId: isGenImg=${originalScene?.isGenerating}, isGenVid=${originalScene?.isGeneratingVideo}, isChgClo=${originalScene?.isChangingClothes}, attempt=${originalScene?.generationAttempt}, imgPath=${originalScene?.imagemGeradaPath?.takeLast(20)}, thumbPath=${originalScene?.pathThumb?.takeLast(20)}")
 
         val newList = currentList.map {
             if (it.id == sceneId) updateAction(it) else it
         }
 
         val updatedScene = newList.find { it.id == sceneId }
-        Log.d(TAG, "internalUpdateSceneState - DEPOIS para cena $sceneId: isGenImg=${updatedScene?.isGenerating}, errMsg=${updatedScene?.generationErrorMessage}, queueMsg=${updatedScene?.queueStatusMessage}, queueId=${updatedScene?.queueRequestId}")
+        Log.d(TAG, "internalUpdateSceneState - DEPOIS para cena $sceneId: isGenImg=${updatedScene?.isGenerating}, isGenVid=${updatedScene?.isGeneratingVideo}, isChgClo=${updatedScene?.isChangingClothes}, attempt=${updatedScene?.generationAttempt}, imgPath=${updatedScene?.imagemGeradaPath?.takeLast(20)}, thumbPath=${updatedScene?.pathThumb?.takeLast(20)}")
 
 
         if (newList != currentList) {
@@ -635,72 +702,32 @@ delay(500L)
                 isChangingClothes = false,
                 generationAttempt = 0,
                 clothesChangeAttempt = 0,
-                generationErrorMessage = applicationContext.getString(R.string.message_cancelled_by_user),
-                queueRequestId = null, // Limpa o ID da fila ao cancelar
-                queueStatusMessage = null // Limpa a mensagem da fila
-            )}
+                generationErrorMessage = applicationContext.getString(R.string.message_cancelled_by_user))
+            }
             Toast.makeText(applicationContext, applicationContext.getString(R.string.toast_generation_cancelled_for_scene, sceneId.take(4)), Toast.LENGTH_SHORT).show()
         }
     }
 
-    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun triggerBatchImageGenerationForScenes(scenesToGenerate: List<SceneLinkData>) {
          viewModelScope.launch {
-             val globalImages = currentImagensReferenciaStateFlow.first()
-
              scenesToGenerate.forEach { sceneLinkData ->
                  if (!viewModelScope.isActive) {
                      Log.w(TAG, "triggerBatchImageGenerationForScenes: Coroutine do ViewModel cancelada, parando de enfileirar workers.")
                      return@forEach
                  }
-                 
-                 
-                 
                  if (sceneLinkData.pathThumb != null) {
-                     Log.d(TAG, "Pulando geração de imagem estática para cena ${sceneLinkData.id}, pois já é um vídeo de referência.")
                      internalUpdateSceneState(sceneLinkData.id) { it.copy(isGenerating = false, generationAttempt = 0) }
                      return@forEach
                  }
-
                  if (sceneLinkData.promptGeracao.isNullOrBlank()) {
-                     Log.w(TAG, "Pulando geração em lote para cena ${sceneLinkData.id} devido a prompt vazio.")
                      internalUpdateSceneState(sceneLinkData.id) { it.copy(isGenerating = false, generationAttempt = 0) }
                  } else {
-                     var imagesJsonForThisWorker = "[]"
+                     Log.d(TAG, "Aguardando 0.5 segundos antes de enfileirar a geração para a cena ${sceneLinkData.cena ?: sceneLinkData.id}.")
+                     delay(100)
 
-                     if (sceneLinkData.imagemReferenciaPath.isNotBlank()) {
-                         val specificRefImage = globalImages.find { it.path == sceneLinkData.imagemReferenciaPath }
-                         if (specificRefImage != null) {
-                             try {
-                                 imagesJsonForThisWorker = json.encodeToString(ListSerializer(ImagemReferencia.serializer()), listOf(specificRefImage))
-                                 Log.d(TAG, "Geração em lote: Enviando imagem de referência específica para Worker (cena ${sceneLinkData.id}): ${specificRefImage.path}")
-                             } catch (e: Exception) {
-                                 Log.e(TAG, "Geração em lote: Falha ao serializar imagem de referência específica para cena ${sceneLinkData.id}.", e)
-                             }
-                         } else {
-                             Log.w(TAG, "Geração em lote: Imagem de referência específica '${sceneLinkData.imagemReferenciaPath}' para cena ${sceneLinkData.id} não encontrada. Worker usará lista vazia.")
-                         }
-                     } else {
-                         Log.d(TAG, "Geração em lote: Nenhuma imagem de referência específica para cena ${sceneLinkData.id}. Worker usará lista vazia.")
-                     }
+                     if (!viewModelScope.isActive) return@forEach
 
-                     val inputData = workDataOf(
-                         KEY_SCENE_ID to sceneLinkData.id,
-                         KEY_TASK_TYPE to TASK_TYPE_GENERATE_IMAGE,
-                         KEY_IMAGE_GEN_PROMPT to sceneLinkData.promptGeracao,
-                         KEY_IMAGENS_REFERENCIA_JSON_INPUT to imagesJsonForThisWorker
-                     )
-                     val sceneSpecificTag = TAG_PREFIX_SCENE_PROCESSING + sceneLinkData.id
-                     
-                     
-                     delay(500)
-                     val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
-                         .setInputData(inputData)
-                         .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                         .addTag(sceneSpecificTag)
-                         .addTag(WorkerTags.VIDEO_PROCESSING)
-                         .build()
-                     workManager.enqueue(workRequest)
+                     enqueueImageGenerationWorker(sceneLinkData.id, sceneLinkData.promptGeracao)
                  }
              }
          }
@@ -800,8 +827,6 @@ delay(500L)
                 KEY_CHOSEN_REFERENCE_IMAGE_PATH to chosenReferenceImagePath,
             )
             val sceneSpecificTag = TAG_PREFIX_SCENE_CLOTHES_PROCESSING + sceneId
-          
-          delay(500L) 
             val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
                 .setInputData(inputData)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -818,13 +843,7 @@ delay(500L)
         val cancelResult = workManager.cancelAllWorkByTag(sceneSpecificTag)
 
         viewModelScope.launch {
-            internalUpdateSceneState(sceneId) { it.copy(
-                isChangingClothes = false,
-                clothesChangeAttempt = 0,
-                generationErrorMessage = applicationContext.getString(R.string.message_cancelled_by_user),
-                queueRequestId = null, // Limpa o ID da fila ao cancelar
-                queueStatusMessage = null // Limpa a mensagem da fila
-            )}
+            internalUpdateSceneState(sceneId) { it.copy(isChangingClothes = false, clothesChangeAttempt = 0, generationErrorMessage = applicationContext.getString(R.string.message_cancelled_by_user)) }
             Toast.makeText(applicationContext, applicationContext.getString(R.string.toast_clothes_change_cancelled_for_scene, sceneId.take(4)), Toast.LENGTH_SHORT).show()
         }
         cancelResult.result.addListener({
@@ -845,9 +864,7 @@ delay(500L)
                    isGeneratingVideo = false,
                    pathThumb = null,
                    promptVideo = null,
-                   audioPathSnippet = null,
-                   queueRequestId = null,
-                   queueStatusMessage = null
+                   audioPathSnippet = null
                )
            }
        }
@@ -890,9 +907,7 @@ delay(500L)
                         aprovado = newAprovado,
                         generationErrorMessage = null,
                         promptVideo = null,
-                        audioPathSnippet = null,
-                        queueRequestId = null,
-                        queueStatusMessage = null
+                        audioPathSnippet = null
                     )
                 } else { scene }
             }
@@ -924,9 +939,7 @@ delay(500L)
                         generationErrorMessage = null,
                         isGeneratingVideo = false,
                         promptVideo = null,
-                        audioPathSnippet = null,
-                        queueRequestId = null,
-                        queueStatusMessage = null
+                        audioPathSnippet = null
                     )
                 } else { scene }
             }
@@ -981,21 +994,20 @@ delay(500L)
                 it.copy(
                     isGeneratingVideo = true,
                     generationAttempt = 1,
-                    promptVideo = videoPromptFromDialog,
-                    generationErrorMessage = null,
-                    queueStatusMessage = applicationContext.getString(R.string.status_enqueuing)
+                    promptVideo = videoPromptFromDialog, // Salva o prompt que será usado
+                    generationErrorMessage = null
+                    // Mantém imagemGeradaPath e pathThumb da imagem estática visíveis durante a geração do vídeo.
                 )
             }
 
             val inputData = workDataOf(
                 KEY_SCENE_ID to sceneId,
                 KEY_TASK_TYPE to TASK_TYPE_GENERATE_VIDEO,
-                KEY_VIDEO_GEN_PROMPT to videoPromptFromDialog,
+                KEY_VIDEO_GEN_PROMPT to videoPromptFromDialog, // <<< --- USA A NOVA CHAVE COM O PROMPT DO VÍDEO --- >>>
                 KEY_SOURCE_IMAGE_PATH_FOR_VIDEO to currentSourceImagePathForVideo
+                // KEY_IMAGENS_REFERENCIA_JSON_INPUT não é necessário aqui, pois o vídeo é gerado a partir de UMA imagem fonte.
             )
             val sceneSpecificTag = TAG_PREFIX_SCENE_VIDEO_PROCESSING + sceneId
-          
-          delay(500L) 
             val workRequest = OneTimeWorkRequestBuilder<VideoProcessingWorker>()
                 .setInputData(inputData)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -1004,13 +1016,5 @@ delay(500L)
                 .build()
             workManager.enqueue(workRequest)
         }
-    }
-
-
-    override fun onCleared() {
-        super.onCleared()
-        Log.d(TAG, "VideoProjectViewModel onCleared. Liberando MediaPlayer e cancelando Jobs.")
-        stopAudioSnippet()
-        imageBatchMonitoringJob?.cancel()
     }
 }

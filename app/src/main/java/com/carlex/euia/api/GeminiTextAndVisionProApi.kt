@@ -1,136 +1,213 @@
 // File: com/carlex/euia/api/GeminiTextAndVisionProApi.kt
 package com.carlex.euia.api
 
+import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import com.carlex.euia.managers.GerenciadorDeChavesApi
+import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
+import com.carlex.euia.viewmodel.AuthViewModel
+import com.carlex.euia.viewmodel.TaskType
 import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.*
-import com.google.ai.client.generativeai.type.generationConfig // Corrigido para minúsculo
+import com.google.ai.client.generativeai.type.ServerException
+import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.generationConfig
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.io.*
-import com.carlex.euia.BuildConfig
+import java.io.File
+import com.google.ai.client.generativeai.type.RequestOptions
+import kotlin.time.Duration.Companion.seconds
+import com.google.ai.client.generativeai.type.Tool
+import com.google.ai.client.generativeai.*
+import com.google.ai.client.generativeai.type.*
 
+/**
+ * Objeto singleton para interagir com a API Gemini Pro, incorporando um sistema
+ * de pool de chaves (separado por tipo) e uma lógica de múltiplas tentativas.
+ */
 object GeminiTextAndVisionProApi {
-    private const val TAG = "GeminiApiPro" // Tag diferente
-    
-    private const val apiKey = BuildConfig.GEMINI_API_KEY
-    private const val modelName = "gemini-2.5-flash-preview-04-17" // Ou o modelo Pro Vision correto ex: "gemini-1.5-pro-preview-0409" ou "gemini-1.0-pro-vision-latest"
+    private const val TAG = "GeminiApiPro"
+    private const val modelName = //"gemini-2.5-flash-lite-preview-06-17"
+                                    "gemini-2.5-flash"
+                                    //"gemini-2.5-flash-preview-04-17" // Ou o modelo Pro Vision desejado
+    private const val TIPO_DE_CHAVE = "text"
 
-    suspend fun perguntarAoGemini(pergunta: String, imagens: List<String>, arquivoTexto: String? = null): Result<String> {
+    // Instanciação interna e preguiçosa (lazy) das dependências.
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private val gerenciadorDeChaves: GerenciadorDeChavesApi by lazy { GerenciadorDeChavesApi(firestore) }
+
+   // private val codeExecutionTool = Tool(codeExecution = CodeExecution())
+        
+    /**
+     * Pergunta ao Gemini usando um pool de chaves e com lógica de retry para o erro 429.
+     *
+     * @param pergunta O prompt de texto.
+     * @param imagens A lista de caminhos de arquivo para as imagens de referência.
+     * @param arquivoTexto O caminho do arquivo de texto opcional para incluir no prompt.
+     * @return Um [Result] contendo a resposta do Gemini em caso de sucesso, ou uma exceção em caso de falha.
+     */
+    suspend fun perguntarAoGemini(
+        pergunta: String,
+        imagens: List<String>,
+        arquivoTexto: String? = null
+    ): Result<String> {
+        val applicationContext = getApplicationFromContext()
+        if (applicationContext == null) {
+            val errorMsg = "Contexto da aplicação não disponível. Impossível verificar créditos."
+            Log.e(TAG, errorMsg)
+            return Result.failure(IllegalStateException(errorMsg))
+        }
+
+        val authViewModel = AuthViewModel(applicationContext)
+        var creditsDeducted = false
+
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Iniciando chamada ao Gemini Pro com ${imagens.size} imagens")
-                Log.d(TAG, "Prompt (início): ${pergunta.take(100)}")
-          
-                // <<< --- AJUSTE AQUI --- >>>
-                val adjustedImagePaths = imagens.map { originalPath ->
-                    val originalFile = File(originalPath)
-                    val originalFileName = originalFile.name
-                    if (originalFileName.startsWith("thumb_")) {
-                        val cleanImageName = originalFileName.replaceFirst("thumb_", "img_")
-                        val parentDir = originalFile.parentFile
-                        if (parentDir != null) {
-                            val cleanImageFile = File(parentDir, cleanImageName)
-                            if (cleanImageFile.exists()) {
-                                Log.d(TAG, "Gemini Pro: Usando imagem limpa '$cleanImageName' em vez de thumbnail '$originalFileName'.")
-                                cleanImageFile.absolutePath
+                // ETAPA 1: VERIFICAR E DEDUZIR CRÉDITOS
+                val deductionResult = authViewModel.checkAndDeductCredits(TaskType.TEXT_PRO)
+                if (deductionResult.isFailure) {
+                    return@withContext Result.failure(deductionResult.exceptionOrNull()!!)
+                }
+                creditsDeducted = true
+                Log.i(TAG, "Créditos (${TaskType.TEXT_PRO.cost}) deduzidos para API Pro. Prosseguindo.")
+
+                // ETAPA 2: LÓGICA DE GERAÇÃO COM TENTATIVAS DINÂMICAS
+                val keyCount = try {
+                    firestore.collection("chaves_api_pool").get().await().size()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Falha ao obter contagem de chaves, usando fallback 10.", e)
+                    10 // Fallback
+                }
+                val MAX_TENTATIVAS = if (keyCount > 0) keyCount else 10
+
+                var tentativas = 0
+                while (tentativas < MAX_TENTATIVAS) {
+                    var chaveAtual: String? = null
+                    try {
+                        chaveAtual = gerenciadorDeChaves.getChave(TIPO_DE_CHAVE)
+                        Log.d(TAG, "Tentativa ${tentativas + 1}/$MAX_TENTATIVAS ($TIPO_DE_CHAVE): Usando chave que termina em '${chaveAtual.takeLast(4)}'")
+
+
+                        val requestOptions = RequestOptions(
+                            timeout = 1320.seconds // Define o timeout para 120 segundos (2 minutos)
+                        )
+                        
+                        val generativeModel = GenerativeModel(
+                            modelName = modelName,
+                            apiKey = chaveAtual,
+                            generationConfig = generationConfig {
+                                temperature = 2.0f // Temperatura mais alta para criatividade
+                                topP = 0.95f
+                            },
+                            requestOptions = requestOptions,
+                            tools =  null
+                        )
+                        
+                        val adjustedImagePaths = ajustarCaminhosDeImagem(imagens)
+                        val bitmaps = processarImagens(adjustedImagePaths)
+                        val textoArquivoLido = arquivoTexto?.let { lerArquivoTexto(it) }
+                        
+                        val content = content {
+                            text(pergunta)
+                            textoArquivoLido?.let { text(it) }
+                            bitmaps.forEach { image(it) }
+                        }
+
+                        val response = generativeModel.generateContent(content)
+                    
+                        val resposta = response.text ?: throw Exception("Resposta nula recebida do Gemini Pro")
+                        Log.i(TAG, "resposta api protext $response.toString().")
+                
+                        Log.i(TAG, "SUCESSO na tentativa ${tentativas + 1} ($TIPO_DE_CHAVE) com a chave '${chaveAtual.takeLast(4)}'.")
+                        gerenciadorDeChaves.setChaveEmUso(chaveAtual, TIPO_DE_CHAVE)
+                        
+                        return@withContext Result.success(resposta)
+
+                    } catch (e: ServerException) {
+                        val isRateLimitError = e.message?.contains("429") == true
+                        if (isRateLimitError && chaveAtual != null) {
+                            Log.w(TAG, "Erro 429 (Rate Limit) ($TIPO_DE_CHAVE) na chave '${chaveAtual.takeLast(4)}'. Bloqueando-a e tentando novamente...")
+                            gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                            tentativas++
+                            if (tentativas < MAX_TENTATIVAS) {
+                                delay(1000)
+                                continue
                             } else {
-                                Log.w(TAG, "Gemini Pro: Imagem limpa '$cleanImageName' não encontrada, usando thumbnail '$originalFileName' como fallback.")
-                                originalPath
+                                throw Exception("Máximo de tentativas ($MAX_TENTATIVAS) atingido para o tipo '$TIPO_DE_CHAVE'.")
                             }
                         } else {
-                            originalPath
+                            Log.e(TAG, "Erro de servidor não-retentável ($TIPO_DE_CHAVE) na chave '${chaveAtual?.takeLast(4)}'", e)
+                            if (chaveAtual != null) {
+                               gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
+                            }
+                            throw e
                         }
-                    } else {
-                        originalPath
+                    } catch (e: NenhumaChaveApiDisponivelException) {
+                        Log.e(TAG, "Não há chaves disponíveis para o tipo '$TIPO_DE_CHAVE'.", e)
+                        throw e
                     }
-                }
-                Log.d(TAG, "Caminhos de imagem ajustados para API: $adjustedImagePaths")
-                // <<< --- FIM DO AJUSTE --- >>>
+                } // Fim do loop while
                 
-                val bitmaps = processarImagens(adjustedImagePaths)
-                if (bitmaps.isEmpty() && adjustedImagePaths.isNotEmpty()) {
-                    Log.w(TAG, "Nenhuma imagem válida foi carregada para a API Pro após ajuste de caminhos.")
-                }
-                val textoArquivo = arquivoTexto?.let { lerArquivoTexto(it) }
-                
-                val generativeModel = GenerativeModel(
-                    modelName = modelName,
-                    apiKey = apiKey,
-                    generationConfig = generationConfig { // Usando a importação correta
-                        temperature = 0.3f // Valores típicos para Pro
-                        topK = 40         // Pode ajustar conforme necessidade
-                        topP = 0.95f      // Pode ajustar conforme necessidade
-                        // maxOutputTokens = 8192 // Modelos Pro podem ter limites maiores
-                    }
-                )
-                
-                val content = content {
-                    text(pergunta)
-                    textoArquivo?.let { text(it) }
-                    bitmaps.forEach { bitmap ->
-                        image(bitmap)
-                    }
-                }
-                
-                val response = generativeModel.generateContent(content)
-                
-                val resposta = response.text ?: run {
-                    Log.e(TAG, "Resposta da API Gemini Pro está nula. Detalhes da resposta: ${response.candidates?.joinToString { it.toString() }}")
-                    throw Exception("Resposta nula recebida do Gemini Pro")
-                }
-                Log.d(TAG, "Resposta recebida com sucesso do Gemini Pro (tamanho: ${resposta.length})")
-                Result.success(resposta)
-                
+                throw Exception("Falha ao obter resposta do Gemini para o tipo '$TIPO_DE_CHAVE' após $MAX_TENTATIVAS tentativas.")
+            
             } catch (e: Exception) {
-                Log.e(TAG, "Erro na API Gemini Pro", e)
-                Result.failure(Exception("Falha na comunicação com o Gemini Pro: ${e.message}"))
+                // ETAPA 3: REEMBOLSO EM CASO DE QUALQUER FALHA
+                if (creditsDeducted) {
+                    Log.w(TAG, "Ocorreu um erro na API Pro. Reembolsando ${TaskType.TEXT_PRO.cost} créditos.", e)
+                    authViewModel.refundCredits(TaskType.TEXT_PRO)
+                }
+                return@withContext Result.failure(e)
             }
         }
     }
     
+    private object AppContextHolder {
+        var application: Application? = null
+    }
+
+    private fun getApplicationFromContext(): Application? {
+        return AppContextHolder.application
+    }
+
+    fun setApplicationContext(app: Application) {
+        AppContextHolder.application = app
+    }
+
+    private fun ajustarCaminhosDeImagem(imagens: List<String>): List<String> {
+        return imagens.map { originalPath ->
+            val originalFile = File(originalPath)
+            if (originalFile.name.startsWith("thumb_")) {
+                val cleanImageFile = File(originalFile.parentFile, originalFile.name.replaceFirst("thumb_", "img_"))
+                if (cleanImageFile.exists()) cleanImageFile.absolutePath else originalPath
+            } else {
+                originalPath
+            }
+        }
+    }
+
     private fun processarImagens(imagePaths: List<String>): List<Bitmap> {
         return imagePaths.mapNotNull { path ->
             try {
-                val imageFile = File(path)
-                if (!imageFile.exists()) {
-                    Log.w(TAG, "Arquivo não encontrado: $path")
-                    return@mapNotNull null
-                }
-                
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                }
-                
-                BitmapFactory.decodeFile(path, options)?.also {
-                    Log.d(TAG, "Imagem carregada para API: $path (${it.width}x${it.height})")
-                }
-            } catch (e: OutOfMemoryError) {
-                Log.e(TAG, "OutOfMemoryError ao processar imagem $path para API", e)
-                null
-            }
-            catch (e: Exception) {
-                Log.e(TAG, "Erro ao processar imagem $path para API", e)
+                BitmapFactory.decodeFile(path)
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao processar imagem para API: $path", e)
                 null
             }
         }
     }
 
     private fun lerArquivoTexto(caminhoArquivo: String): String? {
+        if (AppContextHolder.application == null) {
+            Log.w(TAG, "O contexto da aplicação não foi definido. A dedução de créditos pode falhar.")
+        }
         return try {
-            val arquivo = File(caminhoArquivo)
-            if (!arquivo.exists()) {
-                Log.w(TAG, "Arquivo de texto não encontrado: $caminhoArquivo")
-                return null
-            }
-            
-            arquivo.readText().also {
-                Log.d(TAG, "Texto lido do arquivo (${it.length} caracteres)")
-            }
+            File(caminhoArquivo).readText()
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao ler arquivo de texto $caminhoArquivo", e)
+            Log.e(TAG, "Erro ao ler arquivo de texto para API: $caminhoArquivo", e)
             null
         }
     }

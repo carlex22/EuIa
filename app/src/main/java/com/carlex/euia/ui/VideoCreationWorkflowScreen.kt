@@ -1,4 +1,4 @@
-// File: ui/VideoCreationWorkflowScreen.kt
+// File: euia/ui/VideoCreationWorkflowScreen.kt
 package com.carlex.euia.ui
 
 import androidx.compose.foundation.layout.*
@@ -13,38 +13,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.carlex.euia.AppDestinations
 import com.carlex.euia.R
-import com.carlex.euia.WorkflowStage // Certifique-se que esta importação está correta
+import com.carlex.euia.WorkflowStage
 import com.carlex.euia.utils.shareVideoFile
 import com.carlex.euia.viewmodel.*
 import kotlinx.coroutines.launch
 
-/**
- * Composable principal que orquestra as diferentes etapas (abas) do fluxo de criação de vídeo.
- *
- * Esta tela é responsável por:
- * - Observar a aba atualmente selecionada no [VideoWorkflowViewModel].
- * - Renderizar o Composable de conteúdo apropriado para a aba ativa (e.g., [ContextInfoContent], [VideoInfoContent]).
- * - Coletar estados de processamento dos ViewModels específicos de cada aba.
- * - Atualizar o [VideoWorkflowViewModel] com:
- *     - O estado de processamento consolidado da aba atual.
- *     - O texto de progresso relevante para a aba atual.
- *     - As ações disponíveis para a aba atual (e.g., "Gerar Áudio", "Gravar Vídeo"),
- *       que serão consumidas pela BottomBar gerenciada em [AppNavigationHostComposable].
- *
- * @param navController O [NavHostController] para navegação, caso alguma sub-tela precise dele.
- * @param snackbarHostState O [SnackbarHostState] global para exibir mensagens de feedback ao usuário.
- * @param innerPadding [PaddingValues] fornecido pelo Scaffold pai, para garantir que o conteúdo
- *                     não se sobreponha a elementos como a TopAppBar ou BottomAppBar.
- * @param videoWorkflowViewModel O ViewModel compartilhado que gerencia o estado geral do fluxo de trabalho
- *                               de criação de vídeo, como a aba selecionada e o estado de processamento
- *                               da aba atual.
- * @param audioViewModel ViewModel para a aba de informações de áudio e geração de narrativa.
- * @param videoInfoViewModel ViewModel para a aba de gerenciamento e processamento de imagens de referência.
- * @param refImageInfoViewModel ViewModel para a aba de análise e extração de detalhes das imagens de referência.
- * @param videoProjectViewModel ViewModel para a aba de geração e gerenciamento de cenas do vídeo.
- * @param videoGeneratorViewModel ViewModel para a aba de finalização e geração do arquivo de vídeo.
- * @param generatedVideoPath O caminho do arquivo de vídeo final gerado. Usado para habilitar a ação de compartilhamento.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoCreationWorkflowScreen(
@@ -57,6 +30,8 @@ fun VideoCreationWorkflowScreen(
     refImageInfoViewModel: RefImageViewModel = viewModel(),
     videoProjectViewModel: VideoProjectViewModel = viewModel(),
     videoGeneratorViewModel: VideoGeneratorViewModel = viewModel(),
+    // O AuthViewModel é necessário para obter o token para o upload final
+    authViewModel: AuthViewModel = viewModel(),
     generatedVideoPath: String
 ) {
     val localContext = LocalContext.current
@@ -72,22 +47,17 @@ fun VideoCreationWorkflowScreen(
     val isGeneratingGlobalScenes by videoProjectViewModel.isProcessingGlobalScenes.collectAsState()
     val isGeneratingVideo by videoGeneratorViewModel.isGeneratingVideo.collectAsState()
     val generationVideoProgress by videoGeneratorViewModel.generationProgress.collectAsState()
-    val availableVoicePairsForNarrative by audioViewModel.availableVoices.collectAsState() // Agora é List<Pair<String, String>>
-    val currentVoiceForAudio by audioViewModel.voz.collectAsState() // Continua sendo String (nome da voz)
 
-    // LaunchedEffect para atualizar o estado do VideoWorkflowViewModel (ações, progresso, texto)
-    // sempre que a aba selecionada mudar ou o estado de processamento de alguma aba for alterado.
+    // Este LaunchedEffect atualiza o VideoWorkflowViewModel com o estado e as ações
+    // da aba atualmente selecionada.
     LaunchedEffect(
-        selectedStageIndex,
-        isImageProcessing, isRefInfoAnalyzing, isAudioProcessing, isGeneratingGlobalScenes, isGeneratingVideo,
-        generatedVideoPath, audioGenerationProgressText, generationVideoProgress,
-        availableVoicePairsForNarrative, // Adicionado à lista de chaves
-        currentVoiceForAudio, // Adicionado à lista de chaves
-        audioViewModel, videoInfoViewModel, refImageInfoViewModel, videoProjectViewModel, videoGeneratorViewModel
+        selectedStageIndex, isImageProcessing, isRefInfoAnalyzing, isAudioProcessing,
+        isGeneratingGlobalScenes, isGeneratingVideo, generatedVideoPath,
+        audioGenerationProgressText, generationVideoProgress
     ) {
         val currentStageId = workflowStages.getOrNull(selectedStageIndex)?.identifier ?: return@LaunchedEffect
 
-        // Reseta todas as ações possíveis no ViewModel do workflow antes de configurar as da aba atual
+        // Reseta todas as ações
         videoWorkflowViewModel.setLaunchPickerAction(null)
         videoWorkflowViewModel.setAnalyzeAction(null)
         videoWorkflowViewModel.setCreateNarrativeAction(null)
@@ -100,72 +70,41 @@ fun VideoCreationWorkflowScreen(
         var currentTabProgressFloat = 0f
         var currentTabText = ""
 
-        // Obtém strings de recursos para evitar chamadas @Composable dentro deste bloco não-Composable
-        val processingImagesText = localContext.getString(R.string.status_processing_images_general)
-        val analyzingDetailsText = localContext.getString(R.string.status_analyzing_details)
-        val noVoiceAvailableText = localContext.getString(R.string.snackbar_no_voice_available_for_narrative)
-        val selectVoiceFirstText = localContext.getString(R.string.snackbar_select_voice_for_audio)
-        val processingAudioDefaultText = localContext.getString(R.string.status_processing_audio_default)
-        val generatingScenesText = localContext.getString(R.string.status_generating_scenes)
-        val recordingVideoProgressTextTemplate = localContext.getString(R.string.status_recording_video_progress)
-        val videoReadyText = localContext.getString(R.string.status_video_ready)
-
         when (currentStageId) {
             AppDestinations.WORKFLOW_STAGE_CONTEXT -> {
-                currentTabIsProcessing = false
-                currentTabText = ""
-                // A ação de salvar contexto é gerenciada por provideSaveActionDetails e onContextDirtyStateChanged
+                // Ação de salvar é tratada de forma especial pela `ContextInfoContent`
             }
             AppDestinations.WORKFLOW_STAGE_IMAGES -> {
-                // A ação de launchPicker é configurada pelo VideoInfoContent através de onReadyToLaunchPicker
-                // e o VideoWorkflowViewModel a armazena.
                 currentTabIsProcessing = isImageProcessing
-                currentTabText = if (isImageProcessing) processingImagesText else ""
+                currentTabText = if (isImageProcessing) localContext.getString(R.string.status_processing_images_general) else ""
             }
             AppDestinations.WORKFLOW_STAGE_INFORMATION -> {
                 videoWorkflowViewModel.setAnalyzeAction { refImageInfoViewModel.analyzeImages() }
                 currentTabIsProcessing = isRefInfoAnalyzing
-                currentTabText = if (isRefInfoAnalyzing) analyzingDetailsText else ""
+                currentTabText = if (isRefInfoAnalyzing) localContext.getString(R.string.status_analyzing_details) else ""
             }
             AppDestinations.WORKFLOW_STAGE_NARRATIVE -> {
-                val firstVoicePair = availableVoicePairsForNarrative.firstOrNull()
-                val firstVoiceName = firstVoicePair?.first // Extrai o nome da voz do par
-
                 videoWorkflowViewModel.setCreateNarrativeAction {
-                    if (firstVoiceName != null || currentVoiceForAudio.isNotBlank()) {
-                        audioViewModel.startAudioGeneration(
-                            promptToUse = audioViewModel.prompt.value,
-                            isNewNarrative = true,
-                            voiceToUseOverride = currentVoiceForAudio.ifBlank { firstVoiceName ?: "" }
-                        )
-                    } else {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(message = noVoiceAvailableText, duration = SnackbarDuration.Short)
-                        }
-                    }
+                     audioViewModel.startAudioGeneration(
+                         promptToUse = audioViewModel.prompt.value,
+                         isNewNarrative = true
+                     )
                 }
                 videoWorkflowViewModel.setGenerateAudioAction {
-                    if (currentVoiceForAudio.isNotBlank()) {
-                        audioViewModel.startAudioGeneration(
-                            promptToUse = audioViewModel.prompt.value,
-                            isNewNarrative = false,
-                            voiceToUseOverride = currentVoiceForAudio
-                        )
-                    } else {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(message = selectVoiceFirstText, duration = SnackbarDuration.Short)
-                        }
-                    }
+                     audioViewModel.startAudioGeneration(
+                         promptToUse = audioViewModel.prompt.value,
+                         isNewNarrative = false
+                     )
                 }
                 currentTabIsProcessing = isAudioProcessing
                 currentTabText = if (isAudioProcessing) {
-                    audioGenerationProgressText.ifBlank { processingAudioDefaultText }
+                    audioGenerationProgressText.ifBlank { localContext.getString(R.string.status_processing_audio_default) }
                 } else ""
             }
             AppDestinations.WORKFLOW_STAGE_SCENES -> {
                 videoWorkflowViewModel.setGenerateScenesAction { videoProjectViewModel.requestFullSceneGenerationProcess() }
                 currentTabIsProcessing = isGeneratingGlobalScenes
-                currentTabText = if (isGeneratingGlobalScenes) generatingScenesText else ""
+                currentTabText = if (isGeneratingGlobalScenes) localContext.getString(R.string.status_generating_scenes) else ""
             }
             AppDestinations.WORKFLOW_STAGE_FINALIZE -> {
                 videoWorkflowViewModel.setRecordVideoAction(
@@ -176,12 +115,11 @@ fun VideoCreationWorkflowScreen(
                         { shareVideoFile(localContext, generatedVideoPath) }
                     } else null
                 )
-
                 currentTabIsProcessing = isGeneratingVideo
                 currentTabProgressFloat = if (isGeneratingVideo) generationVideoProgress else 0f
                 currentTabText = when {
-                    isGeneratingVideo -> String.format(recordingVideoProgressTextTemplate, (currentTabProgressFloat * 100).toInt())
-                    generatedVideoPath.isNotBlank() -> videoReadyText
+                    isGeneratingVideo -> localContext.getString(R.string.status_recording_video_progress, (currentTabProgressFloat * 100).toInt())
+                    generatedVideoPath.isNotBlank() -> localContext.getString(R.string.status_video_ready)
                     else -> ""
                 }
             }
@@ -190,14 +128,12 @@ fun VideoCreationWorkflowScreen(
         videoWorkflowViewModel.updateProgressText(currentTabText)
     }
 
-    // O Box raiz ocupa todo o espaço fornecido pelo NavHost.
-    // O padding já é tratado pelo Scaffold principal em AppNavigationHostComposable.
-    Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) { // Usa o innerPadding do Scaffold
+    Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
         when (workflowStages.getOrNull(selectedStageIndex)?.identifier) {
             AppDestinations.WORKFLOW_STAGE_CONTEXT -> {
                 ContextInfoContent(
-                    modifier = Modifier.fillMaxSize(), // Garante que o conteúdo preencha o Box
-                    innerPadding = PaddingValues(0.dp), // Conteúdo interno não precisa de padding adicional aqui
+                    modifier = Modifier.fillMaxSize(),
+                    innerPadding = PaddingValues(0.dp),
                     audioViewModel = audioViewModel,
                     snackbarHostState = snackbarHostState,
                     provideSaveActionDetails = { action, isEnabled ->
@@ -210,7 +146,6 @@ fun VideoCreationWorkflowScreen(
             }
             AppDestinations.WORKFLOW_STAGE_IMAGES -> {
                 VideoInfoContent(
-                    // modifier = Modifier.fillMaxSize(), // VideoInfoContent já tem fillMaxSize
                     innerPadding = PaddingValues(0.dp),
                     videoViewModel = videoInfoViewModel,
                     onReadyToLaunchPicker = { callback ->
@@ -234,16 +169,18 @@ fun VideoCreationWorkflowScreen(
             }
             AppDestinations.WORKFLOW_STAGE_SCENES -> {
                 VideoProjectContent(
-                    // modifier = Modifier.fillMaxSize(), // VideoProjectContent já tem fillMaxSize
                     innerPadding = PaddingValues(0.dp),
                     projectViewModel = videoProjectViewModel
                 )
             }
             AppDestinations.WORKFLOW_STAGE_FINALIZE -> {
+                // Passa todas as instâncias de ViewModel necessárias para a tela de finalização
                 VideoGeneratorContent(
                     modifier = Modifier.fillMaxSize(),
                     innerPadding = PaddingValues(0.dp),
-                    videoGeneratorViewModel = videoGeneratorViewModel
+                    videoGeneratorViewModel = videoGeneratorViewModel,
+                    videoProjectViewModel = videoProjectViewModel,
+                    authViewModel = authViewModel
                 )
             }
             else -> {

@@ -6,13 +6,33 @@ class CreateAudioNarrative {
     private val promptTemplate = """
     Você é um roteirista especialista em criar falas envolventes para vídeos curtos de redes sociais. Seu objetivo é criar um texto **fluido, como se fosse a transcrição de um vídeo falado**, com linguagem natural.
 
-    Voce foi contradado para criar o texto da narrativa de um video; (promptAudio).
+    Voce foi contradado para criar o texto da narrativa de um video; promptAudio.
 
     ##**Dados do seu cliente:**
     Nome/Empresa: "{USER_NAME_COMPANY}"
     Profição/Segmento: "{USER_PROFESSION_SEGMENT}"
     Endereço: "{USER_ADDRESS}"
+    
+    
+    
+    ## **Instruções Avançadas de Narração: Ritmo, Pausas e Sons Humanizados**
 
+    Sua tarefa principal é enriquecer o roteiro com marcações que controlem o ritmo e adicionem sons humanos.
+
+    1.  **Incorpore Pausas Estratégicas:** Para um ritmo mais natural e menos apressado, insira tags de pausa no texto onde uma respiração ou um momento de reflexão faria sentido.
+        *   Use **`[pausa_curta]`** para uma respiração rápida entre frases.
+        *   Use **`[pausa_longa]`** para um momento mais dramático ou para separar ideias principais.
+        *   **Exemplo:** "A decisão não foi fácil... [pausa_longa] mas precisava ser feita."
+        
+    2.  **Incorpore Sons Paralinguísticos Não-Verbais:** Quando apropriado para a emoção, insira tags para sons humanos que quebram a monotonia. A API de TTS tentará simular esses sons com a voz do narrador.
+        *   Use o formato: **`[som:tipo_do_som]`**.
+        *   **Exemplos de tags:** `[som:risada_contida]`, `[som:suspiro_aliviado]`, `[som:murmurio_pensativo]`, `[som:som_de_surpresa_hm]`.
+        *   **Exemplo de uso:** "Ele achou que conseguiria me enganar... [som:risada_contida] mal sabia ele."
+        
+    3.  **Combine com Estilos de Fala:** Continue usando as dicas de estilo de fala entre parênteses `[]` para guiar a emoção geral de um trecho.
+        *   **Exemplo Consolidado:** "[tom mais sério] E o resultado... [pausa_longa] foi exatamente o que esperávamos. [som:suspiro_aliviado] Um sucesso completo."
+
+            
     ##**Abordagen da narrativa:**
     Introdução da narrativa: {VIDEO_OBJECTIVE_INTRODUCTION}
     Desenvolvimento da narrativa: : {VIDEO_OBJECTIVE_VIDEO}
@@ -27,40 +47,49 @@ class CreateAudioNarrative {
     Descrições das imagens de referência (se houver): {FOTOS}
     Total do tempo estimado para o a narração: {VIDEO_TIME_SECONDS}
 
-    ##**Instruções CRUCIAIS para Estilo de Fala na Narrativa (`promptAudio`):**
-    *   Ao criar o texto da narrativa (`promptAudio`), **você DEVE incorporar comandos ou descrições de estilo de fala diretamente no texto** quando apropriado para transmitir a emoção desejada ou dar ênfase.
-    *   Estes comandos devem ser claros e concisos, preferencialmente entre parênteses `()` ou colchetes `[]` antes do trecho de texto ao qual se aplicam.
+    ##**Instruções CRUCIAIS para Estilo de Fala na Narrativa `promptAudio`:**
+    *   Ao criar o texto da narrativa `promptAudio`, **você DEVE incorporar stylo,  comandos ou descrições  de fala diretamente no texto** quando apropriado para transmitir a emoção desejada ou dar ênfase.
+    *   Estes comandos devem ser claros e concisos, preferencialmente entre parênteses `[]` ou no caso de stylo serao inseridos antes de cada paragrafo seguido de : e quebra de linha. sempre antes do trecho de texto ao qual se aplicam.
+        ex: 
+            "Fale com entusiasmo:
+            Oi amigo [Pensativo] quanto tempo, [som murmurando] acho que uns 10 anos
+            Fale com curiosidade:
+            Mas e ai quais as novidades? [confuso] ja consegui o emprego?"
+            
     *   **Inspire-se nos exemplos da documentação do Gemini TTS para controle de estilo:**
-        *   Para um único falante, você pode usar frases como: `(em um sussurro assustador) Ao picar dos meus polegares... Algo perverso se aproxima.`
-        *   Para indicar uma emoção específica para um trecho: `(com voz cansada e entediada) Então... qual é a pauta de hoje?` ou `(com tom otimista) O futuro parece brilhante!`
+        *   Para um único falante, você pode usar frases como: `[em um sussurro assustador] Ao picar dos meus polegares... Algo perverso se aproxima.`
+        *   Para indicar uma emoção específica para um trecho: `[com voz cansada e entediada] Então... qual é a pauta de hoje?` ou `[com tom otimista] O futuro parece brilhante!`
         *   Selecione palavras-chave para o estilo que sejam interpretáveis, como: `sussurrando`, `animado`, `sério`, `calmo`, `energético`, `triste`, `feliz`, `entediado`, `assustador`, `otimista`, `reflexivo`, `autoritário`.
     *   **Adapte estes exemplos para uma narrativa fluida e natural.** O objetivo é que o motor TTS (Text-to-Speech), como o do Gemini, possa interpretar essas dicas para modular a voz.
     *   A emoção geral do narrador será definida no campo "emocao" do sub-objeto "vozes" no JSON (que você também definirá), mas o `promptAudio` pode e deve ter variações de estilo mais granulares para enriquecer a entrega.
-    *   **Exemplo de `promptAudio` desejado:**
-        "Olá a todos! (com entusiasmo) Hoje vamos explorar o incrível mundo dos widgets. (tom mais sério) Mas primeiro, uma pequena advertência: (sussurrando) nem todos os widgets são criados iguais. (voltando ao tom normal e informativo) Nossa linha Pro, por exemplo, oferece durabilidade sem precedentes."
 
-    sua resposta deve conter **apenas a fala completa do vídeo**, de forma envolvente, sem dividir em cenas nem descrever imagens.
 
     **Regras Adicionais:**
-    - Use voz em 1ª pessoa.
-    - Proibido descricoes textuais vasis como : [pausa] [drama] [risos] (a menos que sejam explicitamente parte do comando de estilo, ex: `(com uma risada contida)`).
-    - Defina a idade, sexo (Male or Female) que deve ter o narrador. Defina tambem o seu estado de espirito geral (Alegre, triste, bravo...) nos campos correspondentes dentro do sub-objeto "vozes" no JSON.
+    - Use voz em 1ª pessoa ou narrador.
+    - Defina a idade, sexo (Male or Female) que deve ter o narrador. Defina tambem o seu estado de espirito geral [Alegre, triste, bravo...] nos campos correspondentes dentro do sub-objeto "vozes" no JSON.
     - nao adicione numeros nos textos [0123456789] escreva elws literalnente con 99 voce deve escrever novents e nove .. caracteres com R$ escreva Reais, % porcrntagem, @ artoba, + mais, - menos...
 
     **Evite:**
     - Palavras difíceis.
-    - Tom de vendedor excessivamente agressivo (a menos que o estilo de fala instrua isso para um trecho).
+    - Tom de vendedor excessivamente agressivo, a menos que o estilo de fala instrua isso para um trecho.
     - Repetições óbvias ou frases genéricas e frias.
-
+        
+    "Regras Adicionais": "**Proibido Jargões Corporativos:** Evite termos como 'sinergia', 'alavancar', 'otimizar', 'solução inovadora', a menos que o tom de voz seja especificamente corporativo."
+    "Integre o 'Tom da linguagem' de forma sutil em todo o texto, não apenas nas marcações de estilo. Se o tom é 'descontraído', use gírias leves e frases mais curtas."
+    
+    No fim de cada paragrafo ou quando pertinente adicione [pausas longas], [pausa de ... Segundos, para som de ...], [pausa reflexiva]...
+    
+    
+        
     **Formato esperado resposta:** Nao comente ou responda algo sobre essa tarefa... A sua resposta final, deve conter uma lista JSON contendo um objeto com a seguinte estrutura EXATA:
     [
       {
         "aprovado": true,
-        "promptAudio": "string (pode incluir comandos de estilo de fala)",
+        "promptAudio": "string",
         "vozes": {
           "sexo": "Male or Female",
-          "idade": "string (ex: '30', '25-35 anos', 'adulto jovem')",
-          "emocao": "string (emoção predominante para o narrador, ex: 'Alegre', 'Sério', 'Informativo')",
+          "idade": "string ex: '30', '25-35 anos', 'adulto jovem'",
+          "emocao": "string emoção predominante para o narrador, ex: 'Alegre', 'Sério', 'Informativo'",
           "voz": null,
           "audioPath": null,
           "legendaPath": null

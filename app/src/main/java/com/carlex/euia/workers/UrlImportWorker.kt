@@ -1,8 +1,10 @@
 // File: euia/workers/UrlImportWorker.kt
 package com.carlex.euia.worker
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -11,34 +13,36 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import androidx.work.*
+import com.carlex.euia.MainActivity
 import com.carlex.euia.R
 import com.carlex.euia.api.ExtrairMl
+import com.carlex.euia.api.GeminiTextAndVisionProApi
 import com.carlex.euia.api.GeminiTextAndVisionStandardApi
 import com.carlex.euia.data.*
-import com.carlex.euia.prompts.ExtractInfoFromUrlPrompt
 import com.carlex.euia.prompts.ExtractDetailedPageContentAsKeyValuesPrompt
+import com.carlex.euia.prompts.ExtractInfoFromUrlPrompt
+import com.carlex.euia.utils.NotificationUtils // Importa o utilitário
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import java.io.File
 import kotlin.coroutines.coroutineContext
 
 // Constantes para a notificação
-private const val NOTIFICATION_ID_URL = 3
-private const val NOTIFICATION_CHANNEL_ID_URL = "UrlImportChannelEUIA"
+private const val NOTIFICATION_ID_URL = 3544
 
 class UrlImportWorker(
-    val appContext: Context, // Renomeado para appContext para clareza
+    val appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -51,14 +55,14 @@ class UrlImportWorker(
     private val videoDataStoreManager = VideoDataStoreManager(applicationContext)
     private val videoPreferencesDataStoreManager = VideoPreferencesDataStoreManager(applicationContext)
     private val videoProjectDataStoreManager = VideoProjectDataStoreManager(applicationContext)
-    // private val videoGeneratorDataStoreManager = VideoGeneratorDataStoreManager(applicationContext) // Descomente se necessário
 
     private val workManager = WorkManager.getInstance(applicationContext)
+    private val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     private val kotlinJson = Json {
         ignoreUnknownKeys = true
         isLenient = true
-        prettyPrint = false // Não necessário para armazenamento
+        prettyPrint = false
     }
 
     companion object {
@@ -66,13 +70,9 @@ class UrlImportWorker(
         const val KEY_SUGGESTED_TITLE_FROM_PHASE1 = "key_suggested_title_from_phase1"
         const val KEY_MAIN_SUMMARY_FROM_PHASE1 = "key_main_summary_from_phase1"
         const val KEY_ACTION = "key_action"
-
         const val ACTION_PRE_CONTEXT_EXTRACTION = "action_pre_context_extraction"
         const val ACTION_PROCESS_CONTENT_DETAILS = "action_process_content_details"
-
         const val KEY_OUTPUT_ERROR_MESSAGE = "key_output_error_message"
-
-        // Tags para encadeamento e observação
         const val TAG_URL_IMPORT_WORK_PRE_CONTEXT = "url_import_work_pre_context"
         const val TAG_URL_IMPORT_WORK_CONTENT_DETAILS = "url_import_work_content_details"
     }
@@ -80,7 +80,6 @@ class UrlImportWorker(
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val urlInputForNotification = inputData.getString(KEY_URL_INPUT)?.take(30) ?: appContext.getString(R.string.url_unknown)
         val action = inputData.getString(KEY_ACTION) ?: ACTION_PRE_CONTEXT_EXTRACTION
-        val title = appContext.getString(R.string.notification_title_url_import)
         var contentText = appContext.getString(R.string.notification_content_url_starting, urlInputForNotification)
 
         if (action == ACTION_PROCESS_CONTENT_DETAILS) {
@@ -88,36 +87,42 @@ class UrlImportWorker(
         } else if (action == ACTION_PRE_CONTEXT_EXTRACTION) {
             contentText = appContext.getString(R.string.notification_content_url_extracting_precontext_cleaning, urlInputForNotification)
         }
-        createNotificationChannel()
-        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID_URL)
-            .setContentTitle(title).setTicker(title).setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_notification_icon)
-            .setOngoing(true).setSilent(true).setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+        
+        // A criação do canal foi removida daqui, pois agora é feita centralmente no MyApplication
+        val notification = createNotification(contentText)
         return ForegroundInfo(NOTIFICATION_ID_URL, notification)
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = appContext.getString(R.string.notification_channel_name_url)
-            val descriptionText = appContext.getString(R.string.notification_channel_description_url)
-            val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID_URL, name, importance).apply {
-                description = descriptionText
-            }
-            val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+    private fun createNotification(message: String, isFinished: Boolean = false, isError: Boolean = false): Notification {
+        val intent = Intent(appContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
+        val pendingIntent = PendingIntent.getActivity(
+            appContext, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(appContext, NotificationUtils.CHANNEL_ID_URL_IMPORT) // <<< USA A CONSTANTE CENTRALIZADA
+            .setContentTitle(appContext.getString(R.string.notification_title_url_import))
+            .setTicker(appContext.getString(R.string.notification_title_url_import))
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_notification_icon)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(isFinished || isError)
+
+        if (isFinished || isError) {
+            builder.setProgress(0, 0, false).setOngoing(false)
+        } else {
+            builder.setProgress(0, 0, true).setOngoing(true)
+        }
+        return builder.build()
     }
 
-    private fun updateNotificationProgress(contentText: String, makeDismissible: Boolean = false) {
-        val title = appContext.getString(R.string.notification_title_url_import)
-        val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val notificationBuilder = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID_URL)
-            .setContentTitle(title).setTicker(title).setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_notification_icon)
-            .setOngoing(!makeDismissible).setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_LOW)
-        notificationManager.notify(NOTIFICATION_ID_URL, notificationBuilder.build())
+    private fun updateNotificationProgress(contentText: String, makeDismissible: Boolean = false, isError: Boolean = false) {
+        val notification = createNotification(contentText, isFinished = makeDismissible, isError = isError)
+        notificationManager.notify(NOTIFICATION_ID_URL, notification)
         Log.d(TAG_URL_IMPORT_WORKER, "Notificação de Importação de URL atualizada: $contentText")
     }
 
@@ -130,7 +135,7 @@ class UrlImportWorker(
             val urlInputForNotification = inputData.getString(KEY_URL_INPUT)?.take(30) ?: appContext.getString(R.string.url_generic_placeholder)
             when (action) {
                 ACTION_PRE_CONTEXT_EXTRACTION -> {
-                    performFullCleanup() // Chama a função de limpeza primeiro
+                    performFullCleanup()
                     updateNotificationProgress(appContext.getString(R.string.notification_content_url_phase1_analyzing, urlInputForNotification))
                     finalResult = handlePreContextExtractionAndImageEnqueuing()
                 }
@@ -142,7 +147,6 @@ class UrlImportWorker(
 
                     if (url.isNullOrBlank()) {
                         val errorMsg = appContext.getString(R.string.error_url_missing_for_details)
-                        updateNotificationProgress(errorMsg, true)
                         finalResult = Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to errorMsg))
                     } else {
                         finalResult = extractAndMergeDetailedPageContent(url, title, summary)
@@ -150,7 +154,6 @@ class UrlImportWorker(
                 }
                 else -> {
                     val errorMsg = appContext.getString(R.string.error_unknown_action, action)
-                    updateNotificationProgress(errorMsg, true)
                     finalResult = Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to errorMsg))
                 }
             }
@@ -159,23 +162,24 @@ class UrlImportWorker(
                 updateNotificationProgress(appContext.getString(R.string.notification_content_url_import_completed_successfully, urlInputForNotification), true)
             } else if (finalResult is Result.Failure) {
                 val errorMessage = finalResult.outputData.getString(KEY_OUTPUT_ERROR_MESSAGE) ?: appContext.getString(R.string.error_url_import_failed)
-                updateNotificationProgress(appContext.getString(R.string.notification_content_url_import_failed_details, urlInputForNotification, errorMessage.take(50)), true)
+                updateNotificationProgress(appContext.getString(R.string.notification_content_url_import_failed_details, urlInputForNotification, errorMessage.take(50)), true, isError = true)
             }
             return finalResult
 
         } catch (e: kotlinx.coroutines.CancellationException) {
             Log.w(TAG_URL_IMPORT_WORKER, "Importação de URL cancelada: ${e.message}", e)
             val cancelMsg = e.message ?: appContext.getString(R.string.error_url_import_cancelled)
-            updateNotificationProgress(cancelMsg, true)
+            updateNotificationProgress(cancelMsg, true, isError = true)
             return Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to cancelMsg))
         } catch (e: Exception) {
             Log.e(TAG_URL_IMPORT_WORKER, "Erro catastrófico no UrlImportWorker: ${e.message}", e)
             val errorMsg = appContext.getString(R.string.error_critical_url_import, (e.message ?: e.javaClass.simpleName))
-            updateNotificationProgress(errorMsg, true)
+            updateNotificationProgress(errorMsg, true, isError = true)
             return Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to errorMsg))
         }
     }
-
+    
+    // ... O restante das funções (performFullCleanup, handlePreContextExtractionAndImageEnqueuing, etc.) permanece o mesmo ...
     private suspend fun performFullCleanup() {
         updateNotificationProgress(appContext.getString(R.string.notification_content_url_cleaning_data, inputData.getString(KEY_URL_INPUT)?.take(30) ?: "..."))
         Log.i(TAG_URL_IMPORT_WORKER, "Ação PRE_CONTEXT_EXTRACTION: Iniciando limpeza PROFUNDA de dados e arquivos do projeto.")
@@ -231,8 +235,7 @@ class UrlImportWorker(
 
         Log.i(TAG_URL_IMPORT_WORKER, "Limpeza de dados e arquivos concluída.")
     }
-
-    private suspend fun deleteFileWorker(filePath: String?, logContext: String) {
+     private suspend fun deleteFileWorker(filePath: String?, logContext: String) {
         if (filePath.isNullOrBlank()) return
 
         withContext(Dispatchers.IO) {
@@ -253,8 +256,7 @@ class UrlImportWorker(
             }
         }
     }
-
-    private suspend fun handlePreContextExtractionAndImageEnqueuing(): Result {
+     private suspend fun handlePreContextExtractionAndImageEnqueuing(): Result {
         val urlInput = inputData.getString(KEY_URL_INPUT)
         if (urlInput.isNullOrBlank()) {
             return Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to appContext.getString(R.string.error_url_not_provided)))
@@ -372,8 +374,7 @@ class UrlImportWorker(
             return Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to appContext.getString(R.string.error_phase1_generic, (e.message?.take(50) ?: ""))))
         }
     }
-
-    private suspend fun extractAndMergeDetailedPageContent(originalUrl: String, suggestedTitle: String, initialSummary: String): Result {
+     private suspend fun extractAndMergeDetailedPageContent(originalUrl: String, suggestedTitle: String, initialSummary: String): Result {
         Log.i(TAG_URL_IMPORT_WORKER, "Fase 2 (Detalhes): Iniciando para URL: $originalUrl")
         try {
             if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_phase2_cancelled_early))
@@ -387,7 +388,7 @@ class UrlImportWorker(
 
             updateNotificationProgress(appContext.getString(R.string.notification_content_url_phase2_contacting_ai_details, originalUrl.take(30)))
             val detailedContentPromptObject = ExtractDetailedPageContentAsKeyValuesPrompt(originalUrl, suggestedTitle, initialSummary)
-            val geminiDetailedResult: kotlin.Result<String> = GeminiTextAndVisionStandardApi.perguntarAoGemini(detailedContentPromptObject.prompt, emptyList(), "")
+            val geminiDetailedResult: kotlin.Result<String> = GeminiTextAndVisionProApi.perguntarAoGemini(detailedContentPromptObject.prompt, emptyList(), "")
 
             if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_phase2_cancelled_after_gemini))
 
@@ -433,13 +434,11 @@ class UrlImportWorker(
             return Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to appContext.getString(R.string.error_processing_details_generic, (e.message?.take(50) ?: ""))))
         }
     }
-
-    private suspend fun importarDadosMl(url: String, context: Context): kotlin.Result<Map<String, Any>> {
+     private suspend fun importarDadosMl(url: String, context: Context): kotlin.Result<Map<String, Any>> {
         val extrator = ExtrairMl()
         return extrator.extrairDados(url, context)
     }
-
-    private fun ajustarResposta1(resposta: String): String {
+     private fun ajustarResposta1(resposta: String): String {
         var respostaLimpa = resposta.trim()
         if (respostaLimpa.startsWith("```json", ignoreCase = true)) respostaLimpa = respostaLimpa.removePrefix("```json").trimStart()
         else if (respostaLimpa.startsWith("```")) respostaLimpa = respostaLimpa.removePrefix("```").trimStart()

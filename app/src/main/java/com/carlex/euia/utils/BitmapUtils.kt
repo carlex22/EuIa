@@ -140,145 +140,59 @@ object BitmapUtils {
      * @return Um novo Bitmap com o fundo processado e a imagem proporcional sobreposta, ou null em caso de erro.
      *         O sourceBitmap NÃO é reciclado por esta função.
      */
+     
+     fun cropToAspectRatioCenter(
+        source: Bitmap,
+        aspectWidth: Int,  // Ex: 4 ou 3
+        aspectHeight: Int  // Ex: 3 ou 4
+    ): Bitmap {
+        val sw = source.width.toFloat()
+        val sh = source.height.toFloat()
+        val targetRatio = aspectWidth.toFloat() / aspectHeight.toFloat()
+        val srcRatio = sw / sh
+    
+        var cropW = sw
+        var cropH = sh
+        var startX = 0f
+        var startY = 0f
+    
+        if (srcRatio > targetRatio) {
+            // Imagem mais larga que o target — corta nas laterais
+            cropW = sh * targetRatio
+            startX = (sw - cropW) / 2
+        } else {
+            // Imagem mais alta que o target — corta no topo/baixo
+            cropH = sw / targetRatio
+            startY = (sh - cropH) / 2
+        }
+    
+        return Bitmap.createBitmap(
+            source,
+            startX.toInt(), startY.toInt(),
+            cropW.toInt(), cropH.toInt()
+        )
+    }
+    
+     
+     
     fun resizeWithTransparentBackground( // O nome "TransparentBackground" pode ser menos preciso agora
-        sourceBitmap: Bitmap,
+        sourceBitmap1: Bitmap,
         targetWidth: Int,
         targetHeight: Int
     ): Bitmap? {
-        val originalWidth = sourceBitmap.width
-        val originalHeight = sourceBitmap.height
-
-        if (originalWidth <= 0 || originalHeight <= 0) {
+        val originalWidth = sourceBitmap1.width
+        val originalHeight = sourceBitmap1.height
+        
+        if (originalWidth <= originalHeight ) {
             //Log.e(TAG, "Bitmap original com dimensões inválidas: ${originalWidth}x${originalHeight}. Retornando null.")
-            return null
+            var sourceBitmap = cropToAspectRatioCenter(sourceBitmap1, 4 , 3)
+            return sourceBitmap
+
+        } else {
+            var sourceBitmap = cropToAspectRatioCenter(sourceBitmap1, 3 , 4)
+            return sourceBitmap
         }
-
-        val finalWidth = targetWidth.coerceAtLeast(1)
-        val finalHeight = targetHeight.coerceAtLeast(1)
-        //Log.d(TAG, "Redimensionando com fundo processado: ${originalWidth}x${originalHeight} -> ${finalWidth}x${finalHeight}")
-
-        var resultBitmap: Bitmap? = null
-        var blurredBackgroundBitmap: Bitmap? = null
-        var scaledBitmapProportional: Bitmap? = null
-
-        try {
-            // 1. Criar o bitmap de fundo (desfocado e esbranquiçado)
-            // Primeiro, escalar a imagem original para um tamanho menor para o desfoque (performance)
-            // e depois escalar para o tamanho final do canvas.
-            val downscaleFactorForBlur = 0.25f // Reduz para 1/4 do tamanho para desfoque mais rápido
-            val blurTempWidth = (finalWidth * downscaleFactorForBlur).toInt().coerceAtLeast(1)
-            val blurTempHeight = (finalHeight * downscaleFactorForBlur).toInt().coerceAtLeast(1)
-
-            var tempScaledForBlur: Bitmap? = null
-            if (originalWidth > 0 && originalHeight > 0) {
-                 tempScaledForBlur = Bitmap.createScaledBitmap(sourceBitmap, blurTempWidth, blurTempHeight, true)
-            }
-
-
-            if (tempScaledForBlur != null) {
-                // Aplicar desfoque (usando RenderScript seria ideal para performance, mas Paint pode ser usado para simplicidade)
-                // Esta é uma simulação de desfoque com Paint. Para um desfoque real, use RenderScript ou uma biblioteca.
-                // Aumentar o blurRadius para um efeito mais forte.
-                val blurRadius = 25f // Raio do desfoque (ajuste conforme necessário)
-                val blurPaint = Paint().apply {
-                    isAntiAlias = true
-                    isDither = true
-                    isFilterBitmap = true // Essencial para o BlurMaskFilter funcionar bem
-                    if (blurRadius > 0) {
-                        maskFilter = BlurMaskFilter(blurRadius, BlurMaskFilter.Blur.NORMAL)
-                    }
-                }
-
-                // Criar um bitmap temporário para desenhar o desfoque
-                // Aumentar um pouco o padding para o desfoque não cortar nas bordas
-                val blurPadding = (blurRadius * 2).toInt()
-                blurredBackgroundBitmap = Bitmap.createBitmap(blurTempWidth + blurPadding, blurTempHeight + blurPadding, Bitmap.Config.ARGB_8888)
-                val blurCanvas = Canvas(blurredBackgroundBitmap)
-                blurCanvas.drawBitmap(tempScaledForBlur, blurRadius, blurRadius, blurPaint) // Desenha com offset para o padding
-                tempScaledForBlur.recycle() // Recicla o bitmap escalado para desfoque
-            } else {
-                //Log.w(TAG, "Não foi possível criar bitmap temporário para desfoque.")
-                // Como fallback, pode usar a imagem original esticada sem desfoque, ou cor sólida.
-                // Aqui, vamos prosseguir e a camada de "vidro jateado" será desenhada sobre o que for.
-            }
-
-
-            // 2. Criar o bitmap final e desenhar o fundo desfocado e esbranquiçado
-            resultBitmap = Bitmap.createBitmap(finalWidth, finalHeight, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(resultBitmap)
-            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR) // Limpa o canvas
-
-            if (blurredBackgroundBitmap != null) {
-                val srcRectBlurred = Rect(0, 0, blurredBackgroundBitmap.width, blurredBackgroundBitmap.height)
-                val dstRectFBlurred = RectF(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat())
-                val backgroundPaint = Paint().apply { // Paint para esticar o fundo desfocado e aplicar o "vidro"
-                    isAntiAlias = true
-                    isDither = true
-                    isFilterBitmap = true
-                }
-                canvas.drawBitmap(blurredBackgroundBitmap, srcRectBlurred, dstRectFBlurred, backgroundPaint)
-                blurredBackgroundBitmap.recycle() // Recicla o bitmap de fundo desfocado
-                //Log.d(TAG, "Fundo desfocado desenhado e esticado.")
-            } else {
-                // Fallback: desenha a imagem original esticada sem desfoque (ou uma cor sólida)
-                val fallbackBgPaint = Paint()
-                canvas.drawBitmap(sourceBitmap, Rect(0,0,originalWidth, originalHeight), RectF(0f,0f,finalWidth.toFloat(), finalHeight.toFloat()), fallbackBgPaint)
-                //Log.w(TAG, "Usando fallback para o fundo (sem desfoque).")
-            }
-
-            // Aplicar uma camada de "vidro jateado" (cor branca semi-transparente) sobre o fundo
-            val frostedGlassPaint = Paint().apply {
-                color = Color.WHITE
-                alpha = 100 // Ajuste a transparência (0-255). 100 = ~40% opaco.
-            }
-            canvas.drawRect(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat(), frostedGlassPaint)
-            //Log.d(TAG, "Camada de 'vidro jateado' (branco semi-transparente) aplicada sobre o fundo.")
-
-
-            // 3. Desenhar a Imagem Original Proporcionalmente por Cima (sem filtro de fundo)
-            val foregroundPaint = Paint().apply {
-                isAntiAlias = true
-                isDither = true
-                isFilterBitmap = true
-            }
-
-            val aspectRatioSource = originalWidth.toFloat() / originalHeight
-            val aspectRatioTarget = finalWidth.toFloat() / finalHeight
-
-            var scaledWidth: Int
-            var scaledHeight: Int
-            var xOffset = 0f
-            var yOffset = 0f
-
-            if (aspectRatioSource > aspectRatioTarget) {
-                scaledWidth = finalWidth
-                scaledHeight = (finalWidth / aspectRatioSource).toInt()
-                yOffset = (finalHeight - scaledHeight) / 2f
-            } else {
-                scaledHeight = finalHeight
-                scaledWidth = (finalHeight * aspectRatioSource).toInt()
-                xOffset = (finalWidth - scaledWidth) / 2f
-            }
-            scaledWidth = scaledWidth.coerceAtLeast(1)
-            scaledHeight = scaledHeight.coerceAtLeast(1)
-
-            if (scaledWidth > 0 && scaledHeight > 0) {
-                scaledBitmapProportional = Bitmap.createScaledBitmap(sourceBitmap, scaledWidth, scaledHeight, true)
-                canvas.drawBitmap(scaledBitmapProportional, xOffset, yOffset, foregroundPaint)
-                //Log.d(TAG, "Imagem proporcional desenhada sobre o fundo processado.")
-            } else {
-                //Log.w(TAG, "Dimensões calculadas para imagem proporcional são inválidas: ${scaledWidth}x${scaledHeight}")
-            }
-            return resultBitmap
-
-        } catch (e: Exception) {
-            //Log.e(TAG, "Erro ao redimensionar com fundo processado: ${e.message}", e)
-            resultBitmap?.recycle()
-            blurredBackgroundBitmap?.recycle() // Garante que este também seja reciclado em caso de erro
-            return null
-        } finally {
-            scaledBitmapProportional?.takeIf { it != sourceBitmap && !it.isRecycled }?.recycle()
-        }
+        
     }
     // <<< --- FIM DA FUNÇÃO MODIFICADA --- >>>
 

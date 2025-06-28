@@ -45,6 +45,7 @@ class CreateScenesChat(
             *   O TEMPO DE INÍCIO exato do bloco de fala (converta para segundos no formato double).
             *   O TEMPO DE FIM exato do bloco de fala (converta para segundos no formato double).
             *   O texto completo do bloco de fala.
+            *   o sentimento que este tem intensao transmito
 
     2.  **Criação de Cenas Visuais:**
         *   **Cada BLOCO DE FALA de um personagem DEVE corresponder a UMA CENA VISUAL.**
@@ -72,8 +73,31 @@ class CreateScenesChat(
         *   Se nenhuma imagem de referência for adequada ou se preferir que a IA crie algo original, o valor de "FOTO_REFERENCIA" deve ser `null`.
         *   Se usar uma foto de referência, o "PROMPT_PARA_IMAGEM" deve levar essa referência em consideração, talvez pedindo para a IA modificar a referência ou usar elementos dela no contexto da fala.
         
-    5.  **censrio":**
-        *   Tente manter o mesmo cenario em tpdas as cenas no contexto de cada personagem e do video, sugira pisivoes da camera e d9 personagem diferentes e que exibam seu sebtimento ou duvida ou afirmacao
+        
+    5.  **divisao cenas em subgrupos":**
+        *   ao final divida em cena em outras menores, com duracao entre obrigatoria de cada uma dessa divisao de no minimo 3 a 5 segundos .. cada cena desse grupo d3ve ter o mesmo prompt com pequenas mudancas na composicai imagem ( mudar possicao objeto/pessoa  central e ou na camera e lente e ou no cenario fundo e ou no tempo dia/noite de cada novs cena desse grupo 
+        *    o tempo inicio e fim de cada cena deve ser distribuido em consuderacao ao tempo total da cena a see dividida.
+        
+        exempo: 
+        
+        antes da divisao:
+        cena 1{TEMPO_INICIo:0, TEMPO_FIM:9, PROMPT_PARA_IMAGEM:1},
+        cena 2{TEMPO_INICIO:9, TEMPO_FIM:18, PROMPT_PARA_IMAGEM:2},
+        cena 3{TEMPO_INICIO:18, TEMPO_FIM:21, PROMPT_PARA_IMAGEM:3}
+       
+        apos a divisao versao final: 
+        cena 1{TEMPO_INICIO:0, TEMPO_FIM:3, PROMPT_PARA_IMAGEM:1a}, cena 2{TEMPO_INICIO:3, TEMPO_FIM:5, PROMPT_PARA_IMAGEM:1b}, cena 3{TEMPO_INICIO:5, TEMPO_FIM:9, PROMPT_PARA_IMAGEM:1c},
+        cena 4{TEMPO_INICIO:9, TEMPO_FIM:15, PROMPT_PARA_IMAGEM:2a}, cena 5{TEMPO_INICIO:15, TEMPO_FIM:18, PROMPT_PARA_IMAGEM:2b},
+        cena 6{TEMPO_INICIO:18, TEMPO_FIM:21, PROMPT_PARA_IMAGEM:3a}
+        
+        se atente que o TEMPO_INICIO de cada cena deve ser o mesmo do TEMPO_FIM da cena anterior... se nao estiver corrija pois nao pode haver lacunae temporais na lista final.
+        
+   
+     8.. a nova lista  das cenas de final deve conter a ordem final e revisada 
+
+     9. nos prompts o personagem 1 sempte deve estar voltado para frente ou para a direita da tela nunca para o kado esquerdo 
+        ja o personagem 2 sempre deve estar voltado para frente ou para a esquerda da tela nunca para o lado direito 
+        depamais pessoas nao presisam resleitar essa regra.
 
     *Formato esperado resposta:** Nao comente ou responda algo sobre essa tarefa... A sua resposta final, deve conter uma lista JSON contendo:
     [{"CENA": int, "TEMPO_INICIO": double, "TEMPO_FIM": double, "PROMPT_PARA_IMAGEM": "string", "EXIBIR_PRODUTO": "boolean", "FOTO_REFERENCIA": Int}]

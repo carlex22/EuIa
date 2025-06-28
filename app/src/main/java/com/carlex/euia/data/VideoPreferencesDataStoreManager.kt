@@ -31,6 +31,8 @@ object VideoPrefKeys {
     val ENABLE_SUBTITLES = booleanPreferencesKey("enable_subtitles")
     val ENABLE_SCENE_TRANSITIONS = booleanPreferencesKey("enable_scene_transitions")
     val ENABLE_ZOOM_PAN = booleanPreferencesKey("enable_zoom_pan")
+    val VIDEO_FPS = intPreferencesKey("video_fps") // <<<< NOVO
+    val VIDEO_HD_MOTION = booleanPreferencesKey("video_hd_motion") // <<<< NOVO
     val DEFAULT_SCENE_DURATION_SECONDS = floatPreferencesKey("default_scene_duration_seconds")
     val VIDEO_PROJECT_DIR = stringPreferencesKey("video_project_dir")
 }
@@ -243,6 +245,43 @@ class VideoPreferencesDataStoreManager(context: Context) {
             preferences[VideoPrefKeys.ENABLE_ZOOM_PAN] = enabled
         }
         Log.d(TAG, "Habilitar ZoomPan definido: $enabled")
+    }
+
+    val videoFps: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Log.e(TAG, "Error reading preference ${VideoPrefKeys.VIDEO_FPS.name}", exception)
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences[VideoPrefKeys.VIDEO_FPS] ?: 30 }
+
+    suspend fun setVideoFps(fps: Int) {
+        val coercedFps = fps.coerceIn(10, 60)
+        dataStore.edit { preferences ->
+            preferences[VideoPrefKeys.VIDEO_FPS] = coercedFps
+        }
+        Log.d(TAG, "FPS do Vídeo definido: $coercedFps")
+    }
+
+    val videoHdMotion: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Log.e(TAG, "Error reading preference ${VideoPrefKeys.VIDEO_HD_MOTION.name}", exception)
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences[VideoPrefKeys.VIDEO_HD_MOTION] ?: false }
+
+    suspend fun setVideoHdMotion(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[VideoPrefKeys.VIDEO_HD_MOTION] = enabled
+        }
+        Log.d(TAG, "Habilitar HD Motion (minterpolate) definido: $enabled")
     }
 
     val defaultSceneDurationSeconds: Flow<Float> = dataStore.data

@@ -1,3 +1,4 @@
+// File: data/VideoGeneratorDataStoreManager.kt
 package com.carlex.euia.data
 
 import android.content.Context
@@ -21,6 +22,9 @@ object VideoGeneratorPreferencesKeys {
     val GENERATED_NUMBER_OF_SCENES = intPreferencesKey("generated_number_of_scenes")
     val GENERATED_TOTAL_DURATION = doublePreferencesKey("generated_total_duration")
     val FINAL_VIDEO_PATH = stringPreferencesKey("final_video_path")
+    
+    // <<< CORREÇÃO: Chave reintroduzida para atuar como lock global >>>
+    val IS_CURRENTLY_GENERATING_VIDEO = booleanPreferencesKey("is_currently_generating_video")
 }
 
 // Classe Gerenciadora para interagir com o DataStore
@@ -34,8 +38,10 @@ class VideoGeneratorDataStoreManager(context: Context) {
     private val DEFAULT_NUMBER_OF_SCENES = 0
     private val DEFAULT_TOTAL_DURATION = 0.0
     private val DEFAULT_VIDEO_PATH = ""
+    private val DEFAULT_IS_GENERATING = false
 
     // --- Flows para Leitura de Preferências ---
+
     val generatedVideoTitle: Flow<String> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { preferences -> preferences[VideoGeneratorPreferencesKeys.GENERATED_VIDEO_TITLE] ?: DEFAULT_TITLE }
@@ -60,7 +66,14 @@ class VideoGeneratorDataStoreManager(context: Context) {
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { preferences -> preferences[VideoGeneratorPreferencesKeys.FINAL_VIDEO_PATH] ?: DEFAULT_VIDEO_PATH }
 
+    // <<< CORREÇÃO: Flow para observar o estado de geração (o lock) >>>
+    val isCurrentlyGeneratingVideo: Flow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { preferences -> preferences[VideoGeneratorPreferencesKeys.IS_CURRENTLY_GENERATING_VIDEO] ?: DEFAULT_IS_GENERATING }
+
+
     // --- Suspend Functions para Escrita de Preferências ---
+
     suspend fun saveGenerationDataSnapshot(
         title: String,
         audioPrompt: String,
@@ -74,7 +87,7 @@ class VideoGeneratorDataStoreManager(context: Context) {
             preferences[VideoGeneratorPreferencesKeys.GENERATED_MUSIC_PATH] = musicPath
             preferences[VideoGeneratorPreferencesKeys.GENERATED_NUMBER_OF_SCENES] = numberOfScenes
             preferences[VideoGeneratorPreferencesKeys.GENERATED_TOTAL_DURATION] = totalDuration
-            preferences[VideoGeneratorPreferencesKeys.FINAL_VIDEO_PATH] = DEFAULT_VIDEO_PATH // Limpa o caminho anterior
+            preferences[VideoGeneratorPreferencesKeys.FINAL_VIDEO_PATH] = DEFAULT_VIDEO_PATH
         }
     }
 
@@ -85,11 +98,6 @@ class VideoGeneratorDataStoreManager(context: Context) {
     }
 
     suspend fun clearGeneratorState() {
-    
-        dataStore.edit { preferences ->
-            preferences[VideoGeneratorPreferencesKeys.FINAL_VIDEO_PATH] = ""
-        }
-    
         dataStore.edit { preferences ->
             preferences.clear()
         }
@@ -98,7 +106,14 @@ class VideoGeneratorDataStoreManager(context: Context) {
 
     suspend fun clearFinalVideoPath() {
         dataStore.edit { preferences ->
-            preferences[VideoGeneratorPreferencesKeys.FINAL_VIDEO_PATH] = ""
+            preferences.remove(VideoGeneratorPreferencesKeys.FINAL_VIDEO_PATH)
+        }
+    }
+
+    // <<< CORREÇÃO: Função para controlar o lock global de renderização >>>
+    suspend fun setCurrentlyGenerating(isGenerating: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[VideoGeneratorPreferencesKeys.IS_CURRENTLY_GENERATING_VIDEO] = isGenerating
         }
     }
 }

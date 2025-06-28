@@ -284,8 +284,154 @@ object VideoEditorComTransicoes {
             }
         }
     }
+    
+    
+    // euia/utils/VideoEditorComTransicoes.kt
 
-    private fun buildFFmpeg(
+// ... (imports e outras funções) ...
+
+private fun buildFFmpeg(
+    mediaPaths: List<String>,
+    duracaoCenas: List<Double>,
+    audioPath: String,
+    musicaPath: String,
+    legendaPath: String,
+    outputPath: String,
+    fonteArialPath: String,
+    usarLegendas: Boolean,
+    usarTransicoes: Boolean,
+    usarZoomPan: Boolean,
+    larguraVideoPreferida: Int?,
+    alturaVideoPreferida: Int?,
+    fps: Int,
+    hdMotion: Boolean
+): String {
+    val cmd = StringBuilder("-y -hide_banner ")
+    val filterComplex = StringBuilder()
+    val larguraFinalVideo = (larguraVideoPreferida ?: DEFAULT_VIDEO_WIDTH).coerceAtLeast(100)
+    val alturaFinalVideo = (alturaVideoPreferida ?: DEFAULT_VIDEO_HEIGHT).coerceAtLeast(100)
+    Log.i(TAG, "FFmpeg VIDEO ${larguraFinalVideo}x${alturaFinalVideo} | FPS: $fps | HD Motion: $hdMotion | Transições: $usarTransicoes | ZoomPan: $usarZoomPan | Legendas: $usarLegendas")
+    val tempoDeTransicaoEfetivo = if (usarTransicoes && mediaPaths.size > 1) tempoTransicaoPadrao else 0.0
+
+    // --- ENTRADAS DE MÍDIA ---
+    var inputIndex = 0
+    if (musicaPath.isNotBlank()) {
+        cmd.append("-i \"$musicaPath\" ")
+        inputIndex++
+    }
+    val mediaInputStartIndex = inputIndex
+    mediaPaths.forEach { path ->
+        cmd.append("-i \"$path\" ")
+    }
+    val audioInputIndex = mediaInputStartIndex + mediaPaths.size
+    cmd.append("-i \"$audioPath\" ")
+
+    // --- INÍCIO DA CORREÇÃO NO FILTER_COMPLEX ---
+
+    // 1. Pré-processar CADA input para ter o mesmo FPS, SAR, e dimensões
+    val preprocessedPads = mutableListOf<String>()
+    mediaPaths.forEachIndexed { i, path ->
+        val inputPad = "[${mediaInputStartIndex + i}:v]"
+        val outputPad = "[preprocessed_$i]"
+        val duracaoDestaCena = duracaoCenas[i]
+
+        filterComplex.append("  $inputPad ")
+        filterComplex.append(" setpts=PTS-STARTPTS,") // Reseta timestamps
+        filterComplex.append(" fps=$fps,")
+        filterComplex.append(" scale=$larguraFinalVideo:$alturaFinalVideo:force_original_aspect_ratio=decrease,")
+        filterComplex.append(" pad=$larguraFinalVideo:$alturaFinalVideo:(ow-iw)/2:(oh-ih)/2:color=black,")
+        filterComplex.append(" setsar=1 ")
+        filterComplex.append(outputPad)
+        filterComplex.append(";\n")
+        preprocessedPads.add(outputPad)
+    }
+
+    // 2. Aplicar zoompan nos pads pré-processados
+    val zoompanPads = mutableListOf<String>()
+    preprocessedPads.forEachIndexed { i, pad ->
+        val isVideoInput = mediaPaths[i].endsWith(".mp4", true) || mediaPaths[i].endsWith(".webm", true)
+        val duracaoDestaCena = duracaoCenas[i]
+        val frames = (duracaoDestaCena * fps).toInt()
+        val outputPad = "[zoompan_$i]"
+        
+        filterComplex.append("  $pad ")
+        if (usarZoomPan && !isVideoInput) {
+            val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(mediaPaths[i], larguraFinalVideo, alturaFinalVideo, frames, i)
+            filterComplex.append("zoompan=z=$zoomExpr:s=${larguraFinalVideo}x${alturaFinalVideo}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps")
+        } else {
+            filterComplex.append("trim=duration=$duracaoDestaCena") // Apenas garante a duração
+        }
+        
+        if (hdMotion && !isVideoInput){
+             filterComplex.append(",minterpolate=fps=$fps:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
+        }
+        
+        filterComplex.append(",setpts=PTS-STARTPTS") // Reseta timestamps novamente
+        filterComplex.append(" $outputPad;\n")
+        zoompanPads.add(outputPad)
+    }
+
+    // 3. Concatenar ou fazer transições com os pads do zoompan
+    val videoStreamFinal: String = when {
+        usarTransicoes && zoompanPads.size > 1 -> {
+            var currentStream = zoompanPads[0]
+            var totalDurationSoFar = duracaoCenas[0]
+            for (i in 0 until zoompanPads.size - 1) {
+                val nextStream = zoompanPads[i + 1]
+                val xfadeOutputStreamName = if (i == zoompanPads.size - 2) "[vc_final_effect]" else "[xfade_out_$i]"
+                val xfadeOffset = totalDurationSoFar - tempoDeTransicaoEfetivo
+
+                val tipoTransicao = listOf("fade", "slideleft", "slideright", "slideup", "slidedown")[i % 5]
+                
+                filterComplex.append("  $currentStream$nextStream xfade=transition=$tipoTransicao:duration=$tempoDeTransicaoEfetivo:offset=${"%.4f".format(Locale.US, xfadeOffset)}$xfadeOutputStreamName;\n")
+                
+                currentStream = xfadeOutputStreamName
+                totalDurationSoFar += duracaoCenas[i + 1] - tempoDeTransicaoEfetivo
+            }
+            currentStream
+        }
+        else -> { // Concatenação simples
+            val concatInputs = zoompanPads.joinToString("")
+            filterComplex.append("  $concatInputs concat=n=${zoompanPads.size}:v=1:a=0[vc_final_effect];\n")
+            "[vc_final_effect]"
+        }
+    }
+    
+    // 4. Legendas e Áudio (sem alterações)
+    val safeLegendaPath = if (legendaPath.isNotBlank()) legendaPath.replace("\\", "/").replace(":", "\\\\:") else ""
+    val fonteDir = File(fonteArialPath).parent?.replace("\\", "/")?.replace(":", "\\\\:") ?: "."
+    val videoComLegendasPad: String =
+        if (usarLegendas && safeLegendaPath.isNotBlank()) {
+            filterComplex.append("  $videoStreamFinal subtitles=filename='$safeLegendaPath':fontsdir='$fonteDir':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BackColour=&H80000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginL=25,MarginR=25,MarginV=25'[v_out];\n")
+            "[v_out]"
+        } else {
+            filterComplex.append("  $videoStreamFinal copy[v_out];\n")
+            "[v_out]"
+        }
+
+    val audioPrincipalInputString = "[$audioInputIndex:a]"
+    filterComplex.append("  $audioPrincipalInputString volume=1.0[voice];\n")
+
+    if (musicaPath.isNotBlank()) {
+        val musicaInputString = "[0:a]"
+        filterComplex.append("  $musicaInputString volume=0.05,adelay=500|500[bgm];\n")
+        filterComplex.append("  [voice][bgm]amix=inputs=2:duration=first:dropout_transition=3[a_out];\n")
+    } else {
+        filterComplex.append("  [voice]acopy[a_out];\n")
+    }
+    
+    // Finalização
+    cmd.append("-filter_complex \"${filterComplex.toString().replace("'", "'\\\\''")}\" ")
+    cmd.append("-map \"$videoComLegendasPad\" -map \"[a_out]\" ")
+    cmd.append("-c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p -r $fps ")
+    cmd.append("-movflags +faststart ")
+    cmd.append("\"$outputPath\"")
+
+    return cmd.toString()
+}
+    
+
+    private fun buildFFmpeg1(
         mediaPaths: List<String>,
         duracaoCenas: List<Double>,
         audioPath: String,

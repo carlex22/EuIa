@@ -2,6 +2,10 @@
 <resources>
 <string name="error_loading_ref_images_for_scenes">Erro ao carregar imagens de referência para gerar cenas.</string>
 <string name="voice_style_default"></string>
+   
+   <string name="overlay_permission_granted">Permissão de sobreposição concedida!</string>
+    <string name="overlay_permission_denied">Permissão de sobreposição negada. O ícone de progresso não será exibido.</string>
+   
     <string name="app_name">EUIA App</string>
     <string name="app_name_short">EUIA App</string> <string name="menu_profile">Perfil</string>
     <string name="menu_audio">Roteiro</string>

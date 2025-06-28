@@ -47,6 +47,12 @@ class VideoPreferencesViewModel(application: Application) : AndroidViewModel(app
     val enableSceneTransitions: StateFlow<Boolean> = dataStoreManager.enableSceneTransitions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), true)
 
+    val videoFps: StateFlow<Int> = dataStoreManager.videoFps
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), 30)
+
+    val videoHdMotion: StateFlow<Boolean> = dataStoreManager.videoHdMotion
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
+
     val enableZoomPan: StateFlow<Boolean> = dataStoreManager.enableZoomPan
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
 
@@ -68,6 +74,8 @@ class VideoPreferencesViewModel(application: Application) : AndroidViewModel(app
     val aspectRatioOptions: List<String> = listOf(
         "9:16", "16:9", "1:1", "2:1", "1:2", "4:3", "3:2", "2:3"
     ).distinct()
+
+    val fpsOptions: List<String> = listOf("24", "30", "60")
 
     init {
         loadInitialVoices()
@@ -166,6 +174,14 @@ class VideoPreferencesViewModel(application: Application) : AndroidViewModel(app
     fun setVoiceRate(rateString: String) {
         val rate = rateString.replace(",", ".").toFloatOrNull() ?: 1.0f
         setVoiceRate(rate)
+    }
+
+    fun setVideoFps(fpsString: String) {
+        viewModelScope.launch { dataStoreManager.setVideoFps(fpsString.toIntOrNull() ?: 30) }
+    }
+
+    fun setVideoHdMotion(enabled: Boolean) {
+        viewModelScope.launch { dataStoreManager.setVideoHdMotion(enabled) }
     }
 
     fun setVideoAspectRatio(aspectRatio: String) {

@@ -1,4 +1,4 @@
-// File: api/GeminiImageApi.kt (Versão Final Autossuficiente e Corrigida)
+// File: api/GeminiImageApiProxy.kt (Versão Final Autossuficiente e Corrigida)
 package com.carlex.euia.api
 
 import android.content.Context
@@ -59,7 +59,7 @@ private interface GeminiProxyApiService {
 
 
 
-object GeminiImageApi {
+object GeminiImageApiProxy {
 
     private const val TAG = "GeminiImageApi"
     private const val DEFAULT_WIDTH = 720

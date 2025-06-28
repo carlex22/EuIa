@@ -7,6 +7,7 @@ import android.graphics.Canvas // Adicionado
 import android.graphics.Color  // Adicionado
 import android.util.Log
 import com.arthenica.ffmpegkit.*
+import android.graphics.BitmapFactory
 import com.carlex.euia.data.SceneLinkData
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import java.io.File
@@ -78,17 +79,19 @@ object VideoEditorComTransicoes {
     ): String {
         Log.d(TAG, "🎬 Iniciando gerarVideo com ${scenes.size} cenas SceneLinkData")
         require(scenes.isNotEmpty()) { "A lista de cenas não pode estar vazia" }
-
+        // <<<< INÍCIO DA MODIFICAÇÃO >>>>
         val videoPreferencesManager = VideoPreferencesDataStoreManager(context)
-        val (projectDirName, larguraVideoPref, alturaVideoPref, enableSubtitlesPref, enableSceneTransitionsPref, enableZoomPanPref) = withContext(Dispatchers.IO) {
+        val (projectDirName, larguraVideoPref, alturaVideoPref, enableSubtitlesPref, enableSceneTransitionsPref, enableZoomPanPref, videoFpsPref, videoHdMotionPref) = withContext(Dispatchers.IO) {
             val dirName = videoPreferencesManager.videoProjectDir.first()
             val largura = videoPreferencesManager.videoLargura.first()
             val altura = videoPreferencesManager.videoAltura.first()
             val subtitles = videoPreferencesManager.enableSubtitles.first()
             val transitions = videoPreferencesManager.enableSceneTransitions.first()
             val zoomPan = videoPreferencesManager.enableZoomPan.first()
-            Log.d(TAG, "Preferências lidas: Dir=$dirName, LxA=${largura ?: "N/D"}x${altura ?: "N/D"}, Legendas=$subtitles, Transições=$transitions, ZoomPan=$zoomPan")
-            Sextuple(dirName, largura, altura, subtitles, transitions, zoomPan)
+            val fps = videoPreferencesManager.videoFps.first()
+            val hdMotion = videoPreferencesManager.videoHdMotion.first()
+            Log.d(TAG, "Preferências lidas: Dir=$dirName, LxA=${largura ?: "N/D"}x${altura ?: "N/D"}, Legendas=$subtitles, Transições=$transitions, ZoomPan=$zoomPan, FPS=$fps, HDMotion=$hdMotion")
+            Octuple(dirName, largura, altura, subtitles, transitions, zoomPan, fps, hdMotion)
         }
 
         Log.d(TAG, "Diretório do projeto para salvar vídeo: '$projectDirName'")
@@ -98,6 +101,9 @@ object VideoEditorComTransicoes {
         Log.d(TAG, "Habilitar Legendas (preferência): $enableSubtitlesPref")
         Log.d(TAG, "Habilitar Transições (preferência): $enableSceneTransitionsPref")
         Log.d(TAG, "Habilitar ZoomPan (preferência): $enableZoomPanPref")
+        Log.d(TAG, "FPS do Vídeo (preferência): $videoFpsPref")
+        Log.d(TAG, "Habilitar HD Motion (preferência): $videoHdMotionPref")
+        // <<<< FIM DA MODIFICAÇÃO >>>>
 
         val outputPath = createOutputFilePath(context, "video_final_editado", projectDirName)
 
@@ -223,9 +229,11 @@ object VideoEditorComTransicoes {
             usarTransicoes = enableSceneTransitionsPref,
             usarZoomPan = enableZoomPanPref,
             larguraVideoPreferida = larguraVideoPref, // Passa a preferência original
-            alturaVideoPreferida = alturaVideoPref     // Passa a preferência original
+            alturaVideoPreferida = alturaVideoPref,     // Passa a preferência original
+            fps = videoFpsPref, // <<<< NOVO
+            hdMotion = videoHdMotionPref // <<<< NOVO
         )
-        Log.d(TAG, "🛠️ Comando FFmpeg:\n$comandoFFmpeg")
+        //Log.d(TAG, "🛠️ Comando FFmpeg:\n$comandoFFmpeg")
 
         return suspendCancellableCoroutine { cont ->
             Log.i(TAG, "🚀 Iniciando execução do FFmpeg...")
@@ -247,10 +255,10 @@ object VideoEditorComTransicoes {
                 val timeElapsed = (System.currentTimeMillis() - startTime) / 1000.0
 
                 if (ReturnCode.isSuccess(returnCode)) {
-                    logCallback("✅ FFmpeg executado com SUCESSO em ${"%.2f".format(Locale.US, timeElapsed)}s.")
+                    //logCallback("✅ FFmpeg executado com SUCESSO em ${"%.2f".format(Locale.US, timeElapsed)}s.")
                     val outFile = File(outputPath)
                     if (outFile.exists() && outFile.length() > 100) {
-                        logCallback("Arquivo de saída verificado: $outputPath (Tamanho: ${outFile.length()} bytes)")
+                        //logCallback("Arquivo de saída verificado: $outputPath (Tamanho: ${outFile.length()} bytes)")
                         cont.resume(outputPath)
                     } else {
                         val reason = if (!outFile.exists()) "não foi encontrado" else "está vazio ou muito pequeno (${outFile.length()} bytes)"
@@ -265,11 +273,11 @@ object VideoEditorComTransicoes {
                 }
             }, { log ->
                  logCallback(log.message)
-                 Log.v(TAG, "FFmpegLog: ${log.message}")
+                 //Log.v(TAG, "FFmpegLog: ${log.message}")
                },
                { stat ->
                  val statMessage = "📊 FFmpeg Stats: Tempo=${stat.time}ms, Tamanho=${stat.size}, Taxa=${"%.2f".format(Locale.US, stat.bitrate)}, Vel=${"%.2f".format(Locale.US, stat.speed)}x"
-                 Log.d(TAG, statMessage)
+                 //Log.d(TAG, statMessage)
                })
 
             cont.invokeOnCancellation {
@@ -284,206 +292,291 @@ object VideoEditorComTransicoes {
             }
         }
     }
+    
+    fun Double.format(digits: Int): String = String.format("%.${digits}f", this)
 
-    private fun buildFFmpeg(
-        mediaPaths: List<String>,
-        duracaoCenas: List<Double>,
-        audioPath: String,
-        musicaPath: String,
-        legendaPath: String,
-        outputPath: String,
-        fonteArialPath: String,
-        usarLegendas: Boolean,
-        usarTransicoes: Boolean,
-        usarZoomPan: Boolean,
-        larguraVideoPreferida: Int?, // Mantém para usar na resolução final
-        alturaVideoPreferida: Int?   // Mantém para usar na resolução final
-    ): String {
-        val cmd = StringBuilder("-y -hide_banner ")
-        val filterComplex = StringBuilder()
 
-        // As dimensões finais do vídeo são usadas para escalar e para o output
-        val larguraFinalVideo = (larguraVideoPreferida ?: DEFAULT_VIDEO_WIDTH).coerceAtLeast(100)
-        val alturaFinalVideo = (alturaVideoPreferida ?: DEFAULT_VIDEO_HEIGHT).coerceAtLeast(100)
-        Log.d(TAG, "Dimensões FINAIS para FFmpeg (LxA): ${larguraFinalVideo}x${alturaFinalVideo}. Transições: $usarTransicoes, ZoomPan: $usarZoomPan, Legendas: $usarLegendas")
+    
+   
 
-        val tempoDeTransicaoEfetivo = if (usarTransicoes && mediaPaths.size > 1) tempoTransicaoPadrao else 0.0
+private fun buildFFmpeg(
+    mediaPaths: List<String>,
+    duracaoCenas: List<Double>,
+    audioPath: String,
+    musicaPath: String,
+    legendaPath: String,
+    outputPath: String,
+    fonteArialPath: String,
+    usarLegendas: Boolean,
+    usarTransicoes: Boolean,
+    usarZoomPan: Boolean,
+    larguraVideoPreferida: Int?,
+    alturaVideoPreferida: Int?,
+    fps: Int, // <<<< NOVO
+    hdMotion: Boolean // <<<< NOVO
+): String {
+    val cmd = StringBuilder("-y -hide_banner ")
+    val filterComplex = StringBuilder()
+    // val fps = 30 // <<<< REMOVIDO, AGORA É PARÂMETRO
+    val larguraFinalVideo = (larguraVideoPreferida ?: DEFAULT_VIDEO_WIDTH).coerceAtLeast(100)
+    val alturaFinalVideo = (alturaVideoPreferida ?: DEFAULT_VIDEO_HEIGHT).coerceAtLeast(100)
+    // Log atualizado para incluir novas prefs
+    Log.i(TAG, "FFmpeg VIDEO ${larguraFinalVideo}x${alturaFinalVideo} | FPS: $fps | HD Motion: $hdMotion | Transições: $usarTransicoes | ZoomPan: $usarZoomPan | Legendas: $usarLegendas")
+    val tempoDeTransicaoEfetivo = if (usarTransicoes && mediaPaths.size > 1) tempoTransicaoPadrao else 0.0
+    val safeLegendaPath = if (legendaPath.isNotBlank()) legendaPath.replace("\\", "/").replace(":", "\\\\:") else ""
+    val fonteDir = File(fonteArialPath).parent?.replace("\\", "/")?.replace(":", "\\\\:") ?: "."
+    val fonteNome = File(fonteArialPath).nameWithoutExtension
+    var inputIndex = 0
+    if (musicaPath.isNotBlank()) {
+        cmd.append("-i \"$musicaPath\" ")
+        inputIndex++
+    }
+    val mediaInputStartIndex = inputIndex
+    var ii=0
+    mediaPaths.forEachIndexed { index, path ->
+        val isVideoInput = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
+        val duracaoDestaCena = duracaoCenas[index]
+        val isLast = (index == mediaPaths.lastIndex)
+        val inputDurationParaComando =
+            if (isVideoInput) duracaoDestaCena
+            else duracaoDestaCena + if (!isLast) tempoDeTransicaoEfetivo else 0.0
+        if (isVideoInput) {
+            Log.d(TAG, "Cena MidiaAdd $ii | duracaoDestaCena: %.2f".format(duracaoDestaCena))
+            cmd.append(String.format(Locale.US, "-stream_loop -1 -t %.4f -i \"%s\" -an ", duracaoDestaCena, path))
+        } else {
+            Log.d(TAG, "Cena MidiaAdd $ii | inputDurationParaComando: %.2f".format(inputDurationParaComando))
+            cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", fps, inputDurationParaComando, path))
+        }
+        ii++
+        inputIndex++
+    }
+    val audioInputIndex = inputIndex
+    cmd.append("-i \"$audioPath\" ")
+    
+    
+    
+    // Filtros de vídeo: aplica zoom durante toda a exibição (inclusive transição)
+    filterComplex.append("\n")
+    val processedMediaPads = mutableListOf<String>()
+    mediaPaths.forEachIndexed { i, path ->
+    val outputPad = "[processed_m$i]"
+    processedMediaPads.add(outputPad)
+    val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
+    val durBase = duracaoCenas[i]
+    val isLast = (i == mediaPaths.lastIndex)
+    val trim = durBase + tempoDeTransicaoEfetivo
+    Log.i(TAG, "Cena ZoomPad $i | trim: %.2f".format(trim))
+    val frames = Math.round(trim * fps).toInt()+1
+    val durationExata = frames.toDouble() / fps
+    val w = larguraFinalVideo
+    val h = alturaFinalVideo
+    val input = "[${i + mediaInputStartIndex}:v]"
+    filterComplex.append("  $input format=pix_fmts=rgba,fps=$fps,")
 
-        val safeLegendaPath = if (legendaPath.isNotBlank()) legendaPath.replace("\\", "/").replace(":", "\\\\:") else ""
+    if (usarZoomPan && !isVideo) {
         val fonteDir = File(fonteArialPath).parent?.replace("\\", "/")?.replace(":", "\\\\:") ?: "."
         val fonteNome = File(fonteArialPath).nameWithoutExtension
-
-        var inputIndex = 0
-        if (musicaPath.isNotBlank()) {
-            cmd.append("-i \"$musicaPath\" ")
-            inputIndex++
-        }
-
-        val mediaInputStartIndex = inputIndex
-        mediaPaths.forEachIndexed { index, path ->
-            val mediaFile = File(path)
-            val isVideoInput = mediaFile.name.endsWith(".mp4", ignoreCase = true) || mediaFile.name.endsWith(".webm", ignoreCase = true) // Adicionado webm
-            // A duração da cena agora vem da lista 'duracaoCenas' que pode ter sido modificada
-            val duracaoDestaCena = duracaoCenas[index]
-
-            // Para inputs de imagem, a duração total do input precisa cobrir a cena + a transição de saída
-            // Para vídeos, o input já tem sua duração, então FFmpeg vai usar 'duracaoDestaCena' para o trim.
-            // A duração do input (-t) para imagens deve ser a duração da cena + tempo de transição
-            // A duração do input (-t) para vídeos no stream_loop deve ser a duração da cena
-            val inputDurationParaComando = if (isVideoInput) {
-                duracaoDestaCena // Para -t com -stream_loop
-            } else {
-                 // Para -loop 1 -t com imagem, precisa cobrir a cena e a transição de saída
-                duracaoDestaCena + (if (index < mediaPaths.size - 1) tempoDeTransicaoEfetivo else 0.0)
-            }
-
-
-            if (isVideoInput) {
-                cmd.append(String.format(Locale.US, "-stream_loop -1 -t %.4f -i \"%s\" -an ", duracaoDestaCena, path))
-            } else {
-                val fpsEntrada = 45 // Pode ser ajustado
-                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", fpsEntrada, inputDurationParaComando, path))
-            }
-            inputIndex++
-        }
-        val audioInputIndex = inputIndex
-        cmd.append("-i \"$audioPath\" ")
-
-        filterComplex.append("\n")
-
-        val processedMediaPads = mutableListOf<String>()
-        mediaPaths.forEachIndexed { i, path ->
-            val outputPadName = "[processed_m$i]"
-            processedMediaPads.add(outputPadName)
-            val fpsProcessamento = 45
-            val isVideoInput = File(path).name.endsWith(".mp4", ignoreCase = true) || File(path).name.endsWith(".webm", ignoreCase = true)
-            val duracaoDestaCenaParaFiltros = duracaoCenas[i] // Usar a duração da cena da lista (que pode incluir a cena preta)
-
-            filterComplex.append("  [${i + mediaInputStartIndex}:v]format=pix_fmts=rgba,fps=$fpsProcessamento,")
-
-            if (usarZoomPan && !isVideoInput) { // Aplicar zoompan apenas em IMAGENS (não na cena preta tb)
-                val tipoParallax = listOf("parallax_tl", "parallax_br", "parallax_lr", "parallax_tb").random()
-                val zoomExpr = "zoom+0.002"
-                val xExpr = when (tipoParallax) {
-                    "parallax_tl" -> "'iw/4 - on*0.3'"
-                    "parallax_br" -> "'iw/4 + on*0.3'"
-                    "parallax_lr" -> "'iw/2 - iw/zoom/2 + on*0.25'"
-                    else -> "'iw/2 - iw/zoom/2'"
-                }
-                val yExpr = when (tipoParallax) {
-                    "parallax_tl" -> "'ih/4 - on*0.2'"
-                    "parallax_br" -> "'ih/4 + on*0.2'"
-                    "parallax_tb" -> "'ih/2 - ih/zoom/2 + on*0.25'"
-                    else -> "'ih/2 - ih/zoom/2'"
-                }
-                val duracaoParaZoomPanFrames = (max(0.05, duracaoDestaCenaParaFiltros) * fpsProcessamento).toInt()
-                filterComplex.append("zoompan=z='$zoomExpr':s=${larguraFinalVideo}x${alturaFinalVideo}:d=$duracaoParaZoomPanFrames:x=$xExpr:y=$yExpr:fps=$fpsProcessamento,")
-            } else {
-                filterComplex.append("scale=${larguraFinalVideo}:${alturaFinalVideo}:force_original_aspect_ratio=decrease,pad=${larguraFinalVideo}:${alturaFinalVideo}:(ow-iw)/2:(oh-ih)/2:color=black,")
-            }
-
-            // O trim aqui é para a duração da *cena em si* antes da transição ser aplicada a ela
-            // Se for a última mídia e houver transição, ela não tem transição *de saída* no xfade.
-            val trimDurationParaFiltro = if (i == mediaPaths.size -1 && !isVideoInput && tempoDeTransicaoEfetivo > 0 && mediaPaths.size > 1) {
-                 // Última imagem, não precisa de duração extra para xfade de saída.
-                 max(0.05, duracaoDestaCenaParaFiltros)
-            } else if (!isVideoInput){
-                 // Imagens no meio ou primeira, precisam de duração extra para xfade de saída
-                 max(0.05, duracaoDestaCenaParaFiltros + tempoDeTransicaoEfetivo)
-            } else {
-                 // Vídeos usam sua duração da cena
-                 max(0.05, duracaoDestaCenaParaFiltros)
-            }
-
-            filterComplex.append("trim=duration=$trimDurationParaFiltro,setpts=PTS-STARTPTS$outputPadName;\n")
-        }
-
-
-        val videoStreamFinal: String
-        if (usarTransicoes && processedMediaPads.size > 1) { // Modificado para usar processedMediaPads.size
-            processedMediaPads.forEachIndexed { index, padName ->
-                filterComplex.append(String.format(Locale.US, "  %ssetpts=PTS-STARTPTS[sc_trans%d];\n", padName, index))
-            }
-
-            var currentStream = "[sc_trans0]"
-            var durationOfCurrentStream = duracaoCenas[0]
-
-            for (i in 0 until processedMediaPads.size - 1) { // Modificado para processedMediaPads.size
-                val nextSceneStream = "[sc_trans${i + 1}]"
-                val nextSceneOriginalDuration = duracaoCenas[i+1] - tempoDeTransicaoEfetivo
-                val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_effect]" else "[xfade_out_trans$i]" // Modificado
-                val xfadeOffset = max(0.0, durationOfCurrentStream - tempoDeTransicaoEfetivo)
-
-                filterComplex.append(String.format(Locale.US,
-                    "  %s%sxfade=transition=slideleft:duration=%.4f:offset=%.4f%s;\n",
-                    currentStream, nextSceneStream, tempoDeTransicaoEfetivo, xfadeOffset, xfadeOutputStreamName))
-
-                currentStream = xfadeOutputStreamName
-                durationOfCurrentStream = durationOfCurrentStream + nextSceneOriginalDuration + tempoDeTransicaoEfetivo
-                durationOfCurrentStream = max(0.1, durationOfCurrentStream)
-            }
-            videoStreamFinal = currentStream
-        } else if (processedMediaPads.isNotEmpty()) { // Modificado
-            if (processedMediaPads.size > 1) { // Modificado
-                processedMediaPads.forEachIndexed { index, pad ->
-                    filterComplex.append(String.format(Locale.US,"  %ssetpts=PTS-STARTPTS[s_concat%d];\n", pad, index))
-                }
-                val concatInputs = processedMediaPads.indices.joinToString(separator = "") { "[s_concat$it]" }
-                filterComplex.append(String.format(Locale.US,"  %sconcat=n=%d:v=1:a=0[vc_final_effect];\n", concatInputs, processedMediaPads.size)) // Modificado
-                videoStreamFinal = "[vc_final_effect]"
-            } else {
-                 filterComplex.append("  ${processedMediaPads[0]}copy[vc_final_effect];\n")
-                 videoStreamFinal = "[vc_final_effect]"
-            }
-        } else {
-             val totalDurationFallback = duracaoCenas.sumOf { it }.takeIf { it > 0.0 } ?: 1.0
-             filterComplex.append(String.format(Locale.US, "color=c=black:s=${larguraFinalVideo}x${alturaFinalVideo}:d=%.4f[vc_final_effect];\n", max(0.1, totalDurationFallback)))
-             videoStreamFinal = "[vc_final_effect]"
-        }
-
-
-        val videoComLegendasPad: String
-        if (usarLegendas && legendaPath.isNotBlank() && safeLegendaPath.isNotBlank()) {
-             val escapedLegendaPath = safeLegendaPath.replace("'", "'\\''")
-             filterComplex.append("  ${videoStreamFinal}subtitles=filename='$escapedLegendaPath'")
-             filterComplex.append(":fontsdir='$fonteDir'")
-             filterComplex.append(":force_style='FontName=$fonteNome,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BackColour=&H80000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginL=25,MarginR=25,MarginV=25'")
-             filterComplex.append("[v_out];\n")
-             videoComLegendasPad = "[v_out]"
-        } else {
-            filterComplex.append("  ${videoStreamFinal}copy[v_out];\n")
-            videoComLegendasPad = "[v_out]"
-        }
-
-        val audioPrincipalInputString = "[$audioInputIndex:a]"
-        filterComplex.append("  ${audioPrincipalInputString}volume=1.0[voice];\n")
-
-        if (musicaPath.isNotBlank()) {
-            val musicaInputString = "[0:a]" // Música é sempre o primeiro input
-            filterComplex.append("  ${musicaInputString}volume=0.05,adelay=500|500[bgm];\n")
-            filterComplex.append("  [voice][bgm]amix=inputs=2:duration=first:dropout_transition=3[a_out];\n")
-        } else {
-            filterComplex.append("  [voice]acopy[a_out];\n")
-        }
-
-        val filterComplexString = filterComplex.toString()
-        cmd.append("-filter_complex \"$filterComplexString\" ")
-
-        cmd.append("-map \"$videoComLegendasPad\" -map \"[a_out]\" ")
-        val fpsSaida = 45
-        cmd.append("-r $fpsSaida ")
-        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p ")
-        cmd.append("-c:a aac -b:a 128k ")
-        cmd.append("-movflags +faststart ")
+        val fontePath = "$fonteDir/$fonteNome.ttf"
         
-        // A duração total do vídeo deve ser a soma das durações das cenas (da lista 'duracaoCenas' que pode ter sido modificada)
-        val duracaoTotalVideoCalculada = duracaoCenas.sum() + (if (usarTransicoes && mediaPaths.size > 1) (mediaPaths.size - 1) * tempoDeTransicaoEfetivo else 0.0)
-        cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, duracaoTotalVideoCalculada)))
-        cmd.append("\"$outputPath\"")
+        
+        // Efeito com fundo blur/zoom usando a própria imagem (opcional, pode deixar comentado)
+            /*filterComplex.append(
+                "split=2[main][fundo];" +
+                "[fundo]scale=${w}:${h},boxblur=20:1,crop=${w}:${h},setsar=1[fundo_b];" +
+                "[main]scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1," +
+                "zoompan=z=$zoomExpr:s=${w}x${h}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps," +
+                "overlay=shortest=1:x=0:y=0"
+        )*/
+        
+        
+        val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, w, h, frames, i)
+        val debug = "x=%{$zoomExpr}"
+        filterComplex.append(
+            "scale=${w}:${h}:force_original_aspect_ratio=decrease," 
+            + "pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black," 
+            + "setsar=1,"
+            + "scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,"
+            + "zoompan=z=$zoomExpr:s=${w}x${h}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps,"
+        )
+        // <<<< INÍCIO DA MODIFICAÇÃO >>>>
+        if (hdMotion){
+            filterComplex.append(
+                "minterpolate=fps=$fps:mi_mode=mci:mc_mode=aobmc:vsbmc=1,"
+            )
+        }
+    } else {
+        filterComplex.append(
+            "scale=${w}:${h}:force_original_aspect_ratio=decrease," +
+            "pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black," +
+            "setsar=1,"
+        )
+    }
+    Log.i(TAG, "Cena ZoomPad $i | durationExata: %.2f".format(durationExata))
+    // <<<< FIM DA MODIFICAÇÃO >>>>
+    filterComplex.append("trim=duration=$durationExata,setpts=PTS-STARTPTS$outputPad;\n")
+}
 
-        return cmd.toString()
+
+
+    val tiposDeTransicao = listOf(
+        "fade", 
+        //"slideleft", "slideright", 
+        "slidedown",
+        "circleopen", "circleclose", 
+        "rectcrop", "distance", 
+        "fadeblack", "fadewhite", 
+        //"dissolve", 
+        //"wipeleft", "wiperight"
+    )
+
+
+    val random = java.util.Random()
+
+val videoStreamFinal: String = when {
+    usarTransicoes && processedMediaPads.size > 1 -> {
+        processedMediaPads.forEachIndexed { index, padName ->
+            filterComplex.append("  $padName setpts=PTS-STARTPTS[sc_trans$index];\n")
+        }
+        var currentStream = "[sc_trans0]"
+        var durationOfCurrentStream = duracaoCenas[0]
+        for (i in 0 until processedMediaPads.size - 1) {
+            val nextSceneStream = "[sc_trans${i + 1}]"
+            val nextSceneOriginalDuration = duracaoCenas[i+1] - tempoDeTransicaoEfetivo
+            val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_effect]" else "[xfade_out_trans$i]"
+            val xfadeOffset = max(0.0, durationOfCurrentStream)
+
+            // Escolhe aleatoriamente um tipo de transição para esta mudança de cena
+            val tipoTransicao = tiposDeTransicao[random.nextInt(tiposDeTransicao.size)]
+
+            filterComplex.append(
+                "  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=$tempoDeTransicaoEfetivo:offset=$xfadeOffset$xfadeOutputStreamName;\n"
+            )
+            currentStream = xfadeOutputStreamName
+            durationOfCurrentStream = durationOfCurrentStream + nextSceneOriginalDuration + tempoDeTransicaoEfetivo
+            durationOfCurrentStream = max(0.1, durationOfCurrentStream)
+            Log.i(TAG, "Cena $i Transicao| tipo=$tipoTransicao | durationOfCurrentStream: %.2f".format(durationOfCurrentStream))
+        }
+        currentStream
+    }
+    processedMediaPads.isNotEmpty() && processedMediaPads.size > 1 -> {
+        processedMediaPads.forEachIndexed { index, pad ->
+            filterComplex.append("  $pad setpts=PTS-STARTPTS[s_concat$index];\n")
+        }
+        val concatInputs = processedMediaPads.indices.joinToString("") { "[s_concat$it]" }
+        filterComplex.append("  $concatInputs concat=n=${processedMediaPads.size}:v=1:a=0[vc_final_effect];\n")
+        "[vc_final_effect]"
+    }
+    processedMediaPads.isNotEmpty() -> {
+        filterComplex.append("  ${processedMediaPads[0]} copy[vc_final_effect];\n")
+        "[vc_final_effect]"
+    }
+    else -> {
+        val totalDurationFallback = duracaoCenas.sum().takeIf { it > 0.0 } ?: 1.0
+        filterComplex.append("color=c=black:s=${larguraFinalVideo}x${alturaFinalVideo}:d=${max(0.1, totalDurationFallback)}[vc_final_effect];\n")
+        "[vc_final_effect]"
+    }
+}
+
+
+    // Legendas
+    val videoComLegendasPad: String =
+        if (usarLegendas && legendaPath.isNotBlank() && safeLegendaPath.isNotBlank()) {
+            val escapedLegendaPath = safeLegendaPath.replace("'", "'\\''")
+            filterComplex.append("  $videoStreamFinal subtitles=filename='$escapedLegendaPath'")
+            filterComplex.append(":fontsdir='$fonteDir'")
+            filterComplex.append(":force_style='FontName=$fonteNome,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BackColour=&H80000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginL=25,MarginR=25,MarginV=55'")
+            filterComplex.append("[v_out];\n")
+            "[v_out]"
+        } else {
+            filterComplex.append("  $videoStreamFinal copy[v_out];\n")
+            "[v_out]"
+        }
+
+    // Áudio
+    val audioPrincipalInputString = "[$audioInputIndex:a]"
+    filterComplex.append("  $audioPrincipalInputString volume=1.0[voice];\n")
+
+    if (musicaPath.isNotBlank()) {
+        val musicaInputString = "[0:a]"
+        filterComplex.append("  $musicaInputString volume=0.18,adelay=500|500[bgm];\n")
+        filterComplex.append("  [voice][bgm]amix=inputs=2:duration=first:dropout_transition=3[a_out];\n")
+    } else {
+        filterComplex.append("  [voice]acopy[a_out];\n")
     }
 
+    // Finalização do filter_complex
+    cmd.append("-filter_complex \"${filterComplex}\" ")
+    cmd.append("-map \"$videoComLegendasPad\" -map \"[a_out]\" ")
+    // NÃO use -r 30 aqui! O FPS já está travado lá em cima, para não gerar drop/double frames!
+    //cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p ")
+    cmd.append("-c:v libx264 -preset veryfast -crf 25 -pix_fmt yuv420p -r $fps ")
+    cmd.append("-movflags +faststart ")
+    val duracaoTotalVideoCalculada =
+        duracaoCenas.sum() + (if (usarTransicoes && mediaPaths.size > 1) (mediaPaths.size - 1) * tempoDeTransicaoEfetivo else 0.0)
+    cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, duracaoTotalVideoCalculada)))
+    cmd.append("\"$outputPath\"")
+    return cmd.toString()
+}
+
+// ... (imports e outras funções) ...
+
+
+// Utilitário para pegar dimensões da imagem
+fun obterDimensoesImagem(path: String): Pair<Int, Int>? {
+    return try {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, options)
+        Pair(options.outWidth, options.outHeight)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+
+
+fun gerarZoompanExpressao(
+    imgCaminho: String,
+    larguraVideo: Int,
+    alturaVideo: Int,
+    frames: Int,
+    cenaIdx: Int = -1
+): Triple<String, String, String> {
+    val (larguraImg, alturaImg) = obterDimensoesImagem(imgCaminho) ?: (1 to 1) // Evita zero!
+    
+    val escalaX =  larguraVideo.toDouble() / larguraImg.toDouble()
+    val escalaY =  alturaVideo.toDouble() / alturaImg.toDouble() 
+    val zoomAjuste = minOf(escalaX, escalaY)
+    val larguraAjuste = larguraImg.toDouble() * zoomAjuste
+    val alturaAjuste = alturaImg.toDouble() * zoomAjuste
+    val escalaX1 = larguraVideo.toDouble() / larguraAjuste.toDouble() 
+    val escalaY1 = alturaVideo.toDouble() / alturaAjuste.toDouble()
+    val zoomFixo = maxOf(escalaX1, escalaY1)
+    val zoom = zoomFixo
+    var padX = (((larguraAjuste*zoomFixo)-larguraAjuste)/2)
+    var padY = (((alturaAjuste*zoomFixo)-alturaAjuste)/2)
+
+    var xExpr = "'$padX'"
+    var yExpr = "'$padY'"
+    
+    if (larguraAjuste <= larguraVideo && alturaAjuste < alturaVideo){
+        var t = padX 
+        xExpr = "'($t-(($t/$frames)*on))'"
+    }
+    if (larguraAjuste < larguraVideo && alturaAjuste <= alturaVideo){
+        var t = padY
+        yExpr = "'($t-(($t/$frames)*on))'"
+    }      
+
+    val zoomExpr = "'$zoom + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/1000)'"
+
+    Log.i("ZoomPan", "Cena $cenaIdx - Img: ${larguraImg}x${alturaImg} | Video: ${larguraVideo}x${alturaVideo}")
+    Log.i("ZoomPan", "Cena $cenaIdx - escalaX: $escalaX | escalaY: $escalaY | zoomAjuste: $zoomAjuste")
+    Log.i("ZoomPan", "Cena $cenaIdx - larguraAjuste: $larguraAjuste | alturaAjuste: $alturaAjuste")
+    Log.i("ZoomPan", "Cena $cenaIdx - escalaX1: $escalaX1 | escalaY1: $escalaY1 | zoomFixo: $zoomFixo")
+    Log.i("ZoomPan", "Cena $cenaIdx - xExpr: $xExpr | yExpr: $yExpr | zoom: $zoom")
+
+    return Triple(zoomExpr, xExpr, yExpr)
+}
 
     private fun copiarFonteParaCache(context: Context, nomeFonte: String): String {
         val assetPath = "fonts/$nomeFonte"
@@ -552,7 +645,7 @@ object VideoEditorComTransicoes {
         }
     }
 
-    class VideoGenerationException(message: String) : Exception(message)
-
-    private data class Sextuple<A, B, C, D, E, F>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F)
+    class VideoGenerationException(message: String) : Exception(message)    
+    // Definindo Octuple para acomodar os novos parâmetros
+    private data class Octuple<A, B, C, D, E, F, G, H>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F, val seventh: G, val eighth: H)
 }

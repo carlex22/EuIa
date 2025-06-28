@@ -3,14 +3,16 @@ package com.carlex.euia.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.util.Log
-import android.widget.Toast // Mantido para manter a lógica original de feedback
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.carlex.euia.R // Import para R.string
+import com.carlex.euia.R
 import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.VideoGeneratorDataStoreManager
 import com.carlex.euia.data.VideoProjectDataStoreManager
+import com.carlex.euia.services.VideoProgressOverlayService // <<<<< IMPORT ADICIONADO
 import com.carlex.euia.utils.VideoEditorComTransicoes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -26,6 +28,7 @@ import java.io.File
  * - [AudioDataStoreManager] para obter os caminhos dos arquivos de áudio principal, música e legenda.
  * - [VideoGeneratorDataStoreManager] para persistir o caminho do vídeo final gerado.
  * - [VideoEditorComTransicoes] para realizar a edição e montagem do vídeo.
+ * - [VideoProgressOverlayService] para exibir um ícone de progresso flutuante.
  *
  * Expõe estados como [isGeneratingVideo], [generationLogs], [generationProgress],
  * e o caminho do vídeo gerado ([generatedVideoPath]).
@@ -58,11 +61,6 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
         loadLastGeneratedVideoPathFromDataStore()
     }
 
-    /**
-     * Carrega o caminho do último vídeo gerado do [VideoGeneratorDataStoreManager].
-     * Se um caminho for encontrado e o arquivo existir, atualiza [generatedVideoPath].
-     * Se o arquivo não existir, limpa o caminho persistido.
-     */
     private fun loadLastGeneratedVideoPathFromDataStore() {
         viewModelScope.launch {
             videoGeneratorDataStoreManager.finalVideoPath.firstOrNull()?.let { savedPath ->
@@ -80,10 +78,6 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    /**
-     * Limpa o estado atual do vídeo gerado, incluindo o caminho persistido no DataStore,
-     * logs de geração e progresso.
-     */
     fun clearCurrentVideoState() {
         _generatedVideoPath.value = ""
         _generationLogs.value = emptyList()
@@ -94,28 +88,28 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
         Log.i(TAG, "Estado do vídeo gerado (incluindo persistência) foi limpo.")
     }
 
-    /**
-     * Inicia o processo de geração do vídeo.
-     * Coleta os dados necessários (cenas, áudio, música, legendas) dos DataStores
-     * e invoca [VideoEditorComTransicoes.gerarVideoComTransicoes].
-     * Atualiza os estados de progresso, logs e o caminho do vídeo final.
-     * Exibe Toasts para feedback ao usuário sobre o sucesso ou falha da operação.
-     */
     fun generateVideo() {
         if (_isGeneratingVideo.value) {
             Log.d(TAG, "Geração de vídeo já em andamento. Requisição ignorada.")
-            // Toast para informar o usuário que já está processando
             Toast.makeText(applicationContext, R.string.video_gen_vm_status_already_generating, Toast.LENGTH_SHORT).show()
             return
         }
 
+        // <<<<< INÍCIO DA MODIFICAÇÃO: INICIAR SERVIÇO DE OVERLAY >>>>>
+        val startIntent = Intent(applicationContext, VideoProgressOverlayService::class.java).apply {
+            action = VideoProgressOverlayService.ACTION_START
+            putExtra(VideoProgressOverlayService.EXTRA_PROGRESS, 0f)
+        }
+        applicationContext.startService(startIntent)
+        Log.d(TAG, "Serviço de Overlay iniciado (ACTION_START).")
+        // <<<<< FIM DA MODIFICAÇÃO >>>>>
+
         _isGeneratingVideo.value = true
-        _generationLogs.value = listOf(applicationContext.getString(R.string.progress_starting_generation)) // Log inicial
+        _generationLogs.value = listOf(applicationContext.getString(R.string.progress_starting_generation))
         _generationProgress.value = 0.0f
-        // Não limpa _generatedVideoPath aqui para que o vídeo anterior continue visível até que um novo seja gerado.
         Log.i(TAG, "Iniciando geração de vídeo.")
 
-        viewModelScope.launch(Dispatchers.IO) { // Operações de arquivo e FFmpeg em thread de IO
+        viewModelScope.launch(Dispatchers.IO) {
             var currentTotalDurationForProgress = 0.0
 
             try {
@@ -126,7 +120,7 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
                     scene.imagemGeradaPath?.isNotBlank() == true &&
                     scene.tempoInicio != null &&
                     scene.tempoFim != null &&
-                    scene.tempoFim > scene.tempoInicio // Garante que a cena tenha uma duração válida
+                    scene.tempoFim > scene.tempoInicio
                 }
 
                 if (scenesToInclude.isEmpty()) {
@@ -134,7 +128,7 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
                     withContext(Dispatchers.Main) {
                         Toast.makeText(applicationContext, R.string.video_gen_vm_error_no_valid_scenes, Toast.LENGTH_LONG).show()
                     }
-                    _isGeneratingVideo.value = false
+                    // Retorno antecipado - o bloco finally será executado
                     return@launch
                 }
 
@@ -147,7 +141,7 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
                     withContext(Dispatchers.Main) {
                         Toast.makeText(applicationContext, R.string.video_gen_vm_error_main_audio_missing, Toast.LENGTH_LONG).show()
                     }
-                    _isGeneratingVideo.value = false
+                    // Retorno antecipado - o bloco finally será executado
                     return@launch
                 }
 
@@ -162,12 +156,10 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
                     scenes = scenesToInclude,
                     audioPath = audioFilePath,
                     musicaPath = musicFilePath,
-                    legendaPath = legendFilePath, // VideoEditorComTransicoes lida com a lógica de usar ou não legendas
+                    legendaPath = legendFilePath,
                     logCallback = { logMessage ->
-                        // Atualiza a UI com logs do FFmpeg
                         _generationLogs.value = _generationLogs.value + logMessage
 
-                        // Tenta parsear o tempo dos logs do FFmpeg para calcular o progresso
                         val timeMatch = Regex("time=(\\d{2}:\\d{2}:\\d{2}\\.\\d{2})").find(logMessage)
                         timeMatch?.let {
                             val timeString = it.groupValues[1]
@@ -179,9 +171,22 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
                                     val seconds = parts[2].toDouble()
                                     val centiseconds = parts[3].toDouble()
                                     val timeInSeconds = hours * 3600 + minutes * 60 + seconds + centiseconds / 100
-                                    if (currentTotalDurationForProgress > 0) {
-                                        _generationProgress.value = (timeInSeconds / currentTotalDurationForProgress).toFloat().coerceIn(0f, 1f)
+                                    
+                                    val progress = if (currentTotalDurationForProgress > 0) {
+                                        (timeInSeconds / currentTotalDurationForProgress).toFloat().coerceIn(0f, 1f)
+                                    } else {
+                                        0f
                                     }
+                                    _generationProgress.value = progress
+
+                                    // <<<<< INÍCIO DA MODIFICAÇÃO: ATUALIZAR SERVIÇO DE OVERLAY >>>>>
+                                    val updateIntent = Intent(applicationContext, VideoProgressOverlayService::class.java).apply {
+                                        action = VideoProgressOverlayService.ACTION_UPDATE_PROGRESS
+                                        putExtra(VideoProgressOverlayService.EXTRA_PROGRESS, progress)
+                                    }
+                                    applicationContext.startService(updateIntent)
+                                    // <<<<< FIM DA MODIFICAÇÃO >>>>>
+
                                 } catch (e: NumberFormatException) {
                                     Log.w(TAG, "Falha ao parsear tempo do log FFmpeg: '$timeString'", e)
                                 }
@@ -194,8 +199,8 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
 
                 if (finalVideoPathResult.isNotBlank()) {
                     _generatedVideoPath.value = finalVideoPathResult
-                    videoGeneratorDataStoreManager.setFinalVideoPath(finalVideoPathResult) // Persiste o caminho
-                    _generationProgress.value = 1.0f // Garante que o progresso chegue a 100%
+                    videoGeneratorDataStoreManager.setFinalVideoPath(finalVideoPathResult)
+                    _generationProgress.value = 1.0f
                     withContext(Dispatchers.Main) {
                         Toast.makeText(applicationContext, R.string.video_gen_vm_success, Toast.LENGTH_LONG).show()
                     }
@@ -219,13 +224,18 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
             } finally {
                 _isGeneratingVideo.value = false
                 Log.i(TAG, "Processo de geração de vídeo finalizado (sucesso ou falha).")
+
+                // <<<<< INÍCIO DA MODIFICAÇÃO: PARAR SERVIÇO DE OVERLAY >>>>>
+                val stopIntent = Intent(applicationContext, VideoProgressOverlayService::class.java).apply {
+                    action = VideoProgressOverlayService.ACTION_STOP
+                }
+                applicationContext.startService(stopIntent)
+                Log.d(TAG, "Serviço de Overlay parado (ACTION_STOP).")
+                // <<<<< FIM DA MODIFICAÇÃO >>>>>
             }
         }
     }
 
-    /**
-     * Chamado quando o ViewModel está prestes a ser destruído.
-     */
     override fun onCleared() {
         super.onCleared()
         Log.d(TAG, "VideoGeneratorViewModel onCleared().")

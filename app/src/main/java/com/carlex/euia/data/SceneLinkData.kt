@@ -23,11 +23,6 @@ data class SceneLinkData(
     val generationAttempt: Int = 0,
     var generationErrorMessage: String? = null, // Tornar var para permitir atualização pelo worker
 
-    // --- INÍCIO DA MODIFICAÇÃO: Campos para Gerenciamento de Fila ---
-    var queueRequestId: String? = null,     // Armazena o ID da requisição na API de fila
-    var queueStatusMessage: String? = null, // Armazena a última mensagem de status da fila (ex: "Posição 3 na fila")
-    // --- FIM DA MODIFICAÇÃO ---
-
     // Campos específicos para troca de roupa
     val isChangingClothes: Boolean = false,
     val clothesChangeAttempt: Int = 0,

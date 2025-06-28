@@ -57,15 +57,22 @@ object GeminiTextAndVisionProApi {
                 val textoArquivo = arquivoTexto?.let { lerArquivoTexto(it) }
                 
                 val generativeModel = GenerativeModel(
+                        modelName = modelName,
+                        apiKey = apiKey,
+                        generationConfig = generationConfig { temperature = 0.3f; topK = 40; topP = 0.95f }
+                    )
+                
+                /*
+                val generativeModel = GenerativeModel(
                     modelName = modelName,
                     apiKey = apiKey,
                     generationConfig = generationConfig { // Usando a importação correta
-                        temperature = 0.3f // Valores típicos para Pro
-                        topK = 40         // Pode ajustar conforme necessidade
-                        topP = 0.95f      // Pode ajustar conforme necessidade
+                        temperature = 0.7f // Ajustado para valores típicos para Standard/Pro Vision
+                        topK = 32
+                        topP = 0.8f     // Pode ajustar conforme necessidade
                         // maxOutputTokens = 8192 // Modelos Pro podem ter limites maiores
                     }
-                )
+                )*/
                 
                 val content = content {
                     text(pergunta)

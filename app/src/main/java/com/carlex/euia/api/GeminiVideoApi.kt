@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import com.carlex.euia.BuildConfig
+import com.carlex.euia.data.GeminiApiKeyDataStoreManager
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.carlex.euia.utils.BitmapUtils
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -135,7 +136,7 @@ internal interface VideoGeminiApiService {
 object GeminiVideoApi {
     private const val TAG = "GeminiVideoApi"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/"
-    private val apiKey = BuildConfig.GEMINI_API_KEY
+    // private val apiKey = BuildConfig.GEMINI_API_KEY
     private const val MODEL_ID = "veo-2.0-generate-001" // <<--- VERIFICAR SE ESTE É O MODELO CORRETO
 
     private const val DEFAULT_PERSON_GENERATION_POLICY = "dont_allow"
@@ -190,6 +191,12 @@ object GeminiVideoApi {
         context: Context,
         imagemReferenciaPath: String? = null
     ): Result<List<String>> {
+    
+    
+        val apiKeyDataStore = GeminiApiKeyDataStoreManager(context)
+        val apiKey = apiKeyDataStore.userGeminiApiKey.first()
+
+        
         // --- INÍCIO DOS LOGS ADICIONAIS ---
         Log.i(TAG, "--- INÍCIO: GeminiVideoApi.gerarVideo ---")
         Log.d(TAG, "Parâmetros de entrada:")

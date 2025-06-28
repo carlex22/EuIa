@@ -35,10 +35,42 @@ android {
         } else {
             println("WARNING: local.properties file not found.")
         }
+        
+        packagingOptions {
+        exclude("META-INF/DEPENDENCIES")
+    }
+        
 
         buildConfigField("String", "GEMINI_API_KEY", "\"${localProperties.getProperty("GEMINI_API_KEY", "")}\"")
         buildConfigField("String", "GROQ_API_KEY", "\"${localProperties.getProperty("GROQ_API_KEY", "")}\"")
     }
+    
+    
+    signingConfigs {
+    create("release") {
+        storeFile = file("signing-key.jks")
+        storePassword = "crs1411"
+        keyAlias = "carlex"
+        keyPassword = "crs1411"
+    }
+    getByName("debug") {
+        storeFile = file("signing-key.jks")
+        storePassword = "crs1411"
+        keyAlias = "carlex"
+        keyPassword = "crs1411"
+    }
+}
+
+buildTypes {
+    getByName("release") {
+        signingConfig = signingConfigs.getByName("release")
+    }
+    getByName("debug") {
+        signingConfig = signingConfigs.getByName("debug") 
+    }
+}
+
+    
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -81,7 +113,14 @@ dependencies {
     implementation(libs.google.playServices.auth)
     implementation(libs.google.playServices.ads)
     
-    implementation("com.google.android.gms:play-services-ads:24.4.0")
+implementation("com.google.android.gms:play-services-ads:24.4.0")
+implementation("com.google.apis:google-api-services-youtube:v3-rev222-1.25.0")
+//implementation("com.google.apis:google-api-services-youtube:v3-rev20230810-2.0.0")
+//implementation("com.google.api-client:google-api-client:2.8.0")
+implementation("com.google.android.gms:play-services-auth:21.0.0")
+implementation("com.google.firebase:firebase-auth-ktx:22.3.1")
+//implementation("com.google.code.gson:gson:2.10.1")
+//implementation("com.google.api.client:google-api-client-android:1.35.2")
 
 
     // --- Google AI Generative ---
@@ -139,6 +178,11 @@ dependencies {
 
     // WorkManager
     implementation(libs.androidx.work.runtime)
+
+
+
+
+    implementation("androidx.startup:startup-runtime:1.1.1")
 
     // DataStore
     implementation(libs.androidx.dataStore.preferences)
