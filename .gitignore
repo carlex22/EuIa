@@ -1,20 +1,20 @@
-/app/build/
-/app/build/*.*
-app/src/main/java/com/carlex/euia/prompts/*
-/app/src/main/java/com/carlex/euia/prompts/*
-app/src/main/java/com/carlex/euia/prompts/*.kt
+# Android Studio
 *.iml
-.gradle/*
+.gradle/
 local.properties
-gradle/*
-/gradle/*
-app/src/main/google-services.json
-app/src/release/google-services.json
-app/src/debug/google-services.json
-/app/src/main/google-services.json
-/app/src/release/google-services.json
-/app/src/debug/google-services.json
+/gradle/
 **/*.jar
 **/*.aar
 **/*.zip
 **/*.apk
+
+# Build output
+/app/build/
+
+# Prompts (seus arquivos customizados)
+/app/src/main/java/com/carlex/euia/prompts/
+
+# Google Services (arquivos de configuração sensíveis)
+/app/google-services.json
+/app/src/debug/google-services.json
+/app/src/release/google-services.json
