@@ -1,15 +1,15 @@
 # Android build outputs
 /app/build/
 /app/build/*.*
-/app/src/main/java/com/carlex/euia/prompts/*.*
-/app/src/main/java/com/carlex/euia/prompts/*.kt
+app/src/main/java/com/carlex/euia/prompts/*.*
+app/src/main/java/com/carlex/euia/prompts/*.kt
 *.iml
 .gradle/*.*
 local.properties
-/gradle/*.*
-/app/src/main/google-services.json
-/app/src/release/google-services.json
-/app/src/debug/google-services.json
+gradle/*.*
+app/src/main/google-services.json
+app/src/release/google-services.json
+app/src/debug/google-services.json
 **/*.jar
 **/*.aar
 **/*.zip
