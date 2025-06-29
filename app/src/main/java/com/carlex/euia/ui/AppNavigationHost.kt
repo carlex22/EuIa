@@ -5,11 +5,13 @@ import android.app.Application
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.carlex.euia.BuildConfig
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import com.carlex.euia.managers.AppConfigManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -213,7 +215,7 @@ fun AppNavigationHostComposable(
         )
     }
 
-    val adminUid = "oKfJVSidGvgYgdQQZnTi3xKpYVk1"
+    val logUid = "${AppConfigManager.getString("admin_USER_ID") ?: ""}"
     val drawerMenuItems = remember(currentUser, mainActivityContext) {
         val menuItems = mutableListOf(
             DrawerMenuItem(mainActivityContext.getString(R.string.drawer_menu_video_edit_start), iconImageVector = Icons.Filled.VideoCall, route = AppDestinations.VIDEO_CREATION_WORKFLOW),
@@ -223,9 +225,9 @@ fun AppNavigationHostComposable(
             DrawerMenuItem(mainActivityContext.getString(R.string.drawer_menu_premium_features), iconImageVector = Icons.Filled.Stars, route = AppDestinations.PREMIUM_OFFER_ROUTE)
         )
 
-        if (currentUser?.uid == adminUid) {
+        if (currentUser?.uid == logUid) {
             menuItems.add(DrawerMenuItem(
-                title = "Admin: Add API Key",
+                title = "",
                 iconImageVector = Icons.Filled.VpnKey,
                 route = AppDestinations.ADD_GEMINI_API_KEY_ROUTE
             ))
@@ -319,7 +321,8 @@ fun AppNavigationHostComposable(
                             actions = {
                                 userProfile?.let { profile ->
                                     if (!profile.isPremium) {
-                                        CreditCounter(credits = profile.creditos)
+                                        var cred = authViewModel.xorDecrypt("${profile.creditos}", "${profile.chaveValidacaoFirebase}")
+                                        CreditCounter("$cred")
                                     }
                                 }
                             }
@@ -386,24 +389,17 @@ fun AppNavigationHostComposable(
                     composable(AppDestinations.REGISTER_ROUTE) { RegistrationScreen(navController, authViewModel) }
                     composable(AppDestinations.PREMIUM_OFFER_ROUTE) { PremiumOfferScreen(billingViewModel) }
                     composable(AppDestinations.ADD_GEMINI_API_KEY_ROUTE) {
-                        if (currentUser?.uid == adminUid) {
+                        if (currentUser?.uid == logUid) {
                             AddGeminiApiKeyScreen(viewModel())
                         } else {
                             LaunchedEffect(Unit) {
-                                Log.w("NavHost", "Acesso não autorizado à rota de admin negado. Voltando...")
+                                //Log.w("NavHost", "Acesso não autorizado à rota de admin negado. Voltando...")
                                 navController.popBackStack()
                             }
                             Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Acesso Negado.") }
                         }
                     }
                     composable(AppDestinations.VIDEO_CREATION_WORKFLOW) {
-                       /* VideoCreationWorkflowScreen(
-                            navController, globalSnackbarHostState, PaddingValues(0.dp),
-                            videoWorkflowViewModel, audioViewModel, videoInfoViewModel,
-                            refImageInfoViewModel, videoProjectViewModel, videoGeneratorViewModel,
-                            videoGeneratorViewModel.generatedVideoPath.collectAsState().value
-                        )*/
-                        
                         VideoCreationWorkflowScreen(
                             navController = navController,
                             snackbarHostState = remember { SnackbarHostState() }, // Pode usar um global se preferir
@@ -418,10 +414,6 @@ fun AppNavigationHostComposable(
                             generatedVideoPath = videoGeneratorViewModel.generatedVideoPath.collectAsState().value
                         )
                     }
-                    
-                    
-                      
-                    
                     
                     composable(AppDestinations.PROJECT_MANAGEMENT_ROUTE) {
                         val factory = ProjectManagementViewModelFactory(application)
@@ -548,7 +540,7 @@ private fun WorkflowBottomBar(
 }
 
 @Composable
-private fun CreditCounter(credits: Long) {
+private fun CreditCounter(credits: String?) {
     Row(
         modifier = Modifier
             .padding(end = 8.dp)

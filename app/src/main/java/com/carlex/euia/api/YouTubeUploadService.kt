@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import com.carlex.euia.managers.AppConfigManager
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.ResponseBody
@@ -93,7 +94,7 @@ object YouTubeUploadService {
 
     private const val TAG = "YouTubeUploadService"
     private const val BASE_URL = "https://www.googleapis.com/"
-    private const val YOUR_GOOGLE_API_KEY = BuildConfig.GEMINI_API_KEY
+    private val YOUR_GOOGLE_API_KEY =  AppConfigManager.getString("gemini_API_KEY") ?: ""
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()

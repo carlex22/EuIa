@@ -5,12 +5,14 @@ import android.app.Application
 import android.content.Context
 import android.media.MediaPlayer
 import android.util.Log
+import com.carlex.euia.managers.AppConfigManager
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.work.Constraints
 import androidx.work.NetworkType
+import com.carlex.euia.BuildConfig
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -510,13 +512,16 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 }
 
                 if (scenesThatNeedGeneration.isNotEmpty()) {
-                    val totalCost = scenesThatNeedGeneration.size * TaskType.IMAGE.cost
+                    val imgCu = AppConfigManager.getInt("task_COST_DEB_IMG") ?: 10
+                    val totalCost = scenesThatNeedGeneration.size * imgCu
                     val user = authViewModel.userProfile.value
+                    
+                    var cred = authViewModel.getDecryptedCredits()
 
-                    if (user != null && !user.isPremium && user.creditos < totalCost) {
+                    if (user != null && !user.isPremium && cred?.toInt()!! < totalCost) {
                         _globalSceneError.value = applicationContext.getString(R.string.error_insufficient_credits_for_batch, totalCost, user.creditos)
                     } else {
-                        _pendingImageBatchCost.value = totalCost
+                        _pendingImageBatchCost.value = totalCost.toLong()!!
                         _pendingSceneListForGeneration = generatedSceneDataList
                         _showImageBatchCostConfirmationDialog.value = true
                         Log.d(TAG, "Disparando diálogo de confirmação para ${scenesThatNeedGeneration.size} imagens com custo de $totalCost créditos.")

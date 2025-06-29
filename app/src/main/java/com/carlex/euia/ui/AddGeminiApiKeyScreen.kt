@@ -1,7 +1,6 @@
 // File: euia/ui/AddGeminiApiKeyScreen.kt
 package com.carlex.euia.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -22,6 +20,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.carlex.euia.R
 import com.carlex.euia.data.ChaveApiInfo
 import com.carlex.euia.viewmodel.AddGeminiApiViewModel
+import com.carlex.euia.viewmodel.ConfigState
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -30,22 +29,33 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddGeminiApiKeyScreen(
-    addGeminiApiViewModel: AddGeminiApiViewModel = viewModel()
+    adminViewModel: AddGeminiApiViewModel = viewModel()
 ) {
-    val keys by addGeminiApiViewModel.apiKeys.collectAsState()
-    val isLoading by addGeminiApiViewModel.isLoading.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    // --- Estados para Gerenciamento de Chaves ---
+    val keys by adminViewModel.apiKeys.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var newApiKey by remember { mutableStateOf("") }
     var keyToDelete by remember { mutableStateOf<ChaveApiInfo?>(null) }
 
+    // --- Estados para Configuração do App ---
+    val configState by adminViewModel.appConfigState.collectAsState()
+    val editableConfig by adminViewModel.editableConfig.collectAsState()
+    val isLoading by adminViewModel.isLoading.collectAsState()
+
+    // --- Componentes da UI (Snackbar, Scope) ---
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // --- Efeito para mostrar mensagens da UI ---
     LaunchedEffect(Unit) {
-        addGeminiApiViewModel.uiEvent.collect { message ->
-            snackbarHostState.showSnackbar(message)
+        adminViewModel.uiEvent.collect { message ->
+            scope.launch {
+                snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+            }
         }
     }
 
+    // --- Diálogos (mantidos como antes) ---
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
@@ -61,7 +71,7 @@ fun AddGeminiApiKeyScreen(
             confirmButton = {
                 Button(onClick = {
                     if (newApiKey.isNotBlank()) {
-                        addGeminiApiViewModel.addApiKey(newApiKey)
+                        adminViewModel.addApiKey(newApiKey)
                         newApiKey = ""
                         showAddDialog = false
                     }
@@ -81,7 +91,7 @@ fun AddGeminiApiKeyScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        addGeminiApiViewModel.deleteApiKey(keyInfo)
+                        adminViewModel.deleteApiKey(keyInfo)
                         keyToDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -98,42 +108,106 @@ fun AddGeminiApiKeyScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 text = { Text("Adicionar Chave") },
-                icon = { Icon(Icons.Default.Add, contentDescription = "Adicionar nova chave") },
+                icon = { Icon(Icons.Default.Add, contentDescription = "Adicionar nova chave API") },
                 onClick = {
                     newApiKey = ""
                     showAddDialog = true
-                },
-                expanded = true
+                }
             )
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
+        LazyColumn(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // --- Seção 1: Gerenciamento de Chaves de API ---
+            item {
+                Text(
+                    "Pool de Chaves de API",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             if (isLoading && keys.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                item {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
                 }
             } else if (keys.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                item {
                     Text("Nenhuma chave API no pool.", style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(keys, key = { it.apikey }) { apiKeyInfo ->
-                        ApiKeyItemCard(
-                            apiKeyInfo = apiKeyInfo,
-                            onResetClick = { addGeminiApiViewModel.resetApiKey(it) },
-                            onDeleteClick = { keyToDelete = it }
-                        )
+                items(keys, key = { it.apikey }) { apiKeyInfo ->
+                    ApiKeyItemCard(
+                        apiKeyInfo = apiKeyInfo,
+                        onResetClick = { adminViewModel.resetApiKey(it) },
+                        onDeleteClick = { keyToDelete = it }
+                    )
+                }
+            }
+
+            // --- Seção 2: Configuração do App ---
+            item {
+                Divider(modifier = Modifier.padding(vertical = 24.dp))
+                Text(
+                    "Configuração do Aplicativo (Data_app)",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            item {
+                when (val state = configState) {
+                    is ConfigState.Loading -> {
+                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                    is ConfigState.Error -> {
+                        Text("Erro: ${state.message}", color = MaterialTheme.colorScheme.error)
+                    }
+                    is ConfigState.Success -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Renderiza os itens da lista editável
+                            editableConfig.forEach { (key, value) ->
+                                ConfigItem(
+                                    label = key,
+                                    value = value,
+                                    onValueChange = { newValue ->
+                                        adminViewModel.updateEditableConfigValue(key, newValue)
+                                    }
+                                )
+                            }
+                            // Botão para salvar as configurações
+                            Button(
+                                onClick = { adminViewModel.saveEditableConfig() },
+                                enabled = !isLoading,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 16.dp)
+                            ) {
+                                Text("Salvar Configuração")
+                            }
+                        }
                     }
                 }
+            }
+             item {
+                // Adiciona um espaço no final para o FAB não cobrir o último item
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
 }
 
+// Composables auxiliares (ApiKeyItemCard, KeyStatusInfo, ConfigItem) permanecem os mesmos.
+// ... (código dos composables auxiliares aqui, sem alterações) ...
 @Composable
 private fun ApiKeyItemCard(
     apiKeyInfo: ChaveApiInfo,
@@ -211,4 +285,26 @@ private fun KeyStatusInfo(
             }
         }
     }
+}
+
+@Composable
+fun ConfigItem(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = {
+            Text(
+                text = label,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelMedium
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+        textStyle = MaterialTheme.typography.bodyMedium,
+        singleLine = true
+    )
 }

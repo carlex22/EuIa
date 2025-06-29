@@ -209,7 +209,7 @@ class BillingViewModel(application: Application) : AndroidViewModel(application)
                 val userRef = firestore.collection("users").document(currentUserUid)
                 userRef.update(
                     "isPremium", true,
-                    "subscriptionEndDate", purchase.purchaseTime + 30L * 24 * 60 * 60 * 1000 // Exemplo: 30 dias
+                    "subscriptionEndDate", purchase.purchaseTime + 30L * 24 * 60 * 60 *  100 // Exemplo: 30 dias
                 ).await()
                 _billingMessage.value = "Assinatura ativada com sucesso!"
             } catch (e: Exception) {

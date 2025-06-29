@@ -58,12 +58,12 @@ enum class TaskType {
 
     val cost: Int
         get() = when (this) {
-            TEXT_STANDARD -> AppConfigManager.getInt("task_COST_DEB_TEXT") ?: 1
-            TEXT_PRO -> AppConfigManager.getInt("task_COST_DEB_TEXT_PRO") ?: 5
-            AUDIO_SINGLE -> AppConfigManager.getInt("task_COST_DEB_AUD") ?: 10
-            AUDIO_MULTI -> AppConfigManager.getInt("task_COST_DEB_AUD_MULT") ?: 20
-            IMAGE -> AppConfigManager.getInt("task_COST_DEB_IMG") ?: 10
-            CREDIT_FREE -> AppConfigManager.getInt("task_COST_CRE_FREE") ?: 100
+            TEXT_STANDARD -> AppConfigManager.getInt("TASK_COST_DEB_TEXT")
+            TEXT_PRO -> AppConfigManager.getInt("TASK_COST_DEB_TEXT_PRO")
+            AUDIO_SINGLE -> AppConfigManager.getInt("TASK_COST_DEB_AUD")
+            AUDIO_MULTI -> AppConfigManager.getInt("TASK_COST_DEB_AUD_MULT")
+            IMAGE -> AppConfigManager.getInt("TASK_COST_DEB_IMG")
+            CREDIT_FREE -> AppConfigManager.getInt("TASK_COST_CRE_FREE")
         }
 }
 
@@ -75,17 +75,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val appContext: Context = application.applicationContext
 
     // --- Propriedades que leem do AppConfigManager. Lançam exceção se a chave não existir. ---
-    private val cryptoMasterKey: String get() = AppConfigManager.getString("crypto_MASTER_KEY") ?: ""
-    private val fbKeyWallet: String get() = AppConfigManager.getString("firebase_FIELD_CREDITS") ?: ""
-    private val fbKeyCredExp: String get() = AppConfigManager.getString("firebase_FIELD_CREDIT_EXPIRY") ?: ""
-    private val fbCollectionUsers: String get() = AppConfigManager.getString("firebase_COLLECTION_USERS") ?: ""
-    private val fbKeyIsPremium: String get() = AppConfigManager.getString("firebase_FIELD_IS_PREMIUM") ?: ""
-    private val fbKeyValidation: String get() = AppConfigManager.getString("firebase_FIELD_VALIDATION_KEY") ?: ""
-    private val googleWebClientId: String get() = AppConfigManager.getString("google_WEB_CLIENT_ID") ?: ""
-    private val youtubeUploadScope: String get() = AppConfigManager.getString("youtube_UPLOAD_SCOPE") ?: ""
+    private val cryptoMasterKey: String get() = AppConfigManager.getString("CRYPTO_MASTER_KEY").ifBlank { throw MissingConfigurationException("CRYPTO_MASTER_KEY não pode ser vazia.") }
+    private val fbKeyWallet: String get() = AppConfigManager.getString("FIREBASE_FIELD_CREDITS").ifBlank { throw MissingConfigurationException("FIREBASE_FIELD_CREDITS não pode ser vazia.") }
+    private val fbKeyCredExp: String get() = AppConfigManager.getString("FIREBASE_FIELD_CREDIT_EXPIRY").ifBlank { throw MissingConfigurationException("FIREBASE_FIELD_CREDIT_EXPIRY não pode ser vazia.") }
+    //private val fbCollectionUsers: String get() = AppConfigManager.getString("FIREBASE_COLLECTION_USERS").ifBlank { throw MissingConfigurationException("FIREBASE_COLLECTION_USERS não pode ser vazia.") }
+    private val fbKeyIsPremium: String get() = AppConfigManager.getString("FIREBASE_FIELD_IS_PREMIUM").ifBlank { throw MissingConfigurationException("FIREBASE_FIELD_IS_PREMIUM não pode ser vazia.") }
+    private val fbKeyValidation: String get() = AppConfigManager.getString("FIREBASE_FIELD_VALIDATION_KEY").ifBlank { throw MissingConfigurationException("FIREBASE_FIELD_VALIDATION_KEY não pode ser vazia.") }
+    //private val googleWebClientId: String get() = AppConfigManager.getString("GOOGLE_WEB_CLIENT_ID").ifBlank { throw MissingConfigurationException("GOOGLE_WEB_CLIENT_ID não pode ser vazio.") }
+    //private val youtubeUploadScope: String get() = AppConfigManager.getString("YOUTUBE_UPLOAD_SCOPE").ifBlank { throw MissingConfigurationException("YOUTUBE_UPLOAD_SCOPE não pode ser vazio.") }
 
 
-    
+    private val googleWebClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+    private val youtubeUploadScope = BuildConfig.YOUTUBE_UPLOAD_SCOPE
+    private val fbCollectionUsers: String = BuildConfig.FIREBASE_COLLECTION_USERS
+    //private val cryptoMasterKey: String = BuildConfig.CRYPTO_MASTER_KEY
+
 
     // --- State Flows ---
     private val _currentUser = MutableStateFlow<FirebaseUser?>(null)
@@ -187,15 +191,15 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun generateLocalValidationKey(): String {
-        val userIdValue = auth.currentUser?.uid!! ?: "xxx"
-        val cryptoValue = cryptoMasterKey!! ?: "xxx"
-        val key = xorEncrypt("${userIdValue}-${cryptoValue}", cryptoMasterKey!! ?: "xxx")
-        return key ?: "xxx"
-       //  
+     fun generateLocalValidationKey(): String {
+        val userIdValue = auth.currentUser?.uid ?: ""
+        return if (userIdValue.isBlank()) "" else "${userIdValue}-${cryptoMasterKey}"
     }
 
-    
+    private fun generateFirebaseValidationCheckValue(rawCreditDecryptionKeyString: String): String? {
+        if (rawCreditDecryptionKeyString.isBlank() || cryptoMasterKey.isBlank()) return null
+        return xorEncrypt(rawCreditDecryptionKeyString, cryptoMasterKey)
+    }
 
     fun getGoogleSignInIntent(): Intent {
         if (!::googleSignInClient.isInitialized) {
@@ -242,119 +246,49 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun signInWithFirebaseAndGoogle(credential: AuthCredential, googleAccessToken: String?) {
-        viewModelScope.launch { // <<< CORREÇÃO: Envolver em viewModelScope.launch para segurança de thread >>>
+        viewModelScope.launch {
             try {
                 val authResult = auth.signInWithCredential(credential).await()
                 val firebaseUser = authResult.user
-
                 if (firebaseUser != null) {
-                    val userDocRef = firestore.collection(fbCollectionUsers).document(firebaseUser.uid) // Usa a coleção do BuildConfig
+                    val userDocRef = firestore.collection(fbCollectionUsers).document(firebaseUser.uid)
                     val userSnapshot = userDocRef.get().await()
-
                     if (!userSnapshot.exists()) {
-                        Log.d(TAG, "Novo usuário Google. Criando perfil inicial com créditos criptografados.")
-                        val calendar = Calendar.getInstance()
-                        calendar.add(Calendar.HOUR, 24) // 24 horas de validade para créditos gratuitos
-                        val initialExpiration = Timestamp(calendar.time)
-
-                        // Gera a chave de descriptografia de créditos e o valor de verificação
-                        val chaveValidacaoFirebase = generateLocalValidationKey()
-                        if (chaveValidacaoFirebase.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key))
-                        
-                        
-
-                        val initialCreditsAmount = TaskType.CREDIT_FREE.cost // Valor inicial dos créditos
-                        val initialCreditsCriptografados = xorEncrypt(initialCreditsAmount.toString(), chaveValidacaoFirebase) // Criptografa os créditos
-
+                        val calendar = Calendar.getInstance().apply { add(Calendar.HOUR, 24) }
+                        val creditDecryptionKey = generateLocalValidationKey()
+                        if (creditDecryptionKey.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key))
+                        val firebaseValidationValue = generateFirebaseValidationCheckValue(creditDecryptionKey)
+                        if (firebaseValidationValue.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_validation_check))
+                        val initialCreditsCriptografados = xorEncrypt(TaskType.CREDIT_FREE.cost.toString(), creditDecryptionKey)
                         if (initialCreditsCriptografados.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_initial_credits))
-
                         val newUser = User(
-                            uid = firebaseUser.uid,
-                            email = firebaseUser.email ?: "",
-                            name = firebaseUser.displayName, // Captura o nome se disponível
-                            isPremium = false,
-                            creditos = initialCreditsCriptografados, // Salva os créditos criptografados
-                            dataExpiraCredito = initialExpiration,
-                            chaveValidacaoFirebase = chaveValidacaoFirebase // Salva o valor de verificação CRIPTOGRAFADO
+                            uid = firebaseUser.uid, email = firebaseUser.email ?: "", name = firebaseUser.displayName,
+                            isPremium = false, creditos = initialCreditsCriptografados, dataExpiraCredito = Timestamp(calendar.time),
+                            chaveValidacaoFirebase = firebaseValidationValue
                         )
                         userDocRef.set(newUser).await()
-                        Log.d(TAG, "Novo usuário Google registrado e perfil criado com créditos criptografados e verificação de validação criptografada.")
                     } else {
-                        // Usuário existente. Verifica/atualiza os créditos se não for premium e estiverem expirados.
                         val userProfileData = userSnapshot.toObject(User::class.java)
-                        if (userProfileData != null) { // Sempre verifica se userProfileData não é nulo
-                            if (!userProfileData.isPremium) {
-                               val expirationDate = userProfileData.dataExpiraCredito?.toDate()
-                               val currentDate = Date()
-                               if (expirationDate == null || currentDate.after(expirationDate)) {
-                                    Log.i(TAG, "Créditos 'free' expirados ou nulos para usuário existente. Renovando.")
-                                    val calendar = Calendar.getInstance()
-                                    calendar.time = currentDate
-                                    calendar.add(Calendar.HOUR, 24)
-                                    val newExpirationTimestamp = Timestamp(calendar.time)
-
-                                    // Gera NOVAMENTE a chave de descriptografia de créditos e o valor de verificação para a renovação
-                                    val chaveValidacaoFirebase = generateLocalValidationKey()
-                                    if (chaveValidacaoFirebase.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key_renewal))
-
-
-                                    val initialCreditsAmount = TaskType.CREDIT_FREE.cost // Valor da renovação
-                                    val initialCreditsCriptografados = xorEncrypt(initialCreditsAmount.toString(), chaveValidacaoFirebase) // Criptografa os créditos com a NOVA chave
-                                    if (initialCreditsCriptografados.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_credits_renewal))
-
-                                    val creditUpdates = mapOf(
-                                        fbKeyWallet to initialCreditsCriptografados, // Usa o campo do BuildConfig
-                                        fbKeyCredExp to newExpirationTimestamp, // Usa o campo do BuildConfig
-                                        fbKeyValidation to chaveValidacaoFirebase // Salva a NOVA verificação criptografada
-                                    )
-                                    userDocRef.update(creditUpdates).await()
-                                    Log.i(TAG, "Créditos 'free' renovados para usuário existente. Nova expiração: $newExpirationTimestamp, Nova chave de validação salva.")
-                               } else {
-                                    Log.i(TAG, "Usuário existente, créditos 'free' ainda válidos.")
-                               }
-                               // Independentemente da renovação, garante que a chave de validação armazenada corresponda à calculada
-                               val chaveValidacaoFirebase = generateLocalValidationKey()
-                               
-                               if (chaveValidacaoFirebase != userProfileData.chaveValidacaoFirebase) {
-                                    Log.w(TAG, "Login Google: Discrepância na chave de validação para usuário existente. Atualizando Firebase.")
-                                    if (chaveValidacaoFirebase != null) {
-                                        userDocRef.update(fbKeyValidation, chaveValidacaoFirebase).await()
-                                        Log.d(TAG, "Login Google: Chave de validação do Firebase atualizada.")
-                                    } else {
-                                        Log.e(TAG, "Login Google: Não foi possível gerar o valor esperado da chave de validação para atualização.")
-                                    }
-                               } else {
-                                    Log.d(TAG, "Login Google: Chave de validação corresponde para usuário existente. OK.")
-                               }
-                            } else if (userProfileData.isPremium) {
-                                 Log.i(TAG, "Login Google: Existing user is Premium. No changes to free credits/expiry.")
-                                  // Garante que a chave de validação seja salva mesmo para Premium (menos crítico, mas boa prática)
-                                 val chaveValidacaoFirebase = generateLocalValidationKey()
-                                 
-                                 if (chaveValidacaoFirebase != userProfileData.chaveValidacaoFirebase) {
-                                      Log.w(TAG, "Login Google: Discrepância na chave de validação para usuário Premium. Atualizando Firebase.")
-                                      if (chaveValidacaoFirebase != null) {
-                                          userDocRef.update(fbKeyValidation, chaveValidacaoFirebase).await()
-                                          Log.d(TAG, "Login Google: Chave de validação do Firebase atualizada para usuário Premium.")
-                                      } else {
-                                           Log.e(TAG, "Login Google: Não foi possível gerar o valor esperado da chave de validação para atualização Premium.")
-                                      }
-                                 } else {
-                                      Log.d(TAG, "Login Google: Chave de validação corresponde para usuário Premium. OK.")
-                                 }
+                        if (userProfileData != null && !userProfileData.isPremium) {
+                            val expirationDate = userProfileData.dataExpiraCredito?.toDate()
+                            if (expirationDate == null || Date().after(expirationDate)) {
+                                val calendar = Calendar.getInstance().apply { add(Calendar.HOUR, 24) }
+                                val creditDecryptionKey = generateLocalValidationKey()
+                                if (creditDecryptionKey.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key_renewal))
+                                val firebaseValidationValue = generateFirebaseValidationCheckValue(creditDecryptionKey)
+                                if (firebaseValidationValue.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_validation_check_renewal))
+                                val initialCreditsCriptografados = xorEncrypt(TaskType.CREDIT_FREE.cost.toString(), creditDecryptionKey)
+                                if (initialCreditsCriptografados.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_credits_renewal))
+                                val creditUpdates = mapOf(fbKeyWallet to initialCreditsCriptografados, fbKeyCredExp to Timestamp(calendar.time), fbKeyValidation to firebaseValidationValue)
+                                userDocRef.update(creditUpdates).await()
                             }
-                        } else {
-                             // Este caso idealmente não deveria acontecer se userSnapshot.exists() for true, mas log para segurança
-                             Log.e(TAG, "Login Google: Usuário existente, mas dados do perfil nulos após snapshot.")
                         }
                     }
-                    _youtubeAccessToken.value = googleAccessToken // Salva o token do Google se disponível
-                    _error.value = null // Limpa qualquer erro de autenticação ao logar com sucesso
-                    Log.d(TAG, "Login com Google para Firebase SUCESSO. UID: ${firebaseUser.uid.take(6)}.")
+                    _youtubeAccessToken.value = googleAccessToken
+                    _error.value = null
                 }
             } catch (e: Exception) {
                 _error.value = getApplication<Application>().getString(R.string.auth_failed_firebase_google, e.localizedMessage ?: "xxx")
-                Log.e(TAG, "Erro ao autenticar com Google/Firebase", e)
             } finally {
                 _isLoading.value = false
             }
@@ -370,15 +304,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val firebaseUser = result.user
                 if (firebaseUser != null) {
                     val calendar = Calendar.getInstance().apply { add(Calendar.HOUR, 24) }
-                    val chaveValidacaoFirebase = generateLocalValidationKey()
-                    if (chaveValidacaoFirebase.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key_register))
-                    val initialCreditsCriptografados = xorEncrypt(TaskType.CREDIT_FREE.cost.toString(), chaveValidacaoFirebase)
+                    val creditDecryptionKey = generateLocalValidationKey()
+                    if (creditDecryptionKey.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key_register))
+                    val firebaseValidationValue = generateFirebaseValidationCheckValue(creditDecryptionKey)
+                    if (firebaseValidationValue.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_validation_check_register))
+                    val initialCreditsCriptografados = xorEncrypt(TaskType.CREDIT_FREE.cost.toString(), creditDecryptionKey)
                     if (initialCreditsCriptografados.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_credits_register))
 
                     val newUser = User(
                         uid = firebaseUser.uid, email = firebaseUser.email ?: "", isPremium = false,
                         creditos = initialCreditsCriptografados, dataExpiraCredito = Timestamp(calendar.time),
-                        chaveValidacaoFirebase = chaveValidacaoFirebase
+                        chaveValidacaoFirebase = firebaseValidationValue
                     )
                     firestore.collection(fbCollectionUsers).document(firebaseUser.uid).set(newUser).await()
                     _error.value = null
@@ -417,11 +353,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         val expirationDate = userProfileData.dataExpiraCredito?.toDate()
                         if (expirationDate == null || Date().after(expirationDate)) {
                             val calendar = Calendar.getInstance().apply { add(Calendar.HOUR, 24) }
-                            val chaveValidacaoFirebase = generateLocalValidationKey()
-                            if (chaveValidacaoFirebase.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key_renewal_login))
-                            val initialCreditsCriptografados = xorEncrypt(TaskType.CREDIT_FREE.cost.toString(), chaveValidacaoFirebase)
+                            val creditDecryptionKey = generateLocalValidationKey()
+                            if (creditDecryptionKey.isBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_generate_validation_key_renewal_login))
+                            val firebaseValidationValue = generateFirebaseValidationCheckValue(creditDecryptionKey)
+                            if (firebaseValidationValue.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_validation_check_renewal_login))
+                            val initialCreditsCriptografados = xorEncrypt(TaskType.CREDIT_FREE.cost.toString(), creditDecryptionKey)
                             if (initialCreditsCriptografados.isNullOrBlank()) throw java.lang.IllegalStateException(getApplication<Application>().getString(R.string.error_failed_encrypt_credits_renewal_login))
-                            val creditUpdates = mapOf(fbKeyWallet to initialCreditsCriptografados, fbKeyCredExp to Timestamp(calendar.time), fbKeyValidation to chaveValidacaoFirebase)
+                            val creditUpdates = mapOf(fbKeyWallet to initialCreditsCriptografados, fbKeyCredExp to Timestamp(calendar.time), fbKeyValidation to firebaseValidationValue)
                             userDocRef.update(creditUpdates).await()
                         }
                     }
@@ -452,12 +390,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 firestore.runTransaction { transaction ->
                     val user = transaction.get(userDocRef).toObject(User::class.java) ?: throw Exception(getApplication<Application>().getString(R.string.error_user_profile_not_found))
                     if (user.isPremium) return@runTransaction true
-                    val chaveValidacaoFirebase = generateLocalValidationKey()
-                    if (chaveValidacaoFirebase.isNullOrBlank() || user.chaveValidacaoFirebase != chaveValidacaoFirebase) throw Exception(getApplication<Application>().getString(R.string.error_validation_key_mismatch))
-                    val currentCredits = user.creditos?.let { xorDecrypt(it, chaveValidacaoFirebase)?.toIntOrNull() } ?: 0
+                    val localKey = generateLocalValidationKey()
+                    val expectedValidation = generateFirebaseValidationCheckValue(localKey)
+                    if (expectedValidation.isNullOrBlank() || user.chaveValidacaoFirebase != expectedValidation) throw Exception(getApplication<Application>().getString(R.string.error_validation_key_mismatch))
+                    val currentCredits = user.creditos?.let { xorDecrypt(it, localKey)?.toIntOrNull() } ?: 0
                     if (currentCredits < amountToDeduct) throw Exception(getApplication<Application>().getString(R.string.error_insufficient_credits_simple))
                     val newCredits = currentCredits - amountToDeduct
-                    val newEncryptedCredits = xorEncrypt(newCredits.toString(), chaveValidacaoFirebase) ?: throw Exception(getApplication<Application>().getString(R.string.error_failed_encrypt_new_balance))
+                    val newEncryptedCredits = xorEncrypt(newCredits.toString(), localKey) ?: throw Exception(getApplication<Application>().getString(R.string.error_failed_encrypt_new_balance))
                     transaction.update(userDocRef, fbKeyWallet, newEncryptedCredits)
                     true
                 }.await()
@@ -480,11 +419,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 firestore.runTransaction { transaction ->
                     val userDocRef = firestore.collection(fbCollectionUsers).document(userId)
                     val user = transaction.get(userDocRef).toObject(User::class.java) ?: return@runTransaction
-                    val chaveValidacaoFirebase = generateLocalValidationKey()
-                    if (chaveValidacaoFirebase.isNullOrBlank() || user.chaveValidacaoFirebase != chaveValidacaoFirebase) return@runTransaction
-                    val currentCredits = user.creditos?.let { xorDecrypt(it, chaveValidacaoFirebase)?.toIntOrNull() } ?: 0
+                    val localKey = generateLocalValidationKey()
+                    val expectedValidation = generateFirebaseValidationCheckValue(localKey)
+                    if (expectedValidation.isNullOrBlank() || user.chaveValidacaoFirebase != expectedValidation) return@runTransaction
+                    val currentCredits = user.creditos?.let { xorDecrypt(it, localKey)?.toIntOrNull() } ?: 0
                     val newCredits = currentCredits + amountToRefund
-                    val newEncryptedCredits = xorEncrypt(newCredits.toString(), chaveValidacaoFirebase) ?: return@runTransaction
+                    val newEncryptedCredits = xorEncrypt(newCredits.toString(), localKey) ?: return@runTransaction
                     transaction.update(userDocRef, fbKeyWallet, newEncryptedCredits)
                 }.await()
             } catch (e: Exception) {
@@ -555,18 +495,22 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
              saldoDescriptografadoString = "Premium"
             return 0
         }
-        val chaveValidacaoFirebase = generateLocalValidationKey()
-        if (chaveValidacaoFirebase.isBlank()) {
+        val localKey = generateLocalValidationKey()
+        if (localKey.isBlank()) {
             saldoDescriptografadoString = "Erro"
             return 0
         }
-        
+        val expectedValidation = generateFirebaseValidationCheckValue(localKey)
+        if (expectedValidation == null || currentUserProfile.chaveValidacaoFirebase != expectedValidation) {
+             saldoDescriptografadoString = "Erro"
+            return 0
+        }
         val saldoCriptografado = currentUserProfile.creditos
         if (saldoCriptografado.isNullOrBlank()) {
             saldoDescriptografadoString = "0"
             return 0
         }
-        val saldoDescriptografado = xorDecrypt(saldoCriptografado, chaveValidacaoFirebase)
+        val saldoDescriptografado = xorDecrypt(saldoCriptografado, localKey)
         saldoDescriptografadoString = saldoDescriptografado ?: "Erro"
         val saldoInt = saldoDescriptografado?.toIntOrNull()
         if (saldoInt == null) {

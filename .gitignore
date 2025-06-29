@@ -1,18 +1,12 @@
 # Android build outputs
 /app/build/
-
-
-
-
-
-# IntelliJ/AndroidStudio
+/app/build/*
+/app/src/main/java/com/carlex/euia/prompts/*
 *.iml
-.gradle/
-/local.properties
-/gradle/
-
-
-# Direto para assets grandes que não precisam estar no repo
+.gradle/*
+local.properties
+/gradle/*
+**/google-services.json
 **/*.jar
 **/*.aar
 **/*.zip

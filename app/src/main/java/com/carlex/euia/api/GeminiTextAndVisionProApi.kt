@@ -31,8 +31,8 @@ import com.google.ai.client.generativeai.type.*
  */
 object GeminiTextAndVisionProApi {
     private const val TAG = "GeminiApiPro"
-    private const val modelName = //"gemini-2.5-flash-lite-preview-06-17"
-                                    "gemini-2.5-flash"
+    private const val modelName = "gemini-2.5-flash-lite-preview-06-17"
+                                    //"gemini-2.5-flash"
                                     //"gemini-2.5-flash-preview-04-17" // Ou o modelo Pro Vision desejado
     private const val TIPO_DE_CHAVE = "text"
 
@@ -93,7 +93,7 @@ object GeminiTextAndVisionProApi {
 
 
                         val requestOptions = RequestOptions(
-                            timeout = 1320.seconds // Define o timeout para 120 segundos (2 minutos)
+                            timeout = 600.seconds // Define o timeout para 120 segundos (2 minutos)
                         )
                         
                         val generativeModel = GenerativeModel(

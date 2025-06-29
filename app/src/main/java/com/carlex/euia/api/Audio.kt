@@ -4,6 +4,7 @@ package com.carlex.euia.api
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
+import com.carlex.euia.managers.AppConfigManager
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,7 +33,7 @@ import java.io.IOException // Adicionado para exceções de rede
 object Audio {
     private const val TAG = "AudioGenerator"
     private const val TEXT_PART_CHAR_LIMIT = 680
-    private const val apiKey = BuildConfig.GROQ_API_KEY
+    private val apiKey = AppConfigManager.getString("groq_API_KEY") ?: ""
 
     // --- Data classes (permanecem as mesmas) ---
     private data class WordTimestamp(
@@ -135,6 +136,7 @@ object Audio {
             .build()
             .create(ApiService::class.java)
     }
+    
     private fun splitTextIntoParts(text: String, maxLengthHint: Int): List<String> {
         val parts = mutableListOf<String>()
         var remainingText = text.trim()
@@ -523,7 +525,7 @@ object Audio {
                 val timestampGranularitiesParts = listOf(
                     MultipartBody.Part.createFormData("timestamp_granularities[]", "word")
                 )
-                val wordGranularityRequested = true
+                val wordGranularityRequested = false
                 var finalApiPromptText = ""
                 Log.d(TAG, "Prompt final para API (transcrição): '$finalApiPromptText'")
                 val promptPart = if (finalApiPromptText.isNotEmpty()) MultipartBody.Part.createFormData("prompt", finalApiPromptText) else null
@@ -608,8 +610,8 @@ object Audio {
     private fun generateSrtContent(allWords: List<WordTimestamp>): String {
         val srtBuilder = StringBuilder()
         var entryIndex = 1
-        val maxCharsPerLine = 15
-        val preferredWordsPerLine = 3
+        val maxCharsPerLine = 150
+        val preferredWordsPerLine = 30
 
         if (allWords.isEmpty()) {
             Log.w(TAG, "Nenhuma palavra com timestamp recebida para gerar SRT.")
