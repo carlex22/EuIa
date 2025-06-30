@@ -33,7 +33,7 @@ object GeminiTextAndVisionProApi {
     private const val TAG = "GeminiApiPro"
     private const val modelName = "gemini-2.5-flash-lite-preview-06-17"
                                     //"gemini-2.5-flash"
-                                    //"gemini-2.5-flash-preview-04-17" // Ou o modelo Pro Vision desejado
+                                   // "gemini-2.5-flash-preview-04-17" // Ou o modelo Pro Vision desejado
     private const val TIPO_DE_CHAVE = "text"
 
     // Instanciação interna e preguiçosa (lazy) das dependências.
@@ -96,15 +96,16 @@ object GeminiTextAndVisionProApi {
                             timeout = 600.seconds // Define o timeout para 120 segundos (2 minutos)
                         )
                         
+                        
+                        
+                        
                         val generativeModel = GenerativeModel(
                             modelName = modelName,
                             apiKey = chaveAtual,
                             generationConfig = generationConfig {
                                 temperature = 2.0f // Temperatura mais alta para criatividade
                                 topP = 0.95f
-                            },
-                            requestOptions = requestOptions,
-                            tools =  null
+                            }
                         )
                         
                         val adjustedImagePaths = ajustarCaminhosDeImagem(imagens)

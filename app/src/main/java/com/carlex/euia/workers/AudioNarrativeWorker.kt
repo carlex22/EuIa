@@ -41,14 +41,15 @@ import org.json.JSONArray // org.json
 import org.json.JSONException
 import org.json.JSONObject // org.json
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStreamReader
 import androidx.work.ListenableWorker.Result
 import kotlinx.coroutines.coroutineScope
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.ExperimentalSerializationApi
 import java.io.BufferedReader
-import java.io.InputStreamReader
 
 // --- CONSTANTES NO NÍVEL DO ARQUIVO ---
 const val KEY_PROMPT_TO_USE = "promptToUse"
@@ -90,9 +91,7 @@ class AudioNarrativeWorker(
         val contentText = if (isChat) appContext.getString(R.string.notification_content_audio_dialog_starting)
                           else appContext.getString(R.string.notification_content_audio_starting)
 
-        // <<< CORREÇÃO PRINCIPAL AQUI >>>
-        // Garante que o canal seja criado ANTES de tentar criar a notificação.
-        //createNotificationChannel()
+        // A criação do canal agora é feita centralmente em NotificationUtils
         
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID_AUDIO)
             .setContentTitle(title)
@@ -104,20 +103,6 @@ class AudioNarrativeWorker(
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
         return ForegroundInfo(NOTIFICATION_ID_AUDIO, notification)
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = appContext.getString(R.string.notification_channel_name_audio)
-            val descriptionText = appContext.getString(R.string.notification_channel_description_audio)
-            val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID_AUDIO, name, importance).apply {
-                description = descriptionText
-            }
-            val notificationManager: NotificationManager =
-                applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
     }
 
     private fun updateNotificationProgress(contentText: String, makeDismissible: Boolean = false) {
@@ -135,8 +120,6 @@ class AudioNarrativeWorker(
         notificationManager.notify(NOTIFICATION_ID_AUDIO, notificationBuilder.build())
     }
     
-    // O resto da classe continua igual
-    // ... (doWork e outras funções auxiliares)
     @OptIn(ExperimentalSerializationApi::class)
     override suspend fun doWork(): Result = coroutineScope {
         Log.d(TAG, "doWork() Iniciado.")
@@ -207,7 +190,7 @@ class AudioNarrativeWorker(
                     CreateAudioNarrative().getFormattedPrompt(
                         userName, userProf, userAddr, userTarget, userLangTone,
                         tituloAtual, extrasAtuais, imagePathsForSingleNarrator.joinToString("; "),
-                        videoObjectiveIntroduction, videoObjectiveVideo, videoObjectiveOutcome, videoTimeSeconds
+                        videoObjectiveIntroduction, videoObjectiveVideo, videoObjectiveOutcome, videoTimeSeconds, "${audioDataStoreManager.voiceSpeaker1.first()}", "${audioDataStoreManager.sexo.first()}"
                     )
                 }
 
@@ -231,8 +214,6 @@ class AudioNarrativeWorker(
                         Log.e(TAG, "Erro ao ler arquivo de contexto ($contextFilePath). Usando prompt principal. Erro: ${e.message}")
                     }
                 }
-                // Se contextFileContent for nulo ou vazio, E for chat, usa o prompt principal do DataStore.
-                // Se não for chat, arquivoTextoParaGemini continua null.
                 val arquivoTextoParaGemini = if (isChatNarrativeInput) {
                                                 contextFileContent ?: audioDataStoreManager.prompt.first()
                                             } else {
@@ -248,38 +229,29 @@ class AudioNarrativeWorker(
 
                     if (geminiFullJsonResponse.isNotEmpty()) {
                         try {
-                            var jsonResponseToParse = geminiFullJsonResponse
-                            if (jsonResponseToParse.startsWith("\uFEFF")) {
-                                jsonResponseToParse = jsonResponseToParse.substring(1)
-                            }
-                            val trimmedResponse = jsonResponseToParse.trimStart()
+                            val respostaAjustada = ajustarRespostaGeminiAudioWorker(geminiFullJsonResponse)
+                            if (respostaAjustada.isBlank()) throw JSONException("Ajuste da resposta resultou em string vazia.")
+
                             val rootJsonElementOrgJson: org.json.JSONObject
 
-                            if (trimmedResponse.startsWith("[")) {
-                                val jsonArray = org.json.JSONArray(jsonResponseToParse)
+                            if (respostaAjustada.startsWith("[")) {
+                                val jsonArray = org.json.JSONArray(respostaAjustada)
                                 rootJsonElementOrgJson = if (jsonArray.length() > 0) jsonArray.getJSONObject(0)
                                                          else throw JSONException("Array JSON (org.json) da IA está vazio.")
-                            } else if (trimmedResponse.startsWith("{")) {
-                                rootJsonElementOrgJson = org.json.JSONObject(jsonResponseToParse)
+                            } else if (respostaAjustada.startsWith("{")) {
+                                rootJsonElementOrgJson = org.json.JSONObject(respostaAjustada)
                             } else {
-                                throw JSONException("Resposta da IA não é JSON Array nem Object. Conteúdo: ${jsonResponseToParse.take(100)}")
+                                throw JSONException("Resposta da IA não é JSON Array nem Object. Conteúdo: ${respostaAjustada.take(100)}")
                             }
 
                             if (isChatNarrativeInput) {
                                 finalPromptUsed = rootJsonElementOrgJson.optString("dialogScript", "")
                                 if (finalPromptUsed.isBlank()) throw JSONException("Campo 'dialogScript' não encontrado ou vazio (org.json).")
                                 Log.d(TAG, "Script de diálogo (org.json): '${finalPromptUsed.take(100)}...'")
-                                if (rootJsonElementOrgJson.has("speakerVoiceSuggestions")) {
-                                     val suggestions = rootJsonElementOrgJson.optJSONArray("speakerVoiceSuggestions")
-                                     Log.d(TAG, "Sugestões de voz para chat (org.json): $suggestions")
-                                } else {
-                                     Log.w(TAG, "Campo 'speakerVoiceSuggestions' não encontrado no JSON do chat (org.json).")
-                                }
                             } else {
                                 finalPromptUsed = rootJsonElementOrgJson.optString("promptAudio", "")
                                 if (finalPromptUsed.isBlank()) throw JSONException("Campo 'promptAudio' não encontrado ou vazio (org.json).")
                                 Log.d(TAG, "Prompt narrador único (org.json): '${finalPromptUsed.take(100)}...'")
-
                                 val vozesSubObject = rootJsonElementOrgJson.optJSONObject("vozes")
                                 if (vozesSubObject != null) {
                                     audioDataStoreManager.setSexo(vozesSubObject.optString("sexo", "Female"))
@@ -289,9 +261,6 @@ class AudioNarrativeWorker(
                                     Log.d(TAG, "Características (single) de 'vozes' (org.json) salvas.")
                                 } else {
                                     Log.w(TAG, "Sub-objeto 'vozes' não encontrado no JSON para narrador único (org.json). Usando defaults.")
-                                    audioDataStoreManager.setSexo("Female")
-                                    audioDataStoreManager.setIdade(30)
-                                    audioDataStoreManager.setEmocao("Neutro")
                                 }
                             }
                             audioDataStoreManager.setPrompt(finalPromptUsed)
@@ -299,57 +268,10 @@ class AudioNarrativeWorker(
                             updateWorkerProgress("Texto da narrativa criado!", true)
 
                         } catch (eOrgJson: JSONException) {
-                            Log.w(TAG, "Falha ao parsear com org.json ('${eOrgJson.message}'). Tentando com kotlinx.serialization. JSON:\n$geminiFullJsonResponse")
-                            try {
-                                var jsonResponseToParseKt = geminiFullJsonResponse
-                                if (jsonResponseToParseKt.startsWith("\uFEFF")) {
-                                     jsonResponseToParseKt = jsonResponseToParseKt.substring(1)
-                                }
-                                val ktJsonElement = kotlinJsonParser.parseToJsonElement(jsonResponseToParseKt)
-                                val rootJsonObjectKt: kotlinx.serialization.json.JsonObject
-
-                                if (ktJsonElement is KtJsonArray) {
-                                    rootJsonObjectKt = if (ktJsonElement.isNotEmpty()) ktJsonElement.first().jsonObject
-                                                      else throw JSONException("Array JSON (kotlinx) da IA está vazio.")
-                                } else if (ktJsonElement is KtJsonObject) {
-                                    rootJsonObjectKt = ktJsonElement.jsonObject
-                                } else {
-                                    throw JSONException("Resposta da IA não é JsonArray nem JsonObject (kotlinx).")
-                                }
-
-                                if (isChatNarrativeInput) {
-                                    finalPromptUsed = rootJsonObjectKt["dialogScript"]?.jsonPrimitive?.contentOrNull ?: ""
-                                    if (finalPromptUsed.isBlank()) throw JSONException("Campo 'dialogScript' não encontrado ou vazio (kotlinx).")
-                                    Log.d(TAG, "Script de diálogo (kotlinx): '${finalPromptUsed.take(100)}...'")
-                                } else {
-                                    finalPromptUsed = rootJsonObjectKt["promptAudio"]?.jsonPrimitive?.contentOrNull ?: ""
-                                    if (finalPromptUsed.isBlank()) throw JSONException("Campo 'promptAudio' não encontrado ou vazio (kotlinx).")
-                                    Log.d(TAG, "Prompt narrador único (kotlinx): '${finalPromptUsed.take(100)}...'")
-
-                                    val vozesSubObjectKt = rootJsonObjectKt["vozes"]?.jsonObject
-                                    if (vozesSubObjectKt != null) {
-                                        audioDataStoreManager.setSexo(vozesSubObjectKt["sexo"]?.jsonPrimitive?.content ?: "Female")
-                                        val idadeStr = vozesSubObjectKt["idade"]?.jsonPrimitive?.content ?: "30"
-                                        audioDataStoreManager.setIdade(idadeStr.split("-").firstOrNull()?.trim()?.toIntOrNull() ?: idadeStr.toIntOrNull() ?: 30)
-                                        audioDataStoreManager.setEmocao(vozesSubObjectKt["emocao"]?.jsonPrimitive?.content ?: "Neutro")
-                                        Log.d(TAG, "Características (single) de 'vozes' (kotlinx) salvas.")
-                                    } else {
-                                         Log.w(TAG, "Sub-objeto 'vozes' não encontrado no JSON para narrador único (kotlinx). Usando defaults.")
-                                        audioDataStoreManager.setSexo("Female")
-                                        audioDataStoreManager.setIdade(30)
-                                        audioDataStoreManager.setEmocao("Neutro")
-                                    }
-                                }
-                                audioDataStoreManager.setPrompt(finalPromptUsed)
-                                updateNotificationProgress(appContext.getString(R.string.notification_content_audio_text_created))
-                                updateWorkerProgress("Texto da narrativa criado!", true)
-
-                            } catch (eKt: Exception) {
-                                Log.e(TAG, "Erro CRÍTICO ao parsear JSON (ambos org.json e kotlinx.serialization falharam). JSON:\n$geminiFullJsonResponse\nErro kotlinx: ${eKt.message}", eKt)
-                                finalErrorMessage = appContext.getString(R.string.error_processing_ai_json_response_critical, eKt.message?.take(50) ?: "Detalhe indisponível")
-                                setGenerationErrorWorker(finalErrorMessage)
-                                return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalErrorMessage))
-                            }
+                            Log.e(TAG, "Erro CRÍTICO ao parsear JSON. JSON Bruto:\n$geminiFullJsonResponse\nErro: ${eOrgJson.message}", eOrgJson)
+                            finalErrorMessage = appContext.getString(R.string.error_processing_ai_json_response_critical, eOrgJson.message?.take(50) ?: "Detalhe indisponível")
+                            setGenerationErrorWorker(finalErrorMessage)
+                            return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalErrorMessage))
                         }
                     } else {
                         finalErrorMessage = appContext.getString(R.string.error_ai_empty_prompt_response)
@@ -377,12 +299,12 @@ class AudioNarrativeWorker(
             val audioResult: kotlin.Result<String>
             if (isChatNarrativeInput) {
                 Log.d(TAG, "Gerando áudio de CHAT. S1: '$voiceSpeaker1Input', S2: '$voiceSpeaker2Input', S3: '$voiceSpeaker3Input'")
-                if (voiceSpeaker1Input.isNullOrBlank()) { // Speaker 1 é sempre necessário para chat
+                if (voiceSpeaker1Input.isNullOrBlank()) {
                     finalErrorMessage = appContext.getString(R.string.error_chat_speaker1_voice_mandatory)
                     setGenerationErrorWorker(finalErrorMessage)
                     return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalErrorMessage))
                 }
-                 if (voiceSpeaker2Input.isNullOrBlank()) { // Speaker 2 também é necessário para um diálogo mínimo
+                 if (voiceSpeaker2Input.isNullOrBlank()) { 
                     finalErrorMessage = appContext.getString(R.string.error_chat_speaker2_voice_mandatory)
                     setGenerationErrorWorker(finalErrorMessage)
                     return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalErrorMessage))
@@ -444,7 +366,7 @@ class AudioNarrativeWorker(
                     updateNotificationProgress(applicationContext.getString(R.string.notification_content_audio_subs_generated_successfully))
                     updateWorkerProgress("Legenda original gerada.", true)
 
-                    if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_task_cancelled_before_subtitle_correction))
+                    /*if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_task_cancelled_before_subtitle_correction))
                     
                     Log.d(TAG, "Iniciando correção da legenda...")
                     updateNotificationProgress(appContext.getString(R.string.notification_content_audio_correcting_subs))
@@ -494,7 +416,7 @@ class AudioNarrativeWorker(
                         }
                     } else {
                         Log.w(TAG, "Falha ao corrigir legenda com Gemini: ${correcaoResult.exceptionOrNull()?.message}")
-                    }
+                    }*/
                 } else {
                     finalErrorMessage = legendaResult.exceptionOrNull()?.message ?: appContext.getString(R.string.error_unknown_subtitle_generation_failure)
                     setGenerationErrorWorker(finalErrorMessage)
@@ -541,7 +463,6 @@ class AudioNarrativeWorker(
         }
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     private suspend fun gerarPromptAudioWorker(
         promptDeEntradaParaGemini: String,
         imagensPatch: List<String>,
@@ -549,13 +470,10 @@ class AudioNarrativeWorker(
     ): Result = withContext(Dispatchers.IO) {
         Log.d(TAG, "Worker - gerarPromptAudioWorker: Iniciado.")
         if (promptDeEntradaParaGemini.isBlank()) {
-            Log.e(TAG, "Worker - gerarPromptAudioWorker: Prompt de entrada para Gemini está vazio.")
             val errorMsg = appContext.getString(R.string.error_empty_prompt_for_ai)
             setGenerationErrorWorker(errorMsg)
             return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
         }
-        Log.d(TAG, "Worker - gerarPromptAudioWorker: Prompt para Gemini (início): '${promptDeEntradaParaGemini.take(100)}...'")
-        Log.d(TAG, "Worker - gerarPromptAudioWorker: Imagens: ${imagensPatch.size}, Conteúdo Adicional/Caminho: ${!conteudoAdicionalOuCaminhoArquivo.isNullOrBlank()}")
 
         val respostaResult = try {
             GeminiTextAndVisionProApi.perguntarAoGemini(
@@ -564,7 +482,6 @@ class AudioNarrativeWorker(
                 arquivoTexto = conteudoAdicionalOuCaminhoArquivo
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Worker - gerarPromptAudioWorker: Erro não esperado na chamada Gemini: ${e.message}", e)
             val errorMsg = appContext.getString(R.string.error_generating_prompt_with_error, (e.message ?: e.javaClass.simpleName))
             setGenerationErrorWorker(errorMsg)
             return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
@@ -572,48 +489,42 @@ class AudioNarrativeWorker(
 
         if (respostaResult.isSuccess) {
             val respostaBruta = respostaResult.getOrNull() ?: ""
-            Log.d(TAG, "Worker - gerarPromptAudioWorker: Resposta bruta Gemini: ${respostaBruta.take(300)}")
             if (respostaBruta.isBlank()) {
-                Log.e(TAG, "Worker - gerarPromptAudioWorker: Resposta do Gemini em branco.")
                 val errorMsg = appContext.getString(R.string.error_ai_empty_response)
                 setGenerationErrorWorker(errorMsg)
                 return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
             }
             val respostaAjustada = ajustarRespostaGeminiAudioWorker(respostaBruta)
-            Log.d(TAG, "Worker - gerarPromptAudioWorker: Resposta Gemini ajustada: '${respostaAjustada.take(300)}'")
             try {
-                var jsonResponseToValidate = respostaAjustada
-                if (jsonResponseToValidate.startsWith("\uFEFF")) {
-                     jsonResponseToValidate = jsonResponseToValidate.substring(1)
-                }
-                val trimmedResponseForValidation = jsonResponseToValidate.trimStart()
-                if (trimmedResponseForValidation.startsWith("[")) {
-                    org.json.JSONArray(jsonResponseToValidate)
-                } else if (trimmedResponseForValidation.startsWith("{")) {
-                    org.json.JSONObject(jsonResponseToValidate)
+                if (respostaAjustada.trimStart().startsWith("[")) {
+                    JSONArray(respostaAjustada)
+                } else if (respostaAjustada.trimStart().startsWith("{")) {
+                    JSONObject(respostaAjustada)
                 } else {
-                    throw JSONException("Resposta ajustada não é JSON Array nem Object: ${jsonResponseToValidate.take(100)}")
+                    throw JSONException("Resposta ajustada não é JSON Array nem Object: ${respostaAjustada.take(100)}")
                 }
-                val outputData = workDataOf(KEY_GENERATED_PROMPT to respostaAjustada)
-                Log.d(TAG, "Worker - gerarPromptAudioWorker: Sucesso, retornando JSON ajustado.")
-                return@withContext Result.success(outputData)
+                return@withContext Result.success(workDataOf(KEY_GENERATED_PROMPT to respostaAjustada))
             } catch (e: JSONException) {
-                Log.e(TAG, "Worker - gerarPromptAudioWorker: Falha ao validar/parsear JSON (ajustada: '${respostaAjustada.take(100)}'). Erro: ${e.message}", e)
                 val errorMsg = appContext.getString(R.string.error_processing_ai_json_response)
                 setGenerationErrorWorker(errorMsg)
                 return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
             }
         } else {
             val errorMsgFromApi = respostaResult.exceptionOrNull()?.message ?: appContext.getString(R.string.error_unknown_gemini_api_failure)
-            Log.e(TAG, "Worker - gerarPromptAudioWorker: Falha na API Gemini: $errorMsgFromApi", respostaResult.exceptionOrNull())
             val finalErrorMsg = appContext.getString(R.string.error_gemini_api_failure_with_message, errorMsgFromApi)
             setGenerationErrorWorker(finalErrorMsg)
             return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalErrorMsg))
         }
     }
 
+    /**
+     * Função robusta para extrair um bloco JSON válido de uma string.
+     * Remove marcadores de código e encontra o primeiro bloco JSON balanceado.
+     */
     private fun ajustarRespostaGeminiAudioWorker(resposta: String): String {
         var respostaLimpa = resposta.trim()
+
+        // 1. Remove marcadores de bloco de código
         if (respostaLimpa.startsWith("```json", ignoreCase = true)) {
             respostaLimpa = respostaLimpa.removePrefix("```json").trimStart()
         } else if (respostaLimpa.startsWith("```")) {
@@ -622,47 +533,69 @@ class AudioNarrativeWorker(
         if (respostaLimpa.endsWith("```")) {
             respostaLimpa = respostaLimpa.removeSuffix("```").trimEnd()
         }
+
+        // 2. Encontra o primeiro caractere de início de JSON
         val primeiroColchete = respostaLimpa.indexOf('[')
         val primeiroChave = respostaLimpa.indexOf('{')
-        var inicioJson = -1
-        var tipoJson: Char? = null
-        if (primeiroColchete != -1 && (primeiroChave == -1 || primeiroColchete < primeiroChave)) {
-            inicioJson = primeiroColchete
-            tipoJson = '['
-        } else if (primeiroChave != -1) {
-            inicioJson = primeiroChave
-            tipoJson = '{'
-        }
-        if (inicioJson != -1 && tipoJson != null) {
-            var fimJson = -1
-            var balance = 0
-            val charAbertura = tipoJson
-            val charFechamento = if (tipoJson == '[') ']' else '}'
-            var dentroDeString = false
-            for (i in inicioJson until respostaLimpa.length) {
-                val charAtual = respostaLimpa[i]
-                if (charAtual == '"') {
-                    if (i == 0 || respostaLimpa[i - 1] != '\\') {
-                        dentroDeString = !dentroDeString
-                    }
-                }
-                if (!dentroDeString) {
-                    if (charAtual == charAbertura) {
-                        balance++
-                    } else if (charAtual == charFechamento) {
-                        balance--
-                        if (balance == 0) {
-                            fimJson = i
-                            break
-                        }
-                    }
+
+        val inicioJson: Int
+        val charAbertura: Char
+        val charFechamento: Char
+
+        when {
+            // Se ambos forem encontrados, pega o que aparece primeiro
+            primeiroColchete != -1 && primeiroChave != -1 -> {
+                if (primeiroColchete < primeiroChave) {
+                    inicioJson = primeiroColchete
+                    charAbertura = '['
+                    charFechamento = ']'
+                } else {
+                    inicioJson = primeiroChave
+                    charAbertura = '{'
+                    charFechamento = '}'
                 }
             }
-            if (fimJson != -1) {
-                respostaLimpa = respostaLimpa.substring(inicioJson, fimJson + 1)
+            // Se apenas um for encontrado
+            primeiroColchete != -1 -> {
+                inicioJson = primeiroColchete
+                charAbertura = '['
+                charFechamento = ']'
+            }
+            primeiroChave != -1 -> {
+                inicioJson = primeiroChave
+                charAbertura = '{'
+                charFechamento = '}'
+            }
+            // Se nenhum for encontrado
+            else -> {
+                Log.w(TAG, "Nenhum caractere de início de JSON ('[' ou '{') encontrado na resposta.")
+                return "" // Retorna vazio se não houver JSON
             }
         }
-        return respostaLimpa
+
+        // 3. Encontra o caractere de fechamento correspondente e balanceado
+        var balance = 0
+        var fimJson = -1
+        for (i in inicioJson until respostaLimpa.length) {
+            when (respostaLimpa[i]) {
+                charAbertura -> balance++
+                charFechamento -> balance--
+            }
+            if (balance == 0) {
+                fimJson = i
+                break // Encontrou o final do bloco JSON
+            }
+        }
+
+        // 4. Extrai a substring se o bloco foi encontrado com sucesso
+        return if (fimJson != -1) {
+            val jsonSubstring = respostaLimpa.substring(inicioJson, fimJson + 1)
+            Log.d(TAG, "JSON extraído com sucesso. Tamanho: ${jsonSubstring.length}")
+            jsonSubstring
+        } else {
+            Log.w(TAG, "Não foi possível encontrar o final do bloco JSON balanceado. Retornando string vazia.")
+            "" // Retorna vazio se o JSON estiver malformado/incompleto
+        }
     }
 
     private suspend fun updateWorkerProgress(text: String, isProcessing: Boolean) {

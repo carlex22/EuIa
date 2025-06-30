@@ -53,7 +53,7 @@ object Audio {
         val avg_logprob: Double? = null,
         val compression_ratio: Double? = null,
         val no_speech_prob: Double? = null,
-        val words: List<WordTimestamp>? = null
+        val words: List<WordTimestamp1>? = null
     )
 
     private data class TranscriptionResponse(
@@ -61,7 +61,7 @@ object Audio {
         val language: String?,
         val duration: Double?,
         val text: String,
-        val words: List<WordTimestamp>?,
+        val words: List<WordTimestamp1>?,
         val segments: List<Segment>?,
         val x_groq: Map<String, Any>?
     )
@@ -525,7 +525,7 @@ object Audio {
                 val timestampGranularitiesParts = listOf(
                     MultipartBody.Part.createFormData("timestamp_granularities[]", "word")
                 )
-                val wordGranularityRequested = false
+                val wordGranularityRequested = true
                 var finalApiPromptText = ""
                 Log.d(TAG, "Prompt final para API (transcrição): '$finalApiPromptText'")
                 val promptPart = if (finalApiPromptText.isNotEmpty()) MultipartBody.Part.createFormData("prompt", finalApiPromptText) else null
@@ -575,7 +575,7 @@ object Audio {
                      return@withContext Result.failure(IllegalArgumentException(errorMsg))
                 }
 
-                val srtContent = generateSrtContent(wordsFromResponse ?: emptyList())
+                val srtContent = generateSrtContent1(wordsFromResponse ?: emptyList(), 6, 1)
                 // Salva o arquivo SRT no diretório do projeto
                 val srtFile = saveSrtFile(projectDir, srtContent, srtFileName)
                 Log.d(TAG, "✅ Arquivo SRT salvo em: ${srtFile.absolutePath}")
@@ -607,26 +607,21 @@ object Audio {
         }
     }
 
-    private fun generateSrtContent(allWords: List<WordTimestamp>): String {
+    private fun generateSrtContent(allWords: List<WordTimestamp1>, maxCharsPerLine: Int, preferredWordsPerLine : Int): String {
         val srtBuilder = StringBuilder()
         var entryIndex = 1
-        val maxCharsPerLine = 150
-        val preferredWordsPerLine = 30
 
         if (allWords.isEmpty()) {
             Log.w(TAG, "Nenhuma palavra com timestamp recebida para gerar SRT.")
             return ""
         }
-
-        var currentWordBufferForLine = mutableListOf<WordTimestamp>()
+        var currentWordBufferForLine = mutableListOf<WordTimestamp1>()
 
         for (i in allWords.indices) {
             val currentWordInfo = allWords[i]
             currentWordBufferForLine.add(currentWordInfo)
-
             val currentLineText = currentWordBufferForLine.joinToString(" ") { it.word }
             var forceLineBreak = false
-
             if (currentWordInfo.word.endsWith("?") || currentWordInfo.word.endsWith("!") || currentWordInfo.word.endsWith(".")) {
                 forceLineBreak = true
             }
@@ -642,7 +637,6 @@ object Audio {
             if (i == allWords.size - 1) {
                 forceLineBreak = true
             }
-
             if (forceLineBreak) {
                 if (currentWordBufferForLine.isNotEmpty()) {
                     val lineTextOutput = currentWordBufferForLine.joinToString(" ") { it.word }
@@ -659,6 +653,93 @@ object Audio {
         }
         return srtBuilder.toString()
     }
+    
+    
+
+
+
+// Definições de exemplo para o código compilar.
+// É crucial que seu WordTimestamp real use Double para start/end.
+data class WordTimestamp1(val word: String, val start: Double, val end: Double)
+
+// --- FUNÇÃO formatSrtTime CORRIGIDA ---
+// Agora ela aceita um Double (segundos) e o converte internamente.
+private fun formatSrtTime1(seconds: Double): String {
+    // Converte segundos (Double) para milissegundos (Long) para facilitar os cálculos
+    val totalMillis = (seconds * 1000).toLong()
+    
+    val hours = TimeUnit.MILLISECONDS.toHours(totalMillis)
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(totalMillis) % 60
+    val secs = TimeUnit.MILLISECONDS.toSeconds(totalMillis) % 60
+    val milliseconds = totalMillis % 1000
+    
+    return String.format("%02d:%02d:%02d,%03d", hours, minutes, secs, milliseconds)
+}
+
+
+// --- FUNÇÃO generateSrtContent CORRIGIDA ---
+private fun generateSrtContent1(
+    allWords: List<WordTimestamp1>,
+    maxCharsPerLine: Int,
+    preferredWordsPerLine: Int
+): String {
+    val srtBuilder = StringBuilder()
+    var entryIndex = 1
+
+    if (allWords.isEmpty()) {
+        Log.w(TAG, "Nenhuma palavra com timestamp recebida para gerar SRT.")
+        return ""
+    }
+
+    var currentLineBuffer = mutableListOf<WordTimestamp1>()
+    
+    // --- MUDANÇA 1: Alterado de Long para Double ---
+    // A variável agora é Double para corresponder aos tipos de start/end.
+    var previousEndTime: Double = 0.0
+
+    for (i in allWords.indices) {
+        val currentWord = allWords[i]
+        currentLineBuffer.add(currentWord)
+
+        val isEndOfSentence = currentWord.word.endsWith(".") ||
+                              currentWord.word.endsWith("!") ||
+                              currentWord.word.endsWith("?")
+        val isLastWordOfAll = (i == allWords.size - 1)
+        var nextWordWouldExceedLimit = false
+        if (!isLastWordOfAll && !isEndOfSentence) {
+            val nextWord = allWords[i + 1]
+            val prospectiveLine = (currentLineBuffer.joinToString(" ") { it.word } + " " + nextWord.word)
+            if (prospectiveLine.length > maxCharsPerLine) {
+                nextWordWouldExceedLimit = true
+            }
+        }
+        val significantWordCount = currentLineBuffer.count { it.word.length >= 4 }
+        val preferredWordCountReached = significantWordCount >= preferredWordsPerLine
+
+        if (isLastWordOfAll || isEndOfSentence || nextWordWouldExceedLimit || preferredWordCountReached) {
+            
+            if (currentLineBuffer.isNotEmpty()) {
+                val lineText = currentLineBuffer.joinToString(" ") { it.word }
+                
+                // Agora todas estas variáveis são Double, resolvendo os erros
+                val srtStartTime = previousEndTime
+                val srtEndTime = currentLineBuffer.last().end
+
+                srtBuilder.append("$entryIndex\n")
+                srtBuilder.append("${formatSrtTime1(srtStartTime)} --> ${formatSrtTime1(srtEndTime)}\n")
+                srtBuilder.append("$lineText\n\n")
+
+                // A atribuição agora funciona, pois ambos são Double.
+                previousEndTime = srtEndTime
+
+                entryIndex++
+                currentLineBuffer.clear()
+            }
+        }
+    }
+
+    return srtBuilder.toString()
+}
 
     private fun saveSrtFile(projectDir: File, content: String, fileName: String): File {
         // Garante que o diretório do projeto exista (defensivo, pode já ter sido criado antes)

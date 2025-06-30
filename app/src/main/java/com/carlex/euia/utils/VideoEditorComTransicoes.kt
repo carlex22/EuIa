@@ -22,6 +22,7 @@ import java.util.UUID // Adicionado
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlin.math.min
 
 /**
  * Editor de vídeo focado em:
@@ -97,6 +98,8 @@ object VideoEditorComTransicoes {
         Log.d(TAG, "Diretório do projeto para salvar vídeo: '$projectDirName'")
         val larguraVideoParaProcessamento = larguraVideoPref ?: DEFAULT_VIDEO_WIDTH
         val alturaVideoParaProcessamento = alturaVideoPref ?: DEFAULT_VIDEO_HEIGHT
+        
+        
         Log.d(TAG, "Dimensões do vídeo (LxA): ${larguraVideoParaProcessamento}x${alturaVideoParaProcessamento}")
         Log.d(TAG, "Habilitar Legendas (preferência): $enableSubtitlesPref")
         Log.d(TAG, "Habilitar Transições (preferência): $enableSceneTransitionsPref")
@@ -312,15 +315,13 @@ private fun buildFFmpeg(
     usarZoomPan: Boolean,
     larguraVideoPreferida: Int?,
     alturaVideoPreferida: Int?,
-    fps: Int, // <<<< NOVO
-    hdMotion: Boolean // <<<< NOVO
+    fps: Int,
+    hdMotion: Boolean
 ): String {
     val cmd = StringBuilder("-y -hide_banner ")
     val filterComplex = StringBuilder()
-    // val fps = 30 // <<<< REMOVIDO, AGORA É PARÂMETRO
     val larguraFinalVideo = (larguraVideoPreferida ?: DEFAULT_VIDEO_WIDTH).coerceAtLeast(100)
     val alturaFinalVideo = (alturaVideoPreferida ?: DEFAULT_VIDEO_HEIGHT).coerceAtLeast(100)
-    // Log atualizado para incluir novas prefs
     Log.i(TAG, "FFmpeg VIDEO ${larguraFinalVideo}x${alturaFinalVideo} | FPS: $fps | HD Motion: $hdMotion | Transições: $usarTransicoes | ZoomPan: $usarZoomPan | Legendas: $usarLegendas")
     val tempoDeTransicaoEfetivo = if (usarTransicoes && mediaPaths.size > 1) tempoTransicaoPadrao else 0.0
     val safeLegendaPath = if (legendaPath.isNotBlank()) legendaPath.replace("\\", "/").replace(":", "\\\\:") else ""
@@ -355,66 +356,76 @@ private fun buildFFmpeg(
     
     
     
-    // Filtros de vídeo: aplica zoom durante toda a exibição (inclusive transição)
+    // Filtros de vídeo
     filterComplex.append("\n")
     val processedMediaPads = mutableListOf<String>()
     mediaPaths.forEachIndexed { i, path ->
-    val outputPad = "[processed_m$i]"
-    processedMediaPads.add(outputPad)
-    val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
-    val durBase = duracaoCenas[i]
-    val isLast = (i == mediaPaths.lastIndex)
-    val trim = durBase + tempoDeTransicaoEfetivo
-    Log.i(TAG, "Cena ZoomPad $i | trim: %.2f".format(trim))
-    val frames = Math.round(trim * fps).toInt()+1
-    val durationExata = frames.toDouble() / fps
-    val w = larguraFinalVideo
-    val h = alturaFinalVideo
-    val input = "[${i + mediaInputStartIndex}:v]"
-    filterComplex.append("  $input format=pix_fmts=rgba,fps=$fps,")
+        val outputPad = "[processed_m$i]"
+        processedMediaPads.add(outputPad)
 
-    if (usarZoomPan && !isVideo) {
-        val fonteDir = File(fonteArialPath).parent?.replace("\\", "/")?.replace(":", "\\\\:") ?: "."
-        val fonteNome = File(fonteArialPath).nameWithoutExtension
-        val fontePath = "$fonteDir/$fonteNome.ttf"
+        val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
+        val durBase = duracaoCenas[i]
+        val isLast = (i == mediaPaths.lastIndex)
+        val trim = durBase + (if (!isLast && usarTransicoes) tempoDeTransicaoEfetivo else 0.0)
         
+        val frames = (trim * fps).toInt().coerceAtLeast(1)
+        val durationExata = frames.toDouble() / fps
+        val w = larguraFinalVideo
+        val h = alturaFinalVideo
+        val input = "[${i + mediaInputStartIndex}:v]"
+
+        // --- INÍCIO DA NOVA LÓGICA DE COMPOSIÇÃO DE FRAME ---
         
-        // Efeito com fundo blur/zoom usando a própria imagem (opcional, pode deixar comentado)
-            /*filterComplex.append(
-                "split=2[main][fundo];" +
-                "[fundo]scale=${w}:${h},boxblur=20:1,crop=${w}:${h},setsar=1[fundo_b];" +
-                "[main]scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1," +
-                "zoompan=z=$zoomExpr:s=${w}x${h}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps," +
-                "overlay=shortest=1:x=0:y=0"
-        )*/
+        // 1. Divide o stream de entrada para processar fundo e frente separadamente
+        filterComplex.append("  ${input}split=2[main${i}][bg${i}];\n")
+
+        // 2. Cria o fundo desfocado e ampliado
+        filterComplex.append("  [bg${i}]scale='max(iw,${w}*2)':'max(ih,${h}*2)',crop=${w}:${h},boxblur=40:2,setsar=1[bg_final${i}];\n")
+
+        // 3. Processa a imagem/vídeo da frente
         
+        var squareDix = minOf(w, h)
+        var squareDiy = minOf(w, h)
         
-        val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, w, h, frames, i)
-        val debug = "x=%{$zoomExpr}"
-        filterComplex.append(
-            "scale=${w}:${h}:force_original_aspect_ratio=decrease," 
-            + "pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black," 
-            + "setsar=1,"
-            + "scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,"
-            + "zoompan=z=$zoomExpr:s=${w}x${h}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps,"
-        )
-        // <<<< INÍCIO DA MODIFICAÇÃO >>>>
-        if (hdMotion){
-            filterComplex.append(
-                "minterpolate=fps=$fps:mi_mode=mci:mc_mode=aobmc:vsbmc=1,"
-            )
+        if (w>h){
+            squareDix = (squareDix * 1.2).toInt()
+        } else if (w<h){
+            squareDiy = (squareDiy * 1.2).toInt()
         }
-    } else {
-        filterComplex.append(
-            "scale=${w}:${h}:force_original_aspect_ratio=decrease," +
-            "pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black," +
-            "setsar=1,"
-        )
+        
+        if (isVideo) {
+            // Para vídeos, aplica letterbox/pillarbox para caber no quadro quadrado
+            filterComplex.append("  [main${i}]scale=$squareDix:$squareDiy:force_original_aspect_ratio=decrease[fg_scaled${i}];\n")
+        } else {
+            // Para imagens, aplica o zoompan primeiro (se habilitado), depois corta para o quadrado
+            val fgChain = mutableListOf<String>()
+            if (usarZoomPan) {
+                val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, w, h, frames, i)
+                fgChain.add("zoompan=z=$zoomExpr:s=${w}x${h}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps")
+            }
+            fgChain.add("crop=$squareDix:$squareDiy")
+             if (hdMotion) {
+                fgChain.add("minterpolate=fps=$fps:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
+            }
+            filterComplex.append("  [main${i}]${fgChain.joinToString(",")}[fg_scaled${i}];\n")
+        }
+
+        // 4. Cria o quadro composto (frente + fundo)
+        // Primeiro, o pad da frente para ter o tamanho final do vídeo com fundo transparente
+        filterComplex.append("  [fg_scaled${i}]pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0[fg_padded${i}];\n")
+        // Depois, sobrepõe a frente com pad sobre o fundo
+        filterComplex.append("  [bg_final${i}][fg_padded${i}]overlay=0:0[composite${i}];\n")
+
+        
+        // 5. Adiciona os filtros finais de duração e timestamp
+        val finalEffects = mutableListOf<String>()
+        finalEffects.add("format=pix_fmts=rgba") 
+        finalEffects.add("fps=$fps")            
+        finalEffects.add("trim=duration=$durationExata")
+        finalEffects.add("setpts=PTS-STARTPTS")
+
+        filterComplex.append("  [composite${i}]${finalEffects.joinToString(separator = ",")}$outputPad;\n")
     }
-    Log.i(TAG, "Cena ZoomPad $i | durationExata: %.2f".format(durationExata))
-    // <<<< FIM DA MODIFICAÇÃO >>>>
-    filterComplex.append("trim=duration=$durationExata,setpts=PTS-STARTPTS$outputPad;\n")
-}
 
 
 
@@ -536,12 +547,16 @@ fun obterDimensoesImagem(path: String): Pair<Int, Int>? {
 
 fun gerarZoompanExpressao(
     imgCaminho: String,
-    larguraVideo: Int,
-    alturaVideo: Int,
+    larguraVideo1: Int,
+    alturaVideo1: Int,
     frames: Int,
     cenaIdx: Int = -1
 ): Triple<String, String, String> {
     val (larguraImg, alturaImg) = obterDimensoesImagem(imgCaminho) ?: (1 to 1) // Evita zero!
+    
+    
+    var larguraVideo = minOf(larguraVideo1,alturaVideo1)
+    var alturaVideo = minOf(larguraVideo1,alturaVideo1)
     
     val escalaX =  larguraVideo.toDouble() / larguraImg.toDouble()
     val escalaY =  alturaVideo.toDouble() / alturaImg.toDouble() 
@@ -560,11 +575,11 @@ fun gerarZoompanExpressao(
     
     if (larguraAjuste <= larguraVideo && alturaAjuste < alturaVideo){
         var t = padX 
-        xExpr = "'($t-(($t/$frames)*on))'"
+        xExpr = "'($t-(($padX/($frames))*(on)))'"
     }
     if (larguraAjuste < larguraVideo && alturaAjuste <= alturaVideo){
-        var t = padY
-        yExpr = "'($t-(($t/$frames)*on))'"
+        var t = padY 
+        yExpr = "'($t-(($padY/($frames))*(on)))'"
     }      
 
     val zoomExpr = "'$zoom + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/1000)'"

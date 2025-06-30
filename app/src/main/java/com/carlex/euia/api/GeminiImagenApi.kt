@@ -91,9 +91,8 @@ data class ImgApiError(
 
 // --- Interface de Serviço Retrofit --- (INALTEIRADA)
 internal interface ImgGeminiApiService {
-    //@POST("v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent")
-    @POST("v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent")
-
+      @POST("v1beta/models/gemini-2.0-flash-exp:generateContent")
+      //@POST("v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent")
         suspend fun generateContent(
         @Query("key") apiKey: String,
         @Body requestBody: ImgGeminiRequest
@@ -128,8 +127,8 @@ object GeminiImageApi{
     private const val DEFAULT_HEIGHT = 1280
 
     private val API_TEMPERATURE: Float? = 0.6f
-    private val API_TOP_K: Int? = 40
-    private val API_TOP_P: Float? = 0.6f
+    private val API_TOP_K: Int? = 64
+    private val API_TOP_P: Float? = 0.9f
     private val API_CANDIDATE_COUNT: Int? = 1
 
     private val kotlinJsonParser = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -240,13 +239,13 @@ object GeminiImageApi{
 
         var imagensEfetivas = imagensParaUpload
         if (imagensParaUpload.isEmpty()) {
-           /* val videoDataStoreManager = VideoDataStoreManager(context)
+           val videoDataStoreManager = VideoDataStoreManager(context)
             val globalImagesJson = videoDataStoreManager.imagensReferenciaJson.first()
             if (globalImagesJson.isNotBlank() && globalImagesJson != "[]") {
                 try {
                     imagensEfetivas = kotlinJsonParser.decodeFromString(ListSerializer(ImagemReferencia.serializer()), globalImagesJson)
                 } catch (e: Exception) { Log.e(TAG, "Falha ao desserializar lista global.", e) }
-            }*/
+            }
         }
         
         val partsList = mutableListOf<ImgPart>()
@@ -309,15 +308,15 @@ object GeminiImageApi{
         
         return buildString {
             append(finalPromptComContextoDasImagens)
-           /* if (refObjetoDetalhesJson.isNotBlank() && refObjetoDetalhesJson != "{}") {
+            if (refObjetoDetalhesJson.isNotBlank() && refObjetoDetalhesJson != "{}") {
                 appendLine()
                 appendLine()
-                append("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES DE OBJETOS OU ROUPAS DA IMAGEN ---")
+               // append("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES DE OBJETOS OU ROUPAS DA IMAGEN ---")
                 appendLine()
                 append(refObjetoDetalhesJson)
                 appendLine()
-                append("--- FIM DAS INFORMAÇÕES ADICIONAIS ---")
-            }*/
+               // append("--- FIM DAS INFORMAÇÕES ADICIONAIS ---")
+            }
         }
     }
     
@@ -341,9 +340,9 @@ object GeminiImageApi{
             var finalHeight = targetHeight ?: DEFAULT_HEIGHT
             
             if (finalWidth > finalHeight)
-                finalWidth = (finalWidth *1.1).toInt()
+                finalWidth = (finalWidth).toInt()
             else
-                finalHeight = (finalHeight*1.1).toInt()
+                finalHeight = (finalHeight).toInt()
             
             resizedBitmap = //apiBitmap
             BitmapUtils.resizeWithTransparentBackground(apiBitmap, finalWidth, finalHeight)

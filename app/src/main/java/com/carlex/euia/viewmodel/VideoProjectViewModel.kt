@@ -443,7 +443,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             try {
                 // <<< DELAY 1: AQUI, APÓS RECEBER A RESPOSTA E ANTES DE CRIAR OS OBJETOS E ATUALIZAR A UI >>>
                 Log.d(TAG, "Resposta da IA recebida. Aguardando 0.5 segundos antes de processar e exibir as cenas.")
-                delay(100)
+                delay(500)
 
                 val roteiroCenasFinal = JSONArray(respostaAjustada)
                 val generatedSceneDataList = mutableListOf<SceneLinkData>()
@@ -728,7 +728,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                      internalUpdateSceneState(sceneLinkData.id) { it.copy(isGenerating = false, generationAttempt = 0) }
                  } else {
                      Log.d(TAG, "Aguardando 0.5 segundos antes de enfileirar a geração para a cena ${sceneLinkData.cena ?: sceneLinkData.id}.")
-                     delay(100)
+                     delay(500)
 
                      if (!viewModelScope.isActive) return@forEach
 
