@@ -11,7 +11,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.*
 import com.carlex.euia.R
 import com.carlex.euia.api.GeminiImageApi
-import com.carlex.euia.api.GeminiTextAndVisionProApi
+import com.carlex.euia.api.GeminiTextAndVisionProRestApi
 import com.carlex.euia.api.YouTubeUploadService
 import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.VideoGeneratorDataStoreManager
@@ -140,7 +140,7 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
                 val scenes = videoProjectDataStoreManager.sceneLinkDataList.first()
                 val visualStyleDesc = scenes.take(3).mapNotNull { it.promptGeracao }.joinToString(separator = ". ").ifBlank { "Um vídeo informativo e dinâmico." }
                 val prompt = CreateYouTubeMetadataPrompt(narrative, originalTitle, visualStyleDesc).prompt
-                val result = GeminiTextAndVisionProApi.perguntarAoGemini(prompt, emptyList())
+                val result = GeminiTextAndVisionProRestApi.perguntarAoGemini(prompt, emptyList())
 
                 if (result.isSuccess) {
                     val cleanedJson = cleanGeminiJsonResponse(result.getOrThrow())

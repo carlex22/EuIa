@@ -9,9 +9,12 @@ import com.carlex.euia.managers.GerenciadorDeChavesApi
 import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
 import com.carlex.euia.viewmodel.AuthViewModel
 import com.carlex.euia.viewmodel.TaskType
+import com.google.ai.client.generativeai.type.GenerationConfig
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.ServerException
 import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.*
+import com.google.ai.client.generativeai.*
 import com.google.ai.client.generativeai.type.generationConfig
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 import com.google.ai.client.generativeai.type.Tool
 import com.google.ai.client.generativeai.*
 import com.google.ai.client.generativeai.type.*
+import kotlinx.coroutines.flow.collect // Adicionado para o stream
 
 /**
  * Objeto singleton para interagir com a API Gemini Pro, incorporando um sistema
@@ -31,9 +35,10 @@ import com.google.ai.client.generativeai.type.*
  */
 object GeminiTextAndVisionProApi {
     private const val TAG = "GeminiApiPro"
-    private const val modelName = "gemini-2.5-flash-lite-preview-06-17"
+    private const val modelName = "gemini-2.5-pro"
+    //"gemini-2.5-flash-lite-preview-06-17"
                                     //"gemini-2.5-flash"
-                                   // "gemini-2.5-flash-preview-04-17" // Ou o modelo Pro Vision desejado
+                                    //"gemini-2.5-flash-preview-04-17" // Ou o modelo Pro Vision desejado
     private const val TIPO_DE_CHAVE = "text"
 
     // Instanciação interna e preguiçosa (lazy) das dependências.
@@ -90,13 +95,24 @@ object GeminiTextAndVisionProApi {
                     try {
                         chaveAtual = gerenciadorDeChaves.getChave(TIPO_DE_CHAVE)
                         Log.d(TAG, "Tentativa ${tentativas + 1}/$MAX_TENTATIVAS ($TIPO_DE_CHAVE): Usando chave que termina em '${chaveAtual.takeLast(4)}'")
+                        
+                        
+                        
+
+
+
 
 
                         val requestOptions = RequestOptions(
-                            timeout = 600.seconds // Define o timeout para 120 segundos (2 minutos)
+                            timeout = 3600.seconds // Define o timeout para 120 segundos (2 minutos)
                         )
                         
                         
+                        
+                        
+                        val harassmentSafety = SafetySetting(HarmCategory.HARASSMENT, BlockThreshold.LOW_AND_ABOVE)
+
+                        val hateSpeechSafety = SafetySetting(HarmCategory.HATE_SPEECH, BlockThreshold.LOW_AND_ABOVE)
                         
                         
                         val generativeModel = GenerativeModel(
@@ -105,7 +121,9 @@ object GeminiTextAndVisionProApi {
                             generationConfig = generationConfig {
                                 temperature = 2.0f // Temperatura mais alta para criatividade
                                 topP = 0.95f
-                            }
+                            },
+                            safetySettings = listOf(harassmentSafety, hateSpeechSafety),
+                            requestOptions
                         )
                         
                         val adjustedImagePaths = ajustarCaminhosDeImagem(imagens)
@@ -113,15 +131,36 @@ object GeminiTextAndVisionProApi {
                         val textoArquivoLido = arquivoTexto?.let { lerArquivoTexto(it) }
                         
                         val content = content {
+                            
                             text(pergunta)
                             textoArquivoLido?.let { text(it) }
                             bitmaps.forEach { image(it) }
                         }
 
-                        val response = generativeModel.generateContent(content)
-                    
-                        val resposta = response.text ?: throw Exception("Resposta nula recebida do Gemini Pro")
-                        Log.i(TAG, "resposta api protext $response.toString().")
+                        // --- INÍCIO DA MODIFICAÇÃO ---
+                        // 1. Usa generateContentStream para obter um Flow de respostas.
+                        // 2. Cria um StringBuilder para acumular o texto dos "chunks".
+                        val fullResponse = StringBuilder()
+                        Log.i(TAG, "Iniciando stream com generateContentStream...")
+                        
+                        generativeModel.generateContentStream(content).collect { chunk ->
+                            // 3. Para cada pedaço recebido, loga e anexa ao StringBuilder.
+                            chunk.text?.let { textPart ->
+                                Log.d(TAG, "CHUNK: --> $textPart") // Log para ver os pedaços chegando
+                                fullResponse.append(textPart)
+                            }
+                        }
+
+                        // 4. A resposta final é a string completa do StringBuilder.
+                        val resposta = fullResponse.toString()
+
+                        if (resposta.isBlank()) {
+                             throw Exception("Resposta nula ou vazia recebida do stream do Gemini Pro")
+                        }
+                
+                        Log.i(TAG, "Stream concluído. Resposta completa montada.")
+                        Log.i(TAG, "resposta api protext $resposta")
+                        // --- FIM DA MODIFICAÇÃO ---
                 
                         Log.i(TAG, "SUCESSO na tentativa ${tentativas + 1} ($TIPO_DE_CHAVE) com a chave '${chaveAtual.takeLast(4)}'.")
                         gerenciadorDeChaves.setChaveEmUso(chaveAtual, TIPO_DE_CHAVE)

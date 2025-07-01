@@ -20,7 +20,7 @@ import androidx.work.workDataOf
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.ReturnCode
 import com.carlex.euia.R
-import com.carlex.euia.api.GeminiTextAndVisionProApi
+import com.carlex.euia.api.GeminiTextAndVisionProRestApi
 import com.carlex.euia.data.*
 import com.carlex.euia.prompts.CreateScenes
 import com.carlex.euia.prompts.CreateScenesChat
@@ -424,8 +424,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         val imagePathsForGemini = imagensReferenciasAtuais.map { it.path }
 
 
-        Log.d(TAG, "Chamando GeminiTextAndVisionProApi para gerar estrutura de cenas...")
-        val respostaResult = GeminiTextAndVisionProApi.perguntarAoGemini(
+        Log.d(TAG, "Chamando GeminiTextAndVisionProRestApi para gerar estrutura de cenas...")
+        val respostaResult = GeminiTextAndVisionProRestApi.perguntarAoGemini(
             pergunta = promptGerarCenas,
             imagens = imagePathsForGemini,
             arquivoTexto = legendaPathParaApi

@@ -16,7 +16,7 @@ import androidx.work.*
 import com.carlex.euia.MainActivity
 import com.carlex.euia.R
 import com.carlex.euia.api.ExtrairMl
-import com.carlex.euia.api.GeminiTextAndVisionProApi
+import com.carlex.euia.api.GeminiTextAndVisionProRestApi
 import com.carlex.euia.api.GeminiTextAndVisionStandardApi
 import com.carlex.euia.data.*
 import com.carlex.euia.prompts.ExtractDetailedPageContentAsKeyValuesPrompt
@@ -271,13 +271,32 @@ class UrlImportWorker(
             val currentUserAddress = userInfoDataStoreManager.userAddress.first()
             val currentUserLanguageTone = audioDataStoreManager.userLanguageToneAudio.first()
             val currentUserTargetAudience = audioDataStoreManager.userTargetAudienceAudio.first()
-
+            val isChatMode = audioDataStoreManager.isChatNarrative.first()
+            
             updateNotificationProgress(appContext.getString(R.string.notification_content_url_phase1_contacting_ai_precontext, urlInput.take(30)))
             val preContextPromptObject = ExtractInfoFromUrlPrompt(
                 contentUrl = urlInput, currentUserNameCompany, currentUserProfessionSegment,
-                currentUserAddress, currentUserLanguageTone, currentUserTargetAudience
+                currentUserAddress, currentUserLanguageTone, currentUserTargetAudience, isChatMode
             )
-            val geminiResult: kotlin.Result<String> = GeminiTextAndVisionStandardApi.perguntarAoGemini(preContextPromptObject.prompt, emptyList(), "")
+            
+            
+            val youtubeUrlForApi: String? = if (urlInput.contains("youtube.com", ignoreCase = true) || urlInput.contains("youtu.be", ignoreCase = true)) {
+                Log.i(TAG_URL_IMPORT_WORKER, "YouTube URL detectada. Será enviada para análise de vídeo.")
+                urlInput
+            } else {
+                null
+            }
+
+            // Chama a API PRO, passando a URL do YouTube se aplicável
+            val geminiResult: kotlin.Result<String> = GeminiTextAndVisionProRestApi.perguntarAoGemini(
+                pergunta = preContextPromptObject.prompt,
+                imagens = emptyList(), 
+                arquivoTexto = null,
+                youtubeUrl = youtubeUrlForApi // Passa a URL do YouTube aqui
+            )
+            
+            
+           // val geminiResult: kotlin.Result<String> = GeminiTextAndVisionProRestApi.perguntarAoGemini(preContextPromptObject.prompt, emptyList(), "")
 
             if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_phase1_cancelled_after_gemini))
 
@@ -307,6 +326,7 @@ class UrlImportWorker(
                 val suggestedTargetAudience = jsonObject["suggested_target_audience"]?.jsonPrimitive?.contentOrNull ?: ""
 
                 if (suggestedTitle.isNotBlank()) audioDataStoreManager.setVideoTitulo(suggestedTitle)
+                audioDataStoreManager.setIsChatNarrative(isChatMode)
                 audioDataStoreManager.setVideoObjectiveIntroduction(introObjective)
                 audioDataStoreManager.setVideoObjectiveVideo(contentObjective)
                 audioDataStoreManager.setVideoObjectiveOutcome(outcomeObjective)
@@ -388,7 +408,26 @@ class UrlImportWorker(
 
             updateNotificationProgress(appContext.getString(R.string.notification_content_url_phase2_contacting_ai_details, originalUrl.take(30)))
             val detailedContentPromptObject = ExtractDetailedPageContentAsKeyValuesPrompt(originalUrl, suggestedTitle, initialSummary)
-            val geminiDetailedResult: kotlin.Result<String> = GeminiTextAndVisionProApi.perguntarAoGemini(detailedContentPromptObject.prompt, emptyList(), "")
+            
+            
+            val youtubeUrlForApi: String? = if (originalUrl.contains("youtube.com", ignoreCase = true) || originalUrl.contains("youtu.be", ignoreCase = true)) {
+                Log.i(TAG_URL_IMPORT_WORKER, "YouTube URL detectada. Será enviada para análise de vídeo.")
+                originalUrl
+            } else {
+                null
+            }
+
+            // Chama a API PRO, passando a URL do YouTube se aplicável
+            val geminiDetailedResult: kotlin.Result<String> = GeminiTextAndVisionProRestApi.perguntarAoGemini(
+                pergunta = detailedContentPromptObject.prompt,
+                imagens = emptyList(), // Sem imagens nesta fase
+                arquivoTexto = null,
+                youtubeUrl = youtubeUrlForApi // Passa a URL do YouTube aqui
+            )
+            
+            
+            
+           // val geminiDetailedResult: kotlin.Result<String> = GeminiTextAndVisionProApi.perguntarAoGemini(detailedContentPromptObject.prompt, emptyList(), "")
 
             if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_phase2_cancelled_after_gemini))
 

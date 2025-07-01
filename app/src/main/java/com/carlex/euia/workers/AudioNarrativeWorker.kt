@@ -18,7 +18,7 @@ import com.carlex.euia.api.Audio
 import com.carlex.euia.api.GeminiAudio
 import com.carlex.euia.api.GeminiMultiSpeakerAudio
 import com.carlex.euia.api.GeminiTextAndVisionStandardApi
-import com.carlex.euia.api.GeminiTextAndVisionProApi
+import com.carlex.euia.api.GeminiTextAndVisionProRestApi
 import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.ImagemReferencia
 import com.carlex.euia.data.UserInfoDataStoreManager
@@ -476,16 +476,24 @@ class AudioNarrativeWorker(
         }
 
         val respostaResult = try {
-            GeminiTextAndVisionProApi.perguntarAoGemini(
+            GeminiTextAndVisionProRestApi.perguntarAoGemini(
                 pergunta = promptDeEntradaParaGemini,
                 imagens = imagensPatch,
                 arquivoTexto = conteudoAdicionalOuCaminhoArquivo
             )
+            
+            
+            
+            
         } catch (e: Exception) {
             val errorMsg = appContext.getString(R.string.error_generating_prompt_with_error, (e.message ?: e.javaClass.simpleName))
             setGenerationErrorWorker(errorMsg)
             return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
         }
+        
+        Log.d(TAG, "Worker - RepostaGeminiPromptRest ${respostaResult.toString()}")
+
+        
 
         if (respostaResult.isSuccess) {
             val respostaBruta = respostaResult.getOrNull() ?: ""
