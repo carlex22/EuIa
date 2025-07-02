@@ -114,9 +114,8 @@ class ProjectManagementViewModel(
                 videoProjectDataStoreManager.clearProjectState() // Limpa dados de cenas e outros estados do projeto
                 videoDataStoreManager.clearAllSettings()
                 
-                // <<<< INÍCIO DA CORREÇÃO >>>>
+                // CORREÇÃO: Limpando o estado do VideoGeneratorDataStoreManager
                 videoGeneratorDataStoreManager.clearGeneratorState()
-                // <<<< FIM DA CORREÇÃO >>>>
                 
                 videoPreferencesDataStoreManager.setVideoProjectDir(sanitizedProjectName)
                 Log.i("ProjectVM", "Novo diretório do projeto '$sanitizedProjectName' definido como ativo.")

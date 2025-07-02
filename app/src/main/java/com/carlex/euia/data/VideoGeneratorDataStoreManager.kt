@@ -23,7 +23,7 @@ object VideoGeneratorPreferencesKeys {
     val GENERATED_TOTAL_DURATION = doublePreferencesKey("generated_total_duration")
     val FINAL_VIDEO_PATH = stringPreferencesKey("final_video_path")
     
-    // <<< CORREÇÃO: Chave reintroduzida para atuar como lock global >>>
+    // CORREÇÃO: Chave reintroduzida para atuar como lock global
     val IS_CURRENTLY_GENERATING_VIDEO = booleanPreferencesKey("is_currently_generating_video")
 }
 
@@ -66,7 +66,7 @@ class VideoGeneratorDataStoreManager(context: Context) {
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { preferences -> preferences[VideoGeneratorPreferencesKeys.FINAL_VIDEO_PATH] ?: DEFAULT_VIDEO_PATH }
 
-    // <<< CORREÇÃO: Flow para observar o estado de geração (o lock) >>>
+    // CORREÇÃO: Flow para observar o estado de geração (o lock)
     val isCurrentlyGeneratingVideo: Flow<Boolean> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { preferences -> preferences[VideoGeneratorPreferencesKeys.IS_CURRENTLY_GENERATING_VIDEO] ?: DEFAULT_IS_GENERATING }
@@ -110,7 +110,7 @@ class VideoGeneratorDataStoreManager(context: Context) {
         }
     }
 
-    // <<< CORREÇÃO: Função para controlar o lock global de renderização >>>
+    // CORREÇÃO: Função para controlar o lock global de renderização
     suspend fun setCurrentlyGenerating(isGenerating: Boolean) {
         dataStore.edit { preferences ->
             preferences[VideoGeneratorPreferencesKeys.IS_CURRENTLY_GENERATING_VIDEO] = isGenerating

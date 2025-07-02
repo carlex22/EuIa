@@ -26,12 +26,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.carlex.euia.utils.OverlayManager // Importar OverlayManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     
-    private val showNotificationPermissionDialog = mutableStateOf(false)
-    private val showOverlayPermissionDialog = mutableStateOf(false)
+    private val showNotificationPermissionDialog = mutableStateOf(false) 
+    // Removido showOverlayPermissionDialog, será gerenciado por OverlayManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
@@ -61,19 +62,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkAndRequestOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            showOverlayPermissionDialog.value = true
-        }
-    }
-
-    private fun launchOverlayPermissionIntent() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-            startActivity(intent)
-        }
-    }
-
     private fun askNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {
@@ -99,7 +87,7 @@ class MainActivity : ComponentActivity() {
         GeminiTextAndVisionProRestApi.setApplicationContext(application)
 
         askNotificationPermission()
-        checkAndRequestOverlayPermission()
+        // A lógica de permissão de overlay será iniciada pelo OverlayManager quando necessário.
 
         // CORREÇÃO: Aguardar Firebase antes de configurar UI
         lifecycleScope.launch {
@@ -141,25 +129,6 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-
-                    if (showOverlayPermissionDialog.value) {
-                        AlertDialog(
-                            onDismissRequest = { showOverlayPermissionDialog.value = false },
-                            title = { Text(stringResource(R.string.overlay_permission_dialog_title)) },
-                            text = { Text(stringResource(R.string.overlay_permission_dialog_message)) },
-                            confirmButton = {
-                                Button(onClick = {
-                                    showOverlayPermissionDialog.value = false
-                                    launchOverlayPermissionIntent()
-                                }) { Text(stringResource(R.string.overlay_permission_dialog_confirm_button)) }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showOverlayPermissionDialog.value = false }) {
-                                    Text(stringResource(R.string.overlay_permission_dialog_dismiss_button))
-                                }
-                            }
-                        )
-                    }
                 }
             }
         }
@@ -173,5 +142,19 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         Log.d("MainActivity", "onStart chamado.")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Ao retornar para a MainActivity, esconda o overlay se estiver visível
+        OverlayManager.hideOverlay(applicationContext)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Ao sair da MainActivity, se houver uma renderização em andamento, mostre o overlay
+        // POR SIMPLICIDADE, VOU ADICIONAR UMA CHAMADA GENÉRICA NO OverlayManager para ele se auto-monitorar via WorkManager.
+        // Isso evita que a MainActivity precise saber o estado de todos os Workers.
+        OverlayManager.monitorAndShowOverlayIfNeeded(applicationContext)
     }
 }

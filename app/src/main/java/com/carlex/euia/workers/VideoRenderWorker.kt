@@ -31,7 +31,7 @@ class VideoRenderWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     private val videoProjectDataStoreManager = VideoProjectDataStoreManager(appContext)
-    // <<< CORREÇÃO 1: Adicionar instância do DataStore do Gerador >>>
+    // CORREÇÃO 1: Adicionar instância do DataStore do Gerador
     private val videoGeneratorDataStoreManager = VideoGeneratorDataStoreManager(appContext)
     private val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -52,7 +52,7 @@ class VideoRenderWorker(
     }
 
     override suspend fun doWork(): Result {
-        // <<< CORREÇÃO 2: Lógica de Lock no início e no fim >>>
+        // CORREÇÃO 2: Lógica de Lock no início e no fim
 
         // 1. VERIFICAR O LOCK ANTES DE TUDO
         if (videoGeneratorDataStoreManager.isCurrentlyGeneratingVideo.first()) {
@@ -141,12 +141,13 @@ class VideoRenderWorker(
         val intent = Intent(appContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        val pendingIntent = PendingIntent.getActivity(
+        
+        /*val pendingIntent = PendingIntent.getActivity(
             appContext,
             0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+            //intent,
+            //PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )*/
 
         val builder = NotificationCompat.Builder(appContext, NotificationUtils.CHANNEL_ID_VIDEO_RENDER)
             .setContentTitle(appContext.getString(R.string.video_render_notification_title))
@@ -154,8 +155,8 @@ class VideoRenderWorker(
             .setSmallIcon(R.drawable.ic_notification_icon)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setOnlyAlertOnce(true)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
+            //.setContentIntent(pendingIntent)
+           // .setAutoCancel(true)
 
         if (isFinished || isError) {
             builder.setProgress(0, 0, false).setOngoing(false)

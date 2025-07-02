@@ -1,7 +1,8 @@
+// File: euia/MyApplication.kt
 package com.carlex.euia
 
 import android.app.Application
-import android.content.Intent
+import android.os.StrictMode
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -9,158 +10,203 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.WorkQuery
+import com.carlex.euia.BuildConfig
 import com.carlex.euia.data.AudioDataStoreManager
-import com.carlex.euia.data.SceneLinkData
+import com.carlex.euia.data.VideoDataStoreManager
+import com.carlex.euia.data.VideoGeneratorDataStoreManager // <<< Certifique-se que está importado
 import com.carlex.euia.data.VideoProjectDataStoreManager
-import com.carlex.euia.services.VideoProgressOverlayService
+import com.carlex.euia.utils.NotificationUtils
 import com.carlex.euia.utils.ProjectPersistenceManager
-import com.carlex.euia.utils.WorkerTags
-import com.google.firebase.FirebaseApp
-import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.carlex.euia.utils.WorkerTags // <<< Certifique-se que está importado
+import com.carlex.euia.utils.OverlayManager // Importar OverlayManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.io.IOException
+import kotlinx.coroutines.withContext
 
 class MyApplication : Application() {
-
     override fun onCreate() {
         super.onCreate()
-        Log.d("MyApplication", "Application onCreate - configurando ProcessLifecycleObserver e Firebase App Check")
-
-        FirebaseApp.initializeApp(this)
-
-        val firebaseAppCheck = FirebaseAppCheck.getInstance()
-        val useDebugProvider = BuildConfig.DEBUG
-
-        if (useDebugProvider) {
-            Log.i("MyApplication", "Usando DebugAppCheckProviderFactory para App Check.")
-            firebaseAppCheck.installAppCheckProviderFactory(
-                DebugAppCheckProviderFactory.getInstance()
+        
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .penaltyLog()
+                    .build()
             )
-            firebaseAppCheck.getAppCheckToken(false).addOnSuccessListener { tokenResponse ->
-                val debugToken = tokenResponse.token
-                Log.d("AppCheckDebug", "Debug token: $debugToken")
-            }.addOnFailureListener { e ->
-                Log.e("AppCheckDebug", "Falha ao obter token de debug.", e)
-            }
-        } else {
-            Log.i("MyApplication", "Usando PlayIntegrityAppCheckProviderFactory para App Check.")
-            firebaseAppCheck.installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
+
+            StrictMode.setVmPolicy(
+                StrictMode.VmPolicy.Builder()
+                    .detectLeakedClosableObjects()
+                    .penaltyLog()
+                    .build()
             )
         }
 
+        NotificationUtils.createAllNotificationChannels(this)
+        Log.d("MyApplication", "Todos os canais de notificação foram criados/verificados.")
+
+        // Inicia o monitoramento do OverlayManager para mostrar/esconder o overlay
+        // baseado no estado dos WorkManager.
+        // Passa 'this' (a instância da Application) como contexto.
+        OverlayManager.monitorAndShowOverlayIfNeeded(this)
+        Log.d("MyApplication", "Iniciou monitoramento de overlay.")
+
+
+        Log.d("MyApplication", "Application onCreate - Registrando AppLifecycleObserver. (Fix: Verificacao de lock de renderizacao)")
         ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver(this))
     }
 }
 
 class AppLifecycleObserver(private val context: Application) : DefaultLifecycleObserver {
-
     private val TAG = "AppLifecycleObserver"
 
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
-        Log.d(TAG, "App em primeiro plano (ON_START). Verificando workers e escondendo overlay.")
-
-        // <<<<< LÓGICA DO OVERLAY: Esconde o ícone quando o app volta para o primeiro plano >>>>>
-        val hideIntent = Intent(context, VideoProgressOverlayService::class.java).apply {
-            action = VideoProgressOverlayService.ACTION_HIDE
-        }
-        context.startService(hideIntent)
-        // <<<<< FIM DA LÓGICA DO OVERLAY >>>>>
-
+        Log.d(TAG, "App moved to foreground (ON_START). Checking for stale processing states.")
+        
         owner.lifecycleScope.launch {
-            val workManager = WorkManager.getInstance(context)
-            val audioDataStoreManager = AudioDataStoreManager(context)
-            val videoProjectDataStoreManager = VideoProjectDataStoreManager(context)
+            withContext(Dispatchers.IO) {
+                try {
+                    val workManager = WorkManager.getInstance(context)
+                    val audioDataStoreManager = AudioDataStoreManager(context)
+                    val videoDataStoreManager = VideoDataStoreManager(context)
+                    val videoProjectDataStoreManager = VideoProjectDataStoreManager(context)
+                    // ADICIONADO: Instanciar o DataStore do Gerador de Vídeo
+                    val videoGeneratorDataStoreManager = VideoGeneratorDataStoreManager(context)
 
-            try {
-                // --- Verificação e Reset para Áudio ---
-                val isAudioCurrentlyProcessing = audioDataStoreManager.isAudioProcessing.first()
-                if (isAudioCurrentlyProcessing) {
-                    val audioWorkInfos = workManager.getWorkInfosByTag(WorkerTags.AUDIO_NARRATIVE).get()
-                    val isAudioWorkActive = audioWorkInfos.any {
-                        it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
-                    }
-                    if (!isAudioWorkActive) {
-                        Log.d(TAG, "Audio: State is active but work is not. Resetting audio processing state.")
-                        audioDataStoreManager.setIsAudioProcessing(false)
-                        audioDataStoreManager.setGenerationProgressText("")
-                        audioDataStoreManager.setGenerationError(null)
-                    }
+                    checkImageProcessingState(videoDataStoreManager, workManager)
+                    checkAudioProcessingState(audioDataStoreManager, workManager)
+                    checkVideoScenesState(videoProjectDataStoreManager, workManager)
+                    
+                    // CORREÇÃO PRINCIPAL: Chamada para verificar e limpar o lock de renderização
+                    checkVideoRenderingState(videoGeneratorDataStoreManager, workManager) // Nova funcao para verificar o lock de renderizacao
+                    
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error during state check/cleanup in onStart", e)
                 }
+            }
+        }
+    }
 
-                // --- Verificação e Reset para Cenas de Vídeo ---
-                val currentSceneList = try {
-                    videoProjectDataStoreManager.sceneLinkDataList.first()
-                } catch (e: IOException) {
-                    Log.e(TAG, "VideoScenes: IO Error reading scene link data", e)
-                    emptyList()
+    private suspend fun checkImageProcessingState(
+        videoDataStoreManager: VideoDataStoreManager,
+        workManager: WorkManager
+    ) {
+        if (videoDataStoreManager.isProcessingImages.first()) {
+            val imageWorkQuery = WorkQuery.Builder.fromTags(listOf(WorkerTags.IMAGE_PROCESSING_WORK)).build()
+            val imageWorkInfos = try {
+                workManager.getWorkInfos(imageWorkQuery).get()
+            } catch (e: Exception) { emptyList() }
+
+            if (imageWorkInfos.none { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }) {
+                Log.w(TAG, "Images: State was 'processing' but no active worker found. Resetting state.")
+                videoDataStoreManager.setIsProcessingImages(false)
+            }
+        }
+    }
+
+    private suspend fun checkAudioProcessingState(
+        audioDataStoreManager: AudioDataStoreManager,
+        workManager: WorkManager
+    ) {
+        if (audioDataStoreManager.isAudioProcessing.first()) {
+            val audioWorkQuery = WorkQuery.Builder.fromTags(listOf(WorkerTags.AUDIO_NARRATIVE)).build()
+            val audioWorkInfos = try {
+                workManager.getWorkInfos(audioWorkQuery).get()
+            } catch (e: Exception) { emptyList() }
+
+            if (audioWorkInfos.none { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }) {
+                Log.w(TAG, "Audio: State was 'processing' but no active worker found. Resetting state.")
+                audioDataStoreManager.setIsAudioProcessing(false)
+                audioDataStoreManager.setGenerationProgressText("")
+                audioDataStoreManager.setGenerationError(null)
+            }
+        }
+    }
+
+    private suspend fun checkVideoScenesState(
+        videoProjectDataStoreManager: VideoProjectDataStoreManager,
+        workManager: WorkManager
+    ) {
+        val currentSceneList = try {
+            videoProjectDataStoreManager.sceneLinkDataList.first()
+        } catch (e: Exception) { emptyList() }
+
+        if (currentSceneList.any { it.isGenerating || it.isChangingClothes || it.isGeneratingVideo }) {
+            val videoWorkQuery = WorkQuery.Builder.fromTags(listOf(WorkerTags.VIDEO_PROCESSING)).build()
+            val videoWorkInfos = try {
+                workManager.getWorkInfos(videoWorkQuery).get()
+            } catch (e: Exception) { emptyList() }
+
+            if (videoWorkInfos.none { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }) {
+                Log.w(TAG, "VideoScenes: Active flags found but no active worker. Resetting scene states.")
+                val updatedSceneList = currentSceneList.map { scene ->
+                    scene.copy(
+                        isGenerating = false,
+                        isChangingClothes = false,
+                        isGeneratingVideo = false,
+                        generationAttempt = 0,
+                        clothesChangeAttempt = 0,
+                        generationErrorMessage = null
+                    )
                 }
+                videoProjectDataStoreManager.setSceneLinkDataList(updatedSceneList)
+            }
+        }
+    }
+    
+    // CORREÇÃO PRINCIPAL: Adicionada funcao para verificar e limpar o lock de renderizacao de video
+    private suspend fun checkVideoRenderingState(
+        videoGeneratorDataStoreManager: VideoGeneratorDataStoreManager,
+        workManager: WorkManager
+    ) {
+        // Verifica se a flag de renderização (o "lock") ficou ligada
+        if (videoGeneratorDataStoreManager.isCurrentlyGeneratingVideo.first()) {
+            // Se a flag está ligada, vamos verificar se há um worker realmente em execução
+            val renderWorkQuery = WorkQuery.Builder.fromTags(listOf(WorkerTags.VIDEO_RENDER)).build()
+            val renderWorkInfos = try {
+                workManager.getWorkInfos(renderWorkQuery).get()
+            } catch (e: Exception) { emptyList() }
 
-                val scenesThatNeedReset = currentSceneList.filter { it.isGenerating || it.isChangingClothes || it.isGeneratingVideo }
-
-                if (scenesThatNeedReset.isNotEmpty()) {
-                    val videoWorkInfos = workManager.getWorkInfosByTag(WorkerTags.VIDEO_PROCESSING).get()
-                    val isVideoWorkActive = videoWorkInfos.any {
-                        it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
-                    }
-
-                    if (!isVideoWorkActive) {
-                        Log.d(TAG, "VideoScenes: Active scene flags found and relevant work is not active. Resetting scene processing states.")
-                        val updatedSceneList = currentSceneList.map { scene ->
-                            if (scene.isGenerating || scene.isChangingClothes || scene.isGeneratingVideo) {
-                                scene.copy(
-                                    isGenerating = false,
-                                    isChangingClothes = false,
-                                    isGeneratingVideo = false,
-                                    generationAttempt = 0,
-                                    clothesChangeAttempt = 0,
-                                    generationErrorMessage = null
-                                )
-                            } else {
-                                scene
-                            }
-                        }
-                        videoProjectDataStoreManager.setSceneLinkDataList(updatedSceneList)
-                        Log.d(TAG, "VideoScenes: Scene processing states reset and saved successfully.")
-                    }
-                }
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during state check or reset in onStart", e)
+            // Se não houver NENHUM worker de renderização na fila ou rodando...
+            if (renderWorkInfos.none { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }) {
+                // ...significa que o app crashou e o lock ficou "preso".
+                Log.w(TAG, "VideoRender: State was 'generating' but no active worker found. Resetting lock to false.")
+                // Desligamos o lock para permitir que o usuário tente novamente.
+                videoGeneratorDataStoreManager.setCurrentlyGenerating(false)
+            } else {
+                Log.d(TAG, "VideoRender: State is 'generating' and an active worker was found. State is consistent.")
             }
         }
     }
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
-        Log.d(TAG, "App em segundo plano (ON_STOP). Salvando estado e mostrando overlay se necessário.")
-
-        // <<<<< LÓGICA DO OVERLAY: Mostra o ícone se o serviço estiver ativo >>>>>
-        // O serviço só mostrará algo se estiver rodando (iniciado pelo ViewModel)
-        val showIntent = Intent(context, VideoProgressOverlayService::class.java).apply {
-            action = VideoProgressOverlayService.ACTION_SHOW
-        }
-        context.startService(showIntent)
-        // <<<<< FIM DA LÓGICA DO OVERLAY >>>>>
-
-        // Salvar o estado do projeto quando o app vai para o background
+        Log.d(TAG, "App moved to background (ON_STOP). Saving project state.")
+        
         owner.lifecycleScope.launch(Dispatchers.IO) {
             try {
                 ProjectPersistenceManager.saveProjectState(context)
-                Log.i(TAG, "Estado do projeto salvo com sucesso no onStop do AppLifecycleObserver.")
+                Log.i(TAG, "Estado do projeto salvo com sucesso no onStop.")
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao salvar estado do projeto no onStop do AppLifecycleObserver: ${e.message}", e)
+                Log.e(TAG, "Erro ao salvar estado do projeto no onStop: ${e.message}", e)
             }
         }
     }
 
     override fun onCreate(owner: LifecycleOwner) {
-       super.onCreate(owner)
-       Log.d(TAG, "Process ON_CREATE - called once per process. No state reset performed here.")
+        super.onCreate(owner)
+        Log.d(TAG, "Process ON_CREATE - called once per process.")
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        // Parar o monitoramento do OverlayManager ao encerrar o aplicativo
+        OverlayManager.stopMonitoringWork()
+        Log.d("MyApplication", "Parou monitoramento de overlay em onTerminate.")
     }
 }

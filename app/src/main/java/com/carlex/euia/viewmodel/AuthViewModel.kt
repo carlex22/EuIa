@@ -41,6 +41,7 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 import kotlin.text.toIntOrNull
 import com.carlex.euia.BuildConfig
+import com.carlex.euia.data.UserInfoDataStoreManager // <<<<< ADICIONADO: Importar UserInfoDataStoreManager >>>>>
 
 /**
  * Exceção customizada para ser lançada quando uma configuração essencial não é encontrada.
@@ -73,6 +74,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
     private lateinit var googleSignInClient: GoogleSignInClient // <<< MUDANÇA: Inicialização tardia
     private val appContext: Context = application.applicationContext
+
+    // <<<<< ADICIONADO: Instância do UserInfoDataStoreManager >>>>>
+    private val userInfoDataStoreManager = UserInfoDataStoreManager(application)
 
     // --- Propriedades que leem do AppConfigManager. Lançam exceção se a chave não existir. ---
     private val cryptoMasterKey: String get() = AppConfigManager.getString("crypto_MASTER_KEY") ?: ""
@@ -278,6 +282,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                             chaveValidacaoFirebase = chaveValidacaoFirebase // Salva o valor de verificação CRIPTOGRAFADO
                         )
                         userDocRef.set(newUser).await()
+
+                        // <<<<< ADICIONADO: Salvar dados de perfil no DataStore >>>>>
+                        userInfoDataStoreManager.setUserNameCompany(firebaseUser.displayName ?: "")
+                        userInfoDataStoreManager.setUserProfessionSegment("")
+                        userInfoDataStoreManager.setUserAddress("")
+
                         Log.d(TAG, "Novo usuário Google registrado e perfil criado com créditos criptografados e verificação de validação criptografada.")
                     } else {
                         // Usuário existente. Verifica/atualiza os créditos se não for premium e estiverem expirados.
@@ -361,7 +371,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun register(email: String, password: String) {
+    // <<<<< MODIFICADO: Método register para aceitar e salvar os dados de perfil >>>>>
+    fun register(
+        email: String,
+        password: String,
+        userNameCompany: String,
+        userProfessionSegment: String,
+        userAddress: String
+    ) {
         _isLoading.value = true
         _error.value = null
         viewModelScope.launch {
@@ -381,6 +398,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         chaveValidacaoFirebase = chaveValidacaoFirebase
                     )
                     firestore.collection(fbCollectionUsers).document(firebaseUser.uid).set(newUser).await()
+
+                    // <<<<< ADICIONADO: Salvar dados de perfil no DataStore >>>>>
+                    userInfoDataStoreManager.setUserNameCompany(userNameCompany)
+                    userInfoDataStoreManager.setUserProfessionSegment(userProfessionSegment)
+                    userInfoDataStoreManager.setUserAddress(userAddress)
+
                     _error.value = null
                 }
             } catch (e: MissingConfigurationException) {

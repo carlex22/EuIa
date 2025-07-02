@@ -36,6 +36,11 @@ fun RegistrationScreen(
     val passwordState = remember { mutableStateOf("") }
     val confirmPasswordState = remember { mutableStateOf("") }
 
+    // NOVOS ESTADOS PARA OS CAMPOS DE PERFIL
+    val userNameCompanyState = remember { mutableStateOf("") }
+    val userProfessionSegmentState = remember { mutableStateOf("") }
+    val userAddressState = remember { mutableStateOf("") }
+
     val emailError = remember { mutableStateOf<String?>(null) }
     val passwordError = remember { mutableStateOf<String?>(null) }
     val confirmPasswordError = remember { mutableStateOf<String?>(null) }
@@ -96,12 +101,12 @@ fun RegistrationScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 // Logo do aplicativo
-                Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+               /* Image(
+                    painter = painterResource(id = R.drawable.logo),
                     contentDescription = stringResource(R.string.content_desc_app_logo),
-                    modifier = Modifier.size(120.dp)
-                )
-                Spacer(modifier = Modifier.height(32.dp))
+                    //modifier = Modifier.size(0.6f)
+                )*/
+                //Spacer(modifier = Modifier.height(32.dp))
 
                 Text(
                     text = stringResource(R.string.registration_title),
@@ -169,6 +174,43 @@ fun RegistrationScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // NOVOS CAMPOS DE PERFIL
+                Text(
+                    text = stringResource(R.string.registration_personal_info_title), // Adicione esta string ao strings.xml
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                OutlinedTextField(
+                    value = userNameCompanyState.value,
+                    onValueChange = { userNameCompanyState.value = it },
+                    label = { Text(stringResource(R.string.registration_label_name_company)) }, // Adicione esta string ao strings.xml
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = userProfessionSegmentState.value,
+                    onValueChange = { userProfessionSegmentState.value = it },
+                    label = { Text(stringResource(R.string.registration_label_profession_segment)) }, // Adicione esta string ao strings.xml
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = userAddressState.value,
+                    onValueChange = { userAddressState.value = it },
+                    label = { Text(stringResource(R.string.registration_label_address)) }, // Adicione esta string ao strings.xml
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                // FIM DOS NOVOS CAMPOS DE PERFIL
+
+
                 // Botão de Registrar
                 Button(
                     onClick = {
@@ -199,7 +241,13 @@ fun RegistrationScreen(
                         }
 
                         // Se todas as validações passarem, chama o ViewModel
-                        authViewModel.register(emailState.value, passwordState.value)
+                        authViewModel.register(
+                            email = emailState.value,
+                            password = passwordState.value,
+                            userNameCompany = userNameCompanyState.value, // Passando o novo dado
+                            userProfessionSegment = userProfessionSegmentState.value, // Passando o novo dado
+                            userAddress = userAddressState.value // Passando o novo dado
+                        )
                     },
                     enabled = !isLoading, // Desabilita o botão enquanto o registro está em andamento
                     modifier = Modifier.fillMaxWidth()

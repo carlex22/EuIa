@@ -1,0 +1,80 @@
+{
+  "allFiles": [
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia/app/src/main/AndroidManifest.xml",
+      "selection": {
+        "end": {
+          "column": 8,
+          "index": 1545,
+          "line": 34
+        },
+        "start": {
+          "column": 8,
+          "index": 1545,
+          "line": 34
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia/app/src/main/java/com/carlex/euia/services/OverlayManager.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 6551,
+          "line": 137
+        },
+        "start": {
+          "column": 1,
+          "index": 6551,
+          "line": 137
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia/app/src/main/java/com/carlex/euia/services/OverlayService.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia/app/src/main/java/com/carlex/euia/MainActivity.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 6732,
+          "line": 159
+        },
+        "start": {
+          "column": 1,
+          "index": 6732,
+          "line": 159
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia/app/src/main/java/com/carlex/euia/MyApplication.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 9315,
+          "line": 204
+        },
+        "start": {
+          "column": 1,
+          "index": 9315,
+          "line": 204
+        }
+      }
+    }
+  ],
+  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia/app/src/main/java/com/carlex/euia/MyApplication.kt"
+}

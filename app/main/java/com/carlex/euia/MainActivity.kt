@@ -1,3 +1,4 @@
+// File: euia/MainActivity.kt
 package com.carlex.euia
 
 import android.Manifest
@@ -12,57 +13,51 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
+import com.carlex.euia.api.*
 import com.carlex.euia.ui.AppNavigationHostComposable
-import com.carlex.euia.utils.ProjectPersistenceManager
+import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.carlex.euia.utils.OverlayManager // Importar OverlayManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
+    
+    private val showNotificationPermissionDialog = mutableStateOf(false) 
+    // Removido showOverlayPermissionDialog, será gerenciado por OverlayManager
 
-    // Launcher para a permissão de notificações (se você precisar reativá-la)
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             if (isGranted) {
                 Log.d("MainActivity", "Permissão POST_NOTIFICATIONS concedida.")
             } else {
                 Log.w("MainActivity", "Permissão POST_NOTIFICATIONS negada.")
+                Toast.makeText(this, R.string.notification_permission_denied_feedback, Toast.LENGTH_LONG).show()
             }
         }
 
-    // <<<<< NOVO LAUNCHER PARA A PERMISSÃO DE SOBREPOSIÇÃO >>>>>
-    private val overlayPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            // Após o usuário retornar da tela de configurações, verificamos novamente
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (Settings.canDrawOverlays(this)) {
-                    Toast.makeText(this, R.string.overlay_permission_granted, Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this, R.string.overlay_permission_denied, Toast.LENGTH_LONG).show()
+    // CORREÇÃO: Aguardar Firebase estar pronto
+    private suspend fun ensureFirebaseInitialized() {
+        withContext(Dispatchers.IO) {
+            try {
+                FirebaseApp.getInstance()
+                Log.d("MainActivity", "Firebase já inicializado.")
+            } catch (e: IllegalStateException) {
+                Log.w("MainActivity", "Firebase não inicializado ainda, aguardando...")
+                delay(200) // Aguarda mais tempo
+                try {
+                    FirebaseApp.getInstance()
+                } catch (e2: IllegalStateException) {
+                    Log.e("MainActivity", "Firebase não pôde ser inicializado: ${e2.message}")
                 }
-            }
-        }
-
-    // <<<<< NOVA FUNÇÃO PARA VERIFICAR E SOLICITAR A PERMISSÃO DE SOBREPOSIÇÃO >>>>>
-    private fun checkAndRequestOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Log.d("MainActivity", "Permissão de sobreposição não concedida. Solicitando ao usuário.")
-                // Cria um Intent para abrir a tela de configurações específica do app
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-                // Lança a activity de configurações esperando um resultado
-                overlayPermissionLauncher.launch(intent)
-            } else {
-                Log.d("MainActivity", "Permissão de sobreposição já concedida.")
             }
         }
     }
@@ -71,15 +66,12 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED -> {
-                    Log.d("MainActivity", "Permissão POST_NOTIFICATIONS já concedida.")
+                    Log.d("MainActivity", "Permissão de notificação já concedida.")
                 }
                 shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
-                    Log.d("MainActivity", "Mostrando rationale para permissão POST_NOTIFICATIONS.")
-                    // Aqui você poderia mostrar um diálogo explicando por que precisa da permissão
-                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    showNotificationPermissionDialog.value = true
                 }
                 else -> {
-                    Log.d("MainActivity", "Solicitando permissão POST_NOTIFICATIONS.")
                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             }
@@ -89,56 +81,80 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Solicita a permissão de sobreposição quando o app é iniciado
-        checkAndRequestOverlayPermission()
+        Log.i("MainActivity", "Injetando contexto da aplicação nas classes de API.")
+        GeminiTextAndVisionStandardApi.setApplicationContext(application)
+        GeminiTextAndVisionProApi.setApplicationContext(application)
+        GeminiTextAndVisionProRestApi.setApplicationContext(application)
 
-        // Opcional: Descomente a linha abaixo para também pedir permissão de notificação
-        // askNotificationPermission()
+        askNotificationPermission()
+        // A lógica de permissão de overlay será iniciada pelo OverlayManager quando necessário.
 
-        setContent {
-            MaterialTheme {
-                val navController = rememberNavController()
-                AppNavigationHostComposable(
-                    navController = navController,
-                    mainActivityContext = this
-                )
+        // CORREÇÃO: Aguardar Firebase antes de configurar UI
+        lifecycleScope.launch {
+            ensureFirebaseInitialized()
+            
+            // CORREÇÃO: Aguardar um pouco mais para garantir que tudo está pronto
+            delay(300)
+            
+            setContent {
+                MaterialTheme {
+                    val navController = rememberNavController()
+                    
+                    // CORREÇÃO: Aguardar mais um frame
+                    LaunchedEffect(Unit) {
+                        delay(100)
+                    }
+                    
+                    AppNavigationHostComposable(
+                        navController = navController,
+                        mainActivityContext = this@MainActivity
+                    )
+
+                    // Diálogos de permissão permanecem iguais
+                    if (showNotificationPermissionDialog.value) {
+                        AlertDialog(
+                            onDismissRequest = { showNotificationPermissionDialog.value = false },
+                            title = { Text(stringResource(R.string.notification_permission_dialog_title)) },
+                            text = { Text(stringResource(R.string.notification_permission_dialog_message)) },
+                            confirmButton = {
+                                Button(onClick = {
+                                    showNotificationPermissionDialog.value = false
+                                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }) { Text(stringResource(R.string.notification_permission_dialog_confirm_button)) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showNotificationPermissionDialog.value = false }) {
+                                    Text(stringResource(R.string.notification_permission_dialog_dismiss_button))
+                                }
+                            }
+                        )
+                    }
+                }
             }
         }
     }
 
     override fun onStop() {
         super.onStop()
-        Log.d("MainActivity", "onStop chamado, tentando salvar o estado do projeto.")
-        // A lógica de salvar o projeto já está sendo feita de forma mais robusta no AppLifecycleObserver
-        // Manter esta aqui pode ser redundante, mas não prejudicial.
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                ProjectPersistenceManager.saveProjectState(applicationContext)
-                Log.i("MainActivity", "Estado do projeto salvo com sucesso no onStop da MainActivity.")
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Erro ao salvar estado do projeto no onStop da MainActivity: ${e.message}", e)
-            }
-        }
+        Log.d("MainActivity", "onStop chamado.")
     }
 
-    /**
-     * Salva o estado do projeto e fecha o aplicativo completamente.
-     * Útil para um botão de "Salvar e Sair".
-     */
-    fun saveAndExitApp() {
-        Log.d("MainActivity", "saveAndExitApp chamado, tentando salvar e sair.")
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    ProjectPersistenceManager.saveProjectState(applicationContext)
-                    Log.i("MainActivity", "Estado do projeto salvo com sucesso antes de sair.")
-                }
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Erro ao salvar estado do projeto antes de sair: ${e.message}", e)
-            } finally {
-                // Fecha todas as activities do app e encerra o processo
-                finishAffinity()
-            }
-        }
+    override fun onStart() {
+        super.onStart()
+        Log.d("MainActivity", "onStart chamado.")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Ao retornar para a MainActivity, esconda o overlay se estiver visível
+        OverlayManager.hideOverlay(applicationContext)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Ao sair da MainActivity, se houver uma renderização em andamento, mostre o overlay
+        // POR SIMPLICIDADE, VOU ADICIONAR UMA CHAMADA GENÉRICA NO OverlayManager para ele se auto-monitorar via WorkManager.
+        // Isso evita que a MainActivity precise saber o estado de todos os Workers.
+        OverlayManager.monitorAndShowOverlayIfNeeded(applicationContext)
     }
 }

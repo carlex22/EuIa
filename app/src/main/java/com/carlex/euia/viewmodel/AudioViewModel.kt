@@ -154,30 +154,14 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
 
     // Novo estado para controlar a importação da URL
     private val _isUrlImporting = MutableStateFlow(false)
-    val isUrlImporting: StateFlow<Boolean> = _isUrlImporting.asStateFlow()
-
+    val isUrlImporting: StateFlow<Boolean> = _isUrlImporting.asStateFlow() // Este é o Flow que a UI vai observar
+    
+    
     // Observer para os workers de importação de URL
     private val urlImportWorkObserver = Observer<List<WorkInfo>> { workInfos ->
         val isStillImporting = workInfos.any {
             it.tags.contains(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT) || it.tags.contains(UrlImportWorker.TAG_URL_IMPORT_WORK_CONTENT_DETAILS)
         } && workInfos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
-
-        if (_isUrlImporting.value && !isStillImporting) {
-            _isUrlImporting.value = false
-            Log.d(TAG, "Importação de URL concluída (ou falhou/cancelou). _isUrlImporting resetado para false.")
-            // Verificar se houve falha e notificar o usuário, se necessário,
-            // embora o worker já deva fazer isso via notificação.
-           /* workInfos.firstOrNull {
-                (it.tags.contains(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT) || it.tags.contains(UrlImportWorker.TAG_URL_IMPORT_WORK_CONTENT_DETAILS)) &&
-                it.state == WorkInfo.State.FAILED
-            }?.let {
-                val errorMsg = it.outputData.getString(UrlImportWorker.KEY_OUTPUT_ERROR_MESSAGE)
-                viewModelScope.launch { showToast(appContext.getString(R.string.url_import_failed_toast, errorMsg ?: appContext.getString(R.string.unknown_error))) }
-            }*/
-        } else if (!_isUrlImporting.value && isStillImporting) {
-            // Isso pode acontecer se o worker for enfileirado externamente e o ViewModel for reiniciado.
-            _isUrlImporting.value = true
-        }
     }
 
 
@@ -214,8 +198,8 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
                 fetchAvailableVoices(genderForApi = _sexo.value)
             }
         }
-        // Observar os workers de importação de URL
-        workManager.getWorkInfosByTagLiveData(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT)
+        
+       workManager.getWorkInfosByTagLiveData(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT)
             .observeForever(urlImportWorkObserver)
         workManager.getWorkInfosByTagLiveData(UrlImportWorker.TAG_URL_IMPORT_WORK_CONTENT_DETAILS)
             .observeForever(urlImportWorkObserver)

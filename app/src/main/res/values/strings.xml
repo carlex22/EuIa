@@ -7,6 +7,43 @@
 
     <!-- Adicione estas strings ao seu arquivo -->
 
+
+<!-- strings.xml -->
+
+    <!-- ... seus outros strings ... -->
+    <string name="notification_channel_video_render_name">Renderização de Vídeo</string>
+    <string name="notification_channel_video_render_description">Notificações para o processo de renderização de vídeo.</string>
+    <string name="notification_title_video_render">Renderizando Vídeo</string>
+    <string name="notification_content_video_render_starting">Iniciando renderização do vídeo...</string>
+    <string name="notification_content_video_render_completed_successfully">Vídeo renderizado com sucesso!</string>
+    <string name="notification_content_video_render_failed_details">Falha na renderização: %1$s</string>
+    <string name="error_video_render_cancelled">Renderização de vídeo cancelada.</string>
+    <string name="error_video_render_failed">Falha na renderização do vídeo: %1$s</string>
+    <string name="error_no_scenes_to_render">Nenhuma cena encontrada para renderizar.</string>
+    <string name="error_no_audio_for_video">Nenhum áudio principal para o vídeo.</string>
+    <string name="error_general_unspeycified_failure">Falha inespecífica.</string>
+
+
+    <string name="overlay_permission_dialog_thitle">Permissão de Sobreposição</string>
+    <string name="overlay_permission_dialog_kmessage">Para exibir o progresso em segundo plano, o aplicativo precisa da permissão "Desenhar sobre outros apps". Por favor, conceda esta permissão nas configurações.</string>
+    <string name="overlay_permission_dialog_confiyrm_button">Ir para Configurações</string>
+    <string name="overlay_permission_dialog_dismihss_button">Cancelar</string>
+    <string name="overlay_permission_denied_feedback">Permissão negada. O progresso em segundo plano pode não ser exibido.</string>
+    <string name="overlay_render_in_progress">Renderizando vídeo...</string>
+    <string name="overlay_default_message">Processando em segundo plano...</string>
+    <string name="overlay_tap_to_return">Toque para retornar ao aplicativo</string>
+    <string name="overlay_foreground_notification_title">Serviço de Overlay Ativo</string>
+
+    
+
+
+<string name="context_info_dialog_loading_message">Importando dados da URL. Por favor, aguarde...</string>
+
+<string name="registration_personal_info_title">Informações Pessoais</string>
+<string name="registration_label_name_company">Nome / Empresa</string>
+<string name="registration_label_profession_segment">Profissão / Segmento</string>
+<string name="registration_label_address">Endereço</string>
+
     <!-- Erros de Autenticação e Login -->
     <string name="google_sign_in_required">Login com Google é necessário.</string>
     <string name="google_sign_in_cancelled">Login com Google cancelado.</string>
@@ -945,7 +982,7 @@
     <string name="bottom_bar_action_share_video">Compartilhar Vídeo</string>
     <string name="bottom_bar_action_next">Avançar</string>
 
-    <string name="placeholder_import_data_url">Placeholder: Importar Dados da URL</string>
+    <string name="placeholder_import_data_url">Placeholder: Importar ou Criar Dados para o Video</string>
     <string name="placeholder_chat_screen">Placeholder: Chat Screen</string>
 
     

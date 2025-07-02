@@ -1,4 +1,4 @@
-// File: ui/ContextInfoContent.kt
+// File: euia/ui/ContextInfoContent.kt
 package com.carlex.euia.ui
 
 import androidx.compose.foundation.layout.*
@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import com.carlex.euia.R
 import com.carlex.euia.viewmodel.AudioViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.ui.window.Dialog // Importar o Dialog
+import androidx.compose.ui.text.style.TextAlign // Para o texto centralizado no Dialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,8 +48,10 @@ fun ContextInfoContent(
     val currentUserTargetAudienceAudio by audioViewModel.userTargetAudienceAudio.collectAsState()
     val currentUserLanguageToneAudio by audioViewModel.userLanguageToneAudio.collectAsState()
     val currentVideoTimeSeconds by audioViewModel.videoTimeSeconds.collectAsState()
-    val isUrlImporting by audioViewModel.isUrlImporting.collectAsState()
+    // CORREÇÃO: Especificar o tipo explicitamente para ajudar o compilador
+    val isUrlImporting: Boolean by audioViewModel.isUrlImporting.collectAsState()
     val isChatNarrative by audioViewModel.isChatNarrative.collectAsState()
+
 
     var editingTitleText by remember(currentVideoTituloFromVM) { mutableStateOf(currentVideoTituloFromVM) }
     var localObjectiveIntroduction by remember(currentVideoObjectiveIntroduction) { mutableStateOf(currentVideoObjectiveIntroduction) }
@@ -79,6 +83,10 @@ fun ContextInfoContent(
         localVideoTime != currentVideoTimeSeconds
     }
 
+    // A operação '!' em um Boolean funciona normalmente. O problema pode ter sido de inferência anterior.
+    val isUiEnabled = !isUrlImporting
+
+
     LaunchedEffect(anythingChanged, editingTitleText, localObjectiveIntroduction, localObjectiveVideo, localObjectiveOutcome, localTargetAudience, localLanguageTone, localVideoTime) {
         val saveAction = {
             audioViewModel.setVideoTitulo(editingTitleText)
@@ -96,7 +104,8 @@ fun ContextInfoContent(
                 )
             }; Unit
         }
-        provideSaveActionDetails(saveAction, anythingChanged)
+        // A habilitação do botão salvar agora depende de 'isUiEnabled' também
+        provideSaveActionDetails(saveAction, anythingChanged && isUiEnabled)
         onDirtyStateChange(anythingChanged)
     }
 
@@ -144,11 +153,15 @@ fun ContextInfoContent(
                     }
                 }
             } else {
-                IconButton(onClick = { showUrlImportDialog = true }, modifier = Modifier.size(iconButtonSize)) {
+                IconButton(
+                    onClick = { showUrlImportDialog = true },
+                    modifier = Modifier.size(iconButtonSize),
+                    enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o botão >>>>>
+                ) {
                     Icon(
                         imageVector = Icons.Filled.CloudDownload,
                         contentDescription = stringResource(R.string.context_info_import_data_button_desc),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = if (isUiEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f), // <<<<< ADICIONADO: Muda a cor se desabilitado >>>>>
                         modifier = Modifier.size(progressIndicatorSize) // Usa o mesmo tamanho base do indicador
                     )
                 }
@@ -174,6 +187,7 @@ fun ContextInfoContent(
                 Switch(
                     checked = isChatNarrative,
                     onCheckedChange = { audioViewModel.setIsChatNarrative(it) },
+                    enabled = isUiEnabled, // <<<<< ADICIONADO: Habilita/desabilita o switch >>>>>
                     thumbContent = if (isChatNarrative) {
                         { Icon(imageVector = Icons.Filled.Chat, contentDescription = stringResource(R.string.audio_info_mode_dialogue)) }
                     } else {
@@ -190,24 +204,68 @@ fun ContextInfoContent(
             label = { Text(stringResource(R.string.context_info_label_title)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+            enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo >>>>>
         )
 
         SettingsSectionTitleInternal(stringResource(R.string.context_info_section_narrative_objectives))
-        SettingTextFieldItemInternal(stringResource(R.string.context_info_label_introduction), localObjectiveIntroduction, { newText -> localObjectiveIntroduction = newText }, singleLine = false, maxLines = 3, modifier = Modifier.padding(bottom = 8.dp))
-        SettingTextFieldItemInternal(stringResource(R.string.context_info_label_main_content), localObjectiveVideo, { newText -> localObjectiveVideo = newText }, singleLine = false, maxLines = 3, modifier = Modifier.padding(bottom = 8.dp))
-        SettingTextFieldItemInternal(stringResource(R.string.context_info_label_desired_outcome), localObjectiveOutcome, { newText -> localObjectiveOutcome = newText }, singleLine = false, maxLines = 3, modifier = Modifier.padding(bottom = 16.dp))
+        SettingTextFieldItemInternal(
+            label = stringResource(R.string.context_info_label_introduction),
+            value = localObjectiveIntroduction,
+            onValueChange = { newText -> localObjectiveIntroduction = newText },
+            singleLine = false,
+            maxLines = 3,
+            modifier = Modifier.padding(bottom = 8.dp),
+            enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo >>>>>
+        )
+        // CORREÇÃO: Substituir a referência incorreta a R.org pelo seu próprio recurso de string
+        SettingTextFieldItemInternal(
+            label = stringResource(R.string.context_info_label_main_content),
+            value = localObjectiveVideo,
+            onValueChange = { newText -> localObjectiveVideo = newText },
+            singleLine = false,
+            maxLines = 3,
+            modifier = Modifier.padding(bottom = 8.dp),
+            enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo >>>>>
+        )
+        SettingTextFieldItemInternal(
+            label = stringResource(R.string.context_info_label_desired_outcome),
+            value = localObjectiveOutcome,
+            onValueChange = { newText -> localObjectiveOutcome = newText },
+            singleLine = false,
+            maxLines = 3,
+            modifier = Modifier.padding(bottom = 16.dp),
+            enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo >>>>>
+        )
 
         SettingsSectionTitleInternal(stringResource(R.string.context_info_section_narrative_details))
-        SettingTextFieldItemInternal(stringResource(R.string.context_info_label_target_audience), localTargetAudience, { newText -> localTargetAudience = newText }, placeholder = stringResource(R.string.context_info_placeholder_target_audience), singleLine = false, maxLines = 3, modifier = Modifier.padding(bottom = 8.dp))
-        SettingTextFieldItemInternal(stringResource(R.string.context_info_label_language_tone), localLanguageTone, { newText -> localLanguageTone = newText }, placeholder = stringResource(R.string.context_info_placeholder_language_tone), singleLine = false, maxLines = 3, modifier = Modifier.padding(bottom = 16.dp))
+        SettingTextFieldItemInternal(
+            label = stringResource(R.string.context_info_label_target_audience),
+            value = localTargetAudience,
+            onValueChange = { newText -> localTargetAudience = newText },
+            placeholder = stringResource(R.string.context_info_placeholder_target_audience),
+            singleLine = false,
+            maxLines = 3,
+            modifier = Modifier.padding(bottom = 8.dp),
+            enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo >>>>>
+        )
+        SettingTextFieldItemInternal(
+            label = stringResource(R.string.context_info_label_language_tone),
+            value = localLanguageTone,
+            onValueChange = { newText -> localLanguageTone = newText },
+            placeholder = stringResource(R.string.context_info_placeholder_language_tone),
+            singleLine = false,
+            maxLines = 3,
+            modifier = Modifier.padding(bottom = 16.dp),
+            enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo >>>>>
+        )
 
         SettingsSectionTitleInternal(stringResource(R.string.context_info_section_estimated_duration))
         val timeOptions = listOf("30", "60", "180", "300", "600")
         Box(modifier = Modifier.padding(bottom = 16.dp)) {
             ExposedDropdownMenuBox(
                 expanded = timeDropdownExpanded,
-                onExpandedChange = { timeDropdownExpanded = !timeDropdownExpanded }
+                onExpandedChange = { timeDropdownExpanded = !timeDropdownExpanded },
             ) {
                 OutlinedTextField(
                     value = if (localVideoTime in timeOptions) stringResource(R.string.context_info_dropdown_time_unit_seconds, localVideoTime) else if (localVideoTime.isBlank()) stringResource(R.string.context_info_dropdown_select_time) else stringResource(R.string.context_info_dropdown_time_unit_seconds, localVideoTime),
@@ -215,10 +273,11 @@ fun ContextInfoContent(
                     readOnly = true,
                     label = { Text(stringResource(R.string.context_info_label_time_seconds)) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = timeDropdownExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo >>>>>
                 )
                 ExposedDropdownMenu(
-                    expanded = timeDropdownExpanded,
+                    expanded = timeDropdownExpanded && isUiEnabled, // <<<<< ADICIONADO: Desabilita o menu se a UI estiver desabilitada >>>>>
                     onDismissRequest = { timeDropdownExpanded = false }
                 ) {
                     timeOptions.forEach { selectionOption ->
@@ -228,7 +287,7 @@ fun ContextInfoContent(
                                 localVideoTime = selectionOption
                                 timeDropdownExpanded = false
                             },
-                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita os itens do menu >>>>>
                         )
                     }
                 }
@@ -264,7 +323,8 @@ fun ContextInfoContent(
                                 }
                             }
                             keyboardController?.hide()
-                        })
+                        }),
+                        enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o campo no diálogo >>>>>
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
@@ -289,7 +349,8 @@ fun ContextInfoContent(
                                 )
                             }
                         }
-                    }
+                    },
+                    enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o botão no diálogo >>>>>
                 ) {
                     Text(stringResource(R.string.context_info_dialog_action_import))
                 }
@@ -301,6 +362,32 @@ fun ContextInfoContent(
             }
         )
     }
+
+    // <<<<< ADICIONADO: Overlay de progresso para bloquear a UI >>>>>
+    if (isUrlImporting) {
+        Dialog(onDismissRequest = { /* Não permite fechar */ }) {
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(R.string.context_info_dialog_loading_message), // Adicione esta string ao strings.xml
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center
+                    )
+                    // Opcional: Um botão de cancelamento aqui se a operação for cancelável
+                    TextButton(onClick = { audioViewModel.cancelUrlImport() }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            }
+        }
+    }
+    // <<<<< FIM DO OVERLAY DE PROGRESSO >>>>>
 }
 
 @Composable
@@ -324,7 +411,8 @@ internal fun SettingTextFieldItemInternal(
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true // <<<<< ADICIONADO: Parâmetro 'enabled' >>>>>
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     Column(modifier = modifier.fillMaxWidth()) {
@@ -338,7 +426,7 @@ internal fun SettingTextFieldItemInternal(
             maxLines = maxLines,
             keyboardOptions = if (singleLine) keyboardOptions.copy(imeAction = ImeAction.Done) else keyboardOptions,
             keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
-            enabled = true
+            enabled = enabled // <<<<< ADICIONADO: Usa o parâmetro 'enabled' >>>>>
         )
     }
 }

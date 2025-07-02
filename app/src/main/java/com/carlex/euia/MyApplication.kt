@@ -14,11 +14,12 @@ import androidx.work.WorkQuery
 import com.carlex.euia.BuildConfig
 import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.VideoDataStoreManager
-import com.carlex.euia.data.VideoGeneratorDataStoreManager // <<< Certifique-se que está importado
+import com.carlex.euia.data.VideoGeneratorDataStoreManager 
 import com.carlex.euia.data.VideoProjectDataStoreManager
 import com.carlex.euia.utils.NotificationUtils
 import com.carlex.euia.utils.ProjectPersistenceManager
-import com.carlex.euia.utils.WorkerTags // <<< Certifique-se que está importado
+import com.carlex.euia.utils.WorkerTags 
+import com.carlex.euia.utils.OverlayManager // Importar OverlayManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -48,7 +49,14 @@ class MyApplication : Application() {
         NotificationUtils.createAllNotificationChannels(this)
         Log.d("MyApplication", "Todos os canais de notificação foram criados/verificados.")
 
-        Log.d("MyApplication", "Application onCreate - Registrando AppLifecycleObserver.")
+        // Inicia o monitoramento do OverlayManager para mostrar/esconder o overlay
+        // baseado no estado dos WorkManager.
+        // Passa 'this' (a instância da Application) como contexto.
+        OverlayManager.monitorAndShowOverlayIfNeeded(this)
+        Log.d("MyApplication", "Iniciou monitoramento de overlay.")
+
+
+        Log.d("MyApplication", "Application onCreate - Registrando AppLifecycleObserver. (Fix: Verificacao de lock de renderizacao)")
         ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver(this))
     }
 }
@@ -67,15 +75,15 @@ class AppLifecycleObserver(private val context: Application) : DefaultLifecycleO
                     val audioDataStoreManager = AudioDataStoreManager(context)
                     val videoDataStoreManager = VideoDataStoreManager(context)
                     val videoProjectDataStoreManager = VideoProjectDataStoreManager(context)
-                    // <<< ADICIONADO: Instanciar o DataStore do Gerador de Vídeo >>>
+                    // ADICIONADO: Instanciar o DataStore do Gerador de Vídeo
                     val videoGeneratorDataStoreManager = VideoGeneratorDataStoreManager(context)
 
                     checkImageProcessingState(videoDataStoreManager, workManager)
                     checkAudioProcessingState(audioDataStoreManager, workManager)
                     checkVideoScenesState(videoProjectDataStoreManager, workManager)
                     
-                    // <<< CORREÇÃO PRINCIPAL: Chamar a verificação do estado de renderização >>>
-                    checkVideoRenderingState(videoGeneratorDataStoreManager, workManager)
+                    // CORREÇÃO PRINCIPAL: Chamada para verificar e limpar o lock de renderização
+                    checkVideoRenderingState(videoGeneratorDataStoreManager, workManager) // Nova funcao para verificar o lock de renderizacao
                     
                 } catch (e: Exception) {
                     Log.e(TAG, "Error during state check/cleanup in onStart", e)
@@ -151,7 +159,7 @@ class AppLifecycleObserver(private val context: Application) : DefaultLifecycleO
         }
     }
     
-    // <<< CORREÇÃO PRINCIPAL: Adicionar esta nova função >>>
+    // CORREÇÃO PRINCIPAL: Adicionada funcao para verificar e limpar o lock de renderizacao de video
     private suspend fun checkVideoRenderingState(
         videoGeneratorDataStoreManager: VideoGeneratorDataStoreManager,
         workManager: WorkManager

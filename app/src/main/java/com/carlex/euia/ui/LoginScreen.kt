@@ -108,11 +108,11 @@ fun LoginScreen(
             ) {
                 // Logo do aplicativo
                 Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground), // Verifique se este drawable existe
+                    painter = painterResource(id = R.drawable.logo), // Verifique se este drawable existe
                     contentDescription = stringResource(R.string.content_desc_app_logo),
-                    modifier = Modifier.size(120.dp)
+                    modifier = Modifier.size(240.dp)
                 )
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
                     text = stringResource(R.string.login_title),
