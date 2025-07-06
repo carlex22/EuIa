@@ -1,4 +1,4 @@
-// File: utils/BitmapUtils.kt
+// File: euia/utils/BitmapUtils.kt
 package com.carlex.euia.utils
 
 import android.content.Context
@@ -20,7 +20,7 @@ object BitmapUtils {
 
     private const val TAG = "BitmapUtils"
 
-    // ... (demais funções como decodeSampledBitmapFromUri, decodeBitmapFromByteArray, etc., permanecem iguais) ...
+    // ... (funções decodeSampledBitmapFromUri, decodeBitmapFromByteArray, etc., permanecem as mesmas) ...
     suspend fun decodeSampledBitmapFromUri(
         context: Context,
         uri: Uri,
@@ -127,19 +127,6 @@ object BitmapUtils {
         //Log.d(TAG, "Original: ${width}x$height, Requerido: ${reqWidth}x$reqHeight, SampleSize: $inSampleSize")
         return inSampleSize
     }
-
-    // <<< --- INÍCIO DA FUNÇÃO MODIFICADA --- >>>
-    /**
-     * Redimensiona um Bitmap para as dimensões finais desejadas.
-     * Cria um fundo usando a imagem original esticada, desfocada e esbranquiçada.
-     * Sobrepõe a imagem original redimensionada proporcionalmente (letterbox/pillarbox).
-     *
-     * @param sourceBitmap O Bitmap original.
-     * @param targetWidth A largura final desejada.
-     * @param targetHeight A altura final desejada.
-     * @return Um novo Bitmap com o fundo processado e a imagem proporcional sobreposta, ou null em caso de erro.
-     *         O sourceBitmap NÃO é reciclado por esta função.
-     */
      
      fun cropToAspectRatioCenter(
         source: Bitmap,
@@ -192,10 +179,7 @@ object BitmapUtils {
             var sourceBitmap = cropToAspectRatioCenter(sourceBitmap1, 3 , 4)
             return sourceBitmap
         }
-        
     }
-    // <<< --- FIM DA FUNÇÃO MODIFICADA --- >>>
-
 
     suspend fun saveBitmapToFile(
         context: Context,
@@ -203,8 +187,9 @@ object BitmapUtils {
         projectDirName: String,
         subDir: String,
         baseName: String,
-        format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
-        quality: Int = 85
+        // OTIMIZAÇÃO: Parâmetros padrão para WebP
+        format: Bitmap.CompressFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP,
+        quality: Int = 65
     ): String? = withContext(Dispatchers.IO) {
         val directory = getAppSpecificDirectory(context, projectDirName, subDir)
         if (directory == null) {
@@ -214,12 +199,10 @@ object BitmapUtils {
 
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val uuid = UUID.randomUUID().toString().substring(0, 8)
-        val extension = when (format) {
-            Bitmap.CompressFormat.JPEG -> "jpg"
-            Bitmap.CompressFormat.PNG -> "png"
-            Bitmap.CompressFormat.WEBP, Bitmap.CompressFormat.WEBP_LOSSY, Bitmap.CompressFormat.WEBP_LOSSLESS -> "webp"
-            else -> "img"
-        }
+        
+        // OTIMIZAÇÃO: Extensão sempre será webp com os novos padrões
+        val extension = "webp"
+        
         val fileName = "${baseName}_${timestamp}_$uuid.$extension"
         val file = File(directory, fileName)
 

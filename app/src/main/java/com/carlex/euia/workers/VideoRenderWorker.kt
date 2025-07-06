@@ -18,8 +18,7 @@ import com.carlex.euia.MainActivity
 import com.carlex.euia.R
 import com.carlex.euia.data.VideoGeneratorDataStoreManager // <<< IMPORTAÇÃO ADICIONADA
 import com.carlex.euia.data.VideoProjectDataStoreManager
-import com.carlex.euia.utils.NotificationUtils // <<< IMPORTAÇÃO ADICIONADA
-import com.carlex.euia.utils.VideoEditorComTransicoes
+import com.carlex.euia.utils.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
@@ -88,7 +87,7 @@ class VideoRenderWorker(
             }
 
             val totalDurationForProgress = scenesToInclude.sumOf { it.tempoFim!! - it.tempoInicio!! }
-
+            var pro = -1
             val finalVideoPath = VideoEditorComTransicoes.gerarVideoComTransicoes(
                 context = appContext,
                 scenes = scenesToInclude,
@@ -107,6 +106,11 @@ class VideoRenderWorker(
                                 if (totalDurationForProgress > 0) {
                                     val progressFloat = (timeInSeconds / totalDurationForProgress).toFloat().coerceIn(0f, 1f)
                                     val progressPercent = (progressFloat * 100).toInt()
+                                    if (progressPercent > pro){
+                                        Log.w(TAG, "progressPercent: $progressPercent")
+                                        OverlayManager.showOverlay(appContext, appContext.getString(R.string.notification_title_video_render), progressPercent) 
+                                        pro = progressPercent
+                                    }
                                     
                                     updateNotification(progressPercent, "$progressPercent%")
                                     setProgressAsync(workDataOf(KEY_PROGRESS to progressFloat))
@@ -160,7 +164,9 @@ class VideoRenderWorker(
 
         if (isFinished || isError) {
             builder.setProgress(0, 0, false).setOngoing(false)
+            //OverlayManager.hideOverlay(applicationContext)
         } else {
+            //OverlayManager.hideOverlay(applicationContext)
             builder.setProgress(100, progress, false).setOngoing(true)
         }
         return builder.build()

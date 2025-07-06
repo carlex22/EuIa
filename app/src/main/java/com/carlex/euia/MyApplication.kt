@@ -52,7 +52,7 @@ class MyApplication : Application() {
         // Inicia o monitoramento do OverlayManager para mostrar/esconder o overlay
         // baseado no estado dos WorkManager.
         // Passa 'this' (a instância da Application) como contexto.
-        OverlayManager.monitorAndShowOverlayIfNeeded(this)
+        //OverlayManager.monitorAndShowOverlayIfNeeded(this)
         Log.d("MyApplication", "Iniciou monitoramento de overlay.")
 
 

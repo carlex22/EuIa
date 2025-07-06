@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/discard_area_layout"
+    android:layout_width="match_parent"
+    android:layout_height="120dp"
+    android:background="@color/overlay_discard_inactive_color"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:visibility="gone"
+    android:alpha="0.0">
+
+    <ImageView
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:src="@android:drawable/ic_menu_delete"
+        android:contentDescription="@string/overlay_discard_icon_desc"
+        android:tint="@android:color/white" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/overlay_drag_to_discard"
+        android:textColor="@android:color/white"
+        android:textSize="14sp" />
+</LinearLayout>

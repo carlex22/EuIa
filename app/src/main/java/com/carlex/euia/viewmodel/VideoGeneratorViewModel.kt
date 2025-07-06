@@ -233,8 +233,16 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
             val musicFilePath = audioDataStoreManager.videoMusicPath.first()
             val legendFilePath = audioDataStoreManager.legendaPath.first()
             val inputData = workDataOf(VideoRenderWorker.KEY_AUDIO_PATH to audioFilePath, VideoRenderWorker.KEY_MUSIC_PATH to musicFilePath, VideoRenderWorker.KEY_LEGEND_PATH to legendFilePath)
-            val videoRenderRequest = OneTimeWorkRequestBuilder<VideoRenderWorker>().setInputData(inputData).addTag(VideoRenderWorker.TAG_VIDEO_RENDER).build()
+
+            // CORREÇÃO: A chamada para enfileirar o trabalho é a mesma.
+            // O WorkManager usará a configuração do AndroidManifest para decidir o processo.
+            val videoRenderRequest = OneTimeWorkRequestBuilder<VideoRenderWorker>()
+                .setInputData(inputData)
+                .addTag(VideoRenderWorker.TAG_VIDEO_RENDER)
+                .build()
+                
             workManager.enqueue(videoRenderRequest)
+            
             observeWork(videoRenderRequest.id)
             Toast.makeText(appContext, R.string.video_gen_vm_toast_generation_started_background, Toast.LENGTH_LONG).show()
         }

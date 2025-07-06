@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // Ao retornar para a MainActivity, esconda o overlay se estiver visível
-        OverlayManager.hideOverlay(applicationContext)
+        //OverlayManager.hideOverlay(applicationContext)
     }
 
     override fun onPause() {
@@ -155,6 +155,6 @@ class MainActivity : ComponentActivity() {
         // Ao sair da MainActivity, se houver uma renderização em andamento, mostre o overlay
         // POR SIMPLICIDADE, VOU ADICIONAR UMA CHAMADA GENÉRICA NO OverlayManager para ele se auto-monitorar via WorkManager.
         // Isso evita que a MainActivity precise saber o estado de todos os Workers.
-        OverlayManager.monitorAndShowOverlayIfNeeded(applicationContext)
+        //OverlayManager.monitorAndShowOverlayIfNeeded(applicationContext)
     }
 }

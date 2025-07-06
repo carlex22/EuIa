@@ -350,7 +350,7 @@ object GeminiImageApi{
 
             val saveFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSLESS else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP
             
-            return BitmapUtils.saveBitmapToFile(context, resizedBitmap, projectDirName, "gemini_generated_images", cena, saveFormat, 95)
+            return BitmapUtils.saveBitmapToFile(context, resizedBitmap, projectDirName, "gemini_generated_images", cena, saveFormat, 65)
         } finally {
             BitmapUtils.safeRecycle(resizedBitmap, "saveGeneratedBitmap (resized)")
         }

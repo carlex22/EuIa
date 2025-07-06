@@ -173,14 +173,14 @@ android {
         println("STORE_PASSWORD $StorePassword KEY_PASSWORD $KeyPassword")
 
         create("release") {
-            storeFile = file("/data/user/0/com.itsaky.androidide/files/home/euia/app/signing-key.jks")
+            storeFile = file("/data/user/0/com.itsaky.androidide/files/home/euia2/app/signing-key.jks")
             storePassword = StorePassword
             keyAlias = "carlex"
             keyPassword = KeyPassword
         }
 
         getByName("debug") {
-            storeFile = file("/data/user/0/com.itsaky.androidide/files/home/euia/app/signing-key.jks")
+            storeFile = file("/data/user/0/com.itsaky.androidide/files/home/euia2/app/signing-key.jks")
             storePassword = StorePassword
             keyPassword = KeyPassword
             keyAlias = "carlex"

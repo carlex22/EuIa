@@ -237,7 +237,7 @@ object GeminiImageApiImg3 {
             return BitmapUtils.saveBitmapToFile(
                 context = context, bitmap = resizedBitmap, projectDirName = projectDirName,
                 subDir = "gemini_img3_generated_images", baseName = prefixo,
-                format = saveFormat, quality = quality
+                format = saveFormat, quality = 66
             )
         } finally {
             BitmapUtils.safeRecycle(resizedBitmap, "saveGeneratedBitmap_Imagen3 (resized for $prefixo)")

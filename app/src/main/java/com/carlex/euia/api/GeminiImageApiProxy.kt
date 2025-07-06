@@ -293,7 +293,7 @@ object GeminiImageApiProxy {
                 subDir = "gemini_generated_images",
                 baseName = prefixo,
                 format = saveFormat,
-                quality = quality
+                quality = 65
             )
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao salvar bitmap gerado (prefixo '$prefixo'): ${e.message}", e)

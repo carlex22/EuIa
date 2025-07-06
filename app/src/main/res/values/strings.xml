@@ -7,6 +7,40 @@
 
     <!-- Adicione estas strings ao seu arquivo -->
 
+    <!-- Cores existentes no seu tema (ex: Purple80, PurpleGrey80, etc.) -->
+    <!-- ... -->
+
+    <!-- Cores para o Overlay -->
+    <color name="overlay_discard_active_color">#FF4081</color> <!-- Vermelho vibrante para a lixeira ativa (ex: Color.Magenta ou similar) -->
+    <color name="overlay_discard_inactive_color">#99FF0000</color> <!-- Vermelho semi-transparente para a lixeira inativa (Alpha 99 para ser visível mas discreto) -->
+
+    <!-- Seus outros recursos de cor, por exemplo: -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Overlay -->
+    <string name="overlay_permission_dialojg_title">Permissão de Sobreposição</string>
+    <string name="overlay_permission_dialog_mesksage">Para exibir o progresso em segundo plano, o aplicativo precisa da permissão "Desenhar sobre outros apps". Por favor, conceda esta permissão nas configurações.</string>
+    <string name="overlay_permission_dialog_confirm_kbutton">Ir para Configurações</string>
+    <string name="overlay_permission_dialog_dismjiss_button">Cancelar</string>
+    <string name="overlay_permission_denied_feendback">Permissão negada. O progresso em segundo plano pode não ser exibido.</string>
+    <string name="overlay_render_in_pjrogress">Renderizando vídeo...</string>
+    <string name="overlay_default_jmessage">Processando em segundo plano...</string>
+    <string name="overlay_tap_to_rejturn">Toque para retornar ao aplicativo</string>
+    <string name="overlay_foreground_unotification_title">Serviço de Overlay Ativo</string>
+    <string name="overlay_discard_icon_desc">Ícone de lixeira para descartar o overlay</string>
+    <string name="overlay_drag_to_discard">Arraste para descartar</string>
+
+    <!-- Outras strings existentes no seu projeto -->
+
+
+
+
 
 <!-- strings.xml -->
 
@@ -23,7 +57,8 @@
     <string name="error_no_audio_for_video">Nenhum áudio principal para o vídeo.</string>
     <string name="error_general_unspeycified_failure">Falha inespecífica.</string>
 
-
+    <string name="notification_title_audio_render">Gerando Audio</string>
+ 
     <string name="overlay_permission_dialog_thitle">Permissão de Sobreposição</string>
     <string name="overlay_permission_dialog_kmessage">Para exibir o progresso em segundo plano, o aplicativo precisa da permissão "Desenhar sobre outros apps". Por favor, conceda esta permissão nas configurações.</string>
     <string name="overlay_permission_dialog_confiyrm_button">Ir para Configurações</string>

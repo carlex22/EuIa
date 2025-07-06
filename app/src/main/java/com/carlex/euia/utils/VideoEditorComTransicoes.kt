@@ -37,7 +37,7 @@ import kotlin.math.min
 object VideoEditorComTransicoes {
 
     private const val TAG = "VideoEditorComTransicoes"
-    val tempoTransicaoPadrao = 0.2
+    val tempoTransicaoPadrao = 0.5
 
     private const val DEFAULT_VIDEO_WIDTH = 720
     private const val DEFAULT_VIDEO_HEIGHT = 1280
@@ -80,10 +80,8 @@ object VideoEditorComTransicoes {
     ): String {
         Log.d(TAG, "🎬 Iniciando gerarVideo com ${scenes.size} cenas SceneLinkData")
         require(scenes.isNotEmpty()) { "A lista de cenas não pode estar vazia" }
-        
+        // <<<< INÍCIO DA MODIFICAÇÃO >>>>
         val videoPreferencesManager = VideoPreferencesDataStoreManager(context)
-
-        // CORREÇÃO: Acessar os valores individualmente dentro do withContext
         val (projectDirName, larguraVideoPref, alturaVideoPref, enableSubtitlesPref, enableSceneTransitionsPref, enableZoomPanPref, videoFpsPref, videoHdMotionPref) = withContext(Dispatchers.IO) {
             val dirName = videoPreferencesManager.videoProjectDir.first()
             val largura = videoPreferencesManager.videoLargura.first()
@@ -94,7 +92,6 @@ object VideoEditorComTransicoes {
             val fps = videoPreferencesManager.videoFps.first()
             val hdMotion = videoPreferencesManager.videoHdMotion.first()
             Log.d(TAG, "Preferências lidas: Dir=$dirName, LxA=${largura ?: "N/D"}x${altura ?: "N/D"}, Legendas=$subtitles, Transições=$transitions, ZoomPan=$zoomPan, FPS=$fps, HDMotion=$hdMotion")
-            // Retorna um Octuple explícito
             Octuple(dirName, largura, altura, subtitles, transitions, zoomPan, fps, hdMotion)
         }
 
@@ -109,7 +106,7 @@ object VideoEditorComTransicoes {
         Log.d(TAG, "Habilitar ZoomPan (preferência): $enableZoomPanPref")
         Log.d(TAG, "FPS do Vídeo (preferência): $videoFpsPref")
         Log.d(TAG, "Habilitar HD Motion (preferência): $videoHdMotionPref")
-        // FIM DA MODIFICAÇÃO
+        // <<<< FIM DA MODIFICAÇÃO >>>>
 
         val outputPath = createOutputFilePath(context, "video_final_editado", projectDirName)
 
@@ -236,14 +233,13 @@ object VideoEditorComTransicoes {
             usarZoomPan = enableZoomPanPref,
             larguraVideoPreferida = larguraVideoPref, // Passa a preferência original
             alturaVideoPreferida = alturaVideoPref,     // Passa a preferência original
-            fps = videoFpsPref, // NOVO
-            hdMotion = videoHdMotionPref // NOVO
+            fps = videoFpsPref, // <<<< NOVO
+            hdMotion = videoHdMotionPref // <<<< NOVO
         )
-        //Log.d(TAG, "🛠️ Comando FFmpeg:\n$comandoFFmpeg")
+        Log.d(TAG, "🛠️ Comando FFmpeg:\n$comandoFFmpeg")
 
         return suspendCancellableCoroutine { cont ->
             Log.i(TAG, "🚀 Iniciando execução do FFmpeg...")
-            // CORREÇÃO: Variável da sessão é passada para o lambda
             val session = FFmpegKit.executeAsync(comandoFFmpeg, { completedSession ->
                 // Limpa a imagem preta temporária SE ELA FOI CRIADA
                 blackImagePathTemporary?.let {
@@ -276,21 +272,21 @@ object VideoEditorComTransicoes {
                 } else {
                     logCallback("❌ FFmpeg FALHOU com código de retorno: $returnCode (Tempo: ${"%.2f".format(Locale.US, timeElapsed)}s)")
                     Log.e(TAG, "--- Logs Completos da Falha --- \n$logs\n --- Fim dos Logs ---")
-                    cont.resumeWithException(VideoGenerationException("Falha na concatenação com FFmpeg. Código: ${returnCode}. Verifique os logs para detalhes."))
+                    cont.resumeWithException(VideoGenerationException("Falha na execução do FFmpeg (Código: $returnCode). Logs:\n$logs"))
                 }
             }, { log ->
                  logCallback(log.message)
-                 //Log.v(TAG, "FFmpegLog: ${log.message}")
+                 Log.v(TAG, "FFmpegLog: ${log.message}")
                },
                { stat ->
                  val statMessage = "📊 FFmpeg Stats: Tempo=${stat.time}ms, Tamanho=${stat.size}, Taxa=${"%.2f".format(Locale.US, stat.bitrate)}, Vel=${"%.2f".format(Locale.US, stat.speed)}x"
-                 //Log.d(TAG, statMessage)
+                 Log.d(TAG, statMessage)
                })
 
             cont.invokeOnCancellation {
                 Log.w(TAG,"🚫 Operação FFmpeg cancelada!")
                 logCallback("🚫 Operação FFmpeg cancelada!")
-                FFmpegKit.cancel(session.sessionId) // Acessa sessionId do objeto 'session'
+                FFmpegKit.cancel(session.sessionId)
                 // Limpa a imagem preta temporária também em caso de cancelamento
                 blackImagePathTemporary?.let {
                     val tempFile = File(it)
@@ -388,24 +384,30 @@ private fun buildFFmpeg(
 
         // 3. Processa a imagem/vídeo da frente
         
-       var squareDix = minOf(w, h)
-        var squareDiy = minOf(w, h)
+        var squareDix = w
+        var squareDiy = h
+        var ss = "${w}x${h}"
         
         if (w>h){
-            squareDix = (squareDix * 1.2).toInt()
+           squareDix = (squareDiy * 1.2).toInt()
+            ss = "${squareDix}x${squareDiy}"
         } else if (w<h){
-            squareDiy = (squareDiy * 1.2).toInt()
+            squareDiy = (squareDix * 1.2).toInt()
+            ss = "${squareDix}y${squareDiy}"
         }
         
         if (isVideo) {
             // Para vídeos, aplica letterbox/pillarbox para caber no quadro quadrado
-            filterComplex.append("  [main${i}]scale=$squareDix:$squareDiy:force_original_aspect_ratio=decrease[fg_scaled${i}];\n")
+            filterComplex.append("[main${i}]scale=$squareDix:$squareDiy:force_original_aspect_ratio=decrease[fg_scaled${i}];\n")
         } else {
             // Para imagens, aplica o zoompan primeiro (se habilitado), depois corta para o quadrado
             val fgChain = mutableListOf<String>()
             if (usarZoomPan) {
                 val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, squareDix, squareDiy, frames, i)
-                fgChain.add("zoompan=z=$zoomExpr:s=${squareDix}x${squareDiy}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps")
+                fgChain.add("scale=${squareDix}:${squareDiy}:force_original_aspect_ratio=decrease,"
+                          + "pad=${squareDix}:${squareDiy}:(ow-iw)/2:(oh-ih)/2:color=black," 
+                          + "setsar=1,"
+                          + "zoompan=z=$zoomExpr:s=${ss}:d=$frames:x=$xExpr:y=$yExpr:fps=$fps")
             }
             fgChain.add("crop=$squareDix:$squareDiy")
              if (hdMotion) {
@@ -524,7 +526,7 @@ val videoStreamFinal: String = when {
     cmd.append("-map \"$videoComLegendasPad\" -map \"[a_out]\" ")
     // NÃO use -r 30 aqui! O FPS já está travado lá em cima, para não gerar drop/double frames!
     //cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p ")
-    cmd.append("-c:v libx264 -preset veryfast -crf 25 -pix_fmt yuv420p -r $fps ")
+    cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $fps ")
     cmd.append("-movflags +faststart ")
     val duracaoTotalVideoCalculada =
         duracaoCenas.sum() + (if (usarTransicoes && mediaPaths.size > 1) (mediaPaths.size - 1) * tempoDeTransicaoEfetivo else 0.0)
@@ -548,7 +550,6 @@ fun obterDimensoesImagem(path: String): Pair<Int, Int>? {
 }
 
 
-
 fun gerarZoompanExpressao(
     imgCaminho: String,
     larguraVideo: Int,
@@ -557,10 +558,6 @@ fun gerarZoompanExpressao(
     cenaIdx: Int = -1
 ): Triple<String, String, String> {
     val (larguraImg, alturaImg) = obterDimensoesImagem(imgCaminho) ?: (1 to 1) // Evita zero!
-    
-    
-   // var larguraVideo = minOf(larguraVideo1,alturaVideo1)
-   // var alturaVideo = minOf(larguraVideo1,alturaVideo1)
     
     val escalaX =  larguraVideo.toDouble() / larguraImg.toDouble()
     val escalaY =  alturaVideo.toDouble() / alturaImg.toDouble() 
@@ -579,23 +576,25 @@ fun gerarZoompanExpressao(
     
     if (larguraAjuste <= larguraVideo && alturaAjuste < alturaVideo){
         var t = padX 
-        xExpr = "'($t-(($padX/($frames))*(on)))'"
+        xExpr = "'($t-(($t/$frames)*on))'"
     }
     if (larguraAjuste < larguraVideo && alturaAjuste <= alturaVideo){
-        var t = padY 
-        yExpr = "'($t-(($padY/($frames))*(on)))'"
+        var t = padY
+        yExpr = "'($t-(($t/$frames)*on))'"
     }      
 
-    val zoomExpr = "'$zoom + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/3000)'"
+    val zoomExpr = "'$zoom + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/1000)'"
 
-    Log.i("ZoomPan", "Cena $cenaIdx - Img: ${larguraImg}x${alturaImg} | Video: ${larguraVideo}x${alturaVideo}")
-    Log.i("ZoomPan", "Cena $cenaIdx - escalaX: $escalaX | escalaY: $escalaY | zoomAjuste: $zoomAjuste")
-    Log.i("ZoomPan", "Cena $cenaIdx - larguraAjuste: $larguraAjuste | alturaAjuste: $alturaAjuste")
-    Log.i("ZoomPan", "Cena $cenaIdx - escalaX1: $escalaX1 | escalaY1: $escalaY1 | zoomFixo: $zoomFixo")
-    Log.i("ZoomPan", "Cena $cenaIdx - xExpr: $xExpr | yExpr: $yExpr | zoom: $zoom")
+    Log.i(TAG, "Cena $cenaIdx - Img: ${larguraImg}x${alturaImg} | Video: ${larguraVideo}x${alturaVideo}")
+    Log.i(TAG, "Cena $cenaIdx - escalaX: $escalaX | escalaY: $escalaY | zoomAjuste: $zoomAjuste")
+    Log.i(TAG, "Cena $cenaIdx - larguraAjuste: $larguraAjuste | alturaAjuste: $alturaAjuste")
+    Log.i(TAG, "Cena $cenaIdx - escalaX1: $escalaX1 | escalaY1: $escalaY1 | zoomFixo: $zoomFixo")
+    Log.i(TAG, "Cena $cenaIdx - xExpr: $xExpr | yExpr: $yExpr | zoom: $zoom")
 
     return Triple(zoomExpr, xExpr, yExpr)
 }
+
+
 
     private fun copiarFonteParaCache(context: Context, nomeFonte: String): String {
         val assetPath = "fonts/$nomeFonte"
