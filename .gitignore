@@ -12,7 +12,7 @@ local.properties
 /app/build/
 
 # Prompts (seus arquivos customizados)
-/app/src/main/java/com/carlex/euia/prompts/
+#/app/src/main/java/com/carlex/euia/prompts/
 
 # Google Services (arquivos de configuração sensíveis)
 /app/google-services.json
