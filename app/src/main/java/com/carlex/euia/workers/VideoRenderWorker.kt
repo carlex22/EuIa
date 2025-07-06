@@ -85,6 +85,8 @@ class VideoRenderWorker(
                 val error = "Dados essenciais faltando (Cenas: ${scenesToInclude.size}, Áudio: ${!audioPath.isNullOrBlank()})"
                 throw IllegalStateException(error)
             }
+            
+            OverlayManager.showOverlay(appContext, appContext.getString(R.string.notification_title_video_render), 0) 
 
             val totalDurationForProgress = scenesToInclude.sumOf { it.tempoFim!! - it.tempoInicio!! }
             var pro = -1
@@ -95,7 +97,10 @@ class VideoRenderWorker(
                 musicaPath = musicPath,
                 legendaPath = legendPath,
                 logCallback = { logMessage ->
-                    val timeMatch = Regex("time=(\\d{2}:\\d{2}:\\d{2}\\.\\d{2})").find(logMessage)
+                
+                    Log.w(TAG, "logMessage: $logMessage")
+                                  
+                    /*val timeMatch = Regex("time=(\\d{2}:\\d{2}:\\d{2}\\.\\d{2})").find(logMessage)
                     timeMatch?.let {
                         val timeString = it.groupValues[1]
                         val parts = timeString.split(":", ".")
@@ -119,11 +124,42 @@ class VideoRenderWorker(
                                 Log.w(TAG, "Falha ao parsear tempo do log FFmpeg: '$timeString'", e)
                             }
                         }
+                    }*/
+                    
+                    val loteMatch = Regex("Lote (\\d+) de (\\d+), Duracao: ([\\d.]+), Concluido=([\\d.]+)").find(logMessage)
+                    loteMatch?.let {
+                        val loteAtual = it.groupValues[1].toInt()
+                        val totalLotes = it.groupValues[2].toInt()
+                        val duracao = it.groupValues[3].toDouble()
+                        val concluido = it.groupValues[4].toDouble()
+                    
+                        val progressoGlobal = (concluido / (duracao * totalLotes)) * 100
+                        
+                        val progressoPorLote = (1.0 / totalLotes) * 100
+                        val progressoAtualNoLote = (concluido / duracao) * progressoPorLote
+                        val progressoAcumulado = progressoPorLote * (loteAtual - 1) + progressoAtualNoLote
+                 
+                        val progressoPercent = (progressoAcumulado.toInt()).coerceIn(0, 100)
+                        
+                        if (progressoPercent > pro) {
+                            Log.w(TAG, "Progresso global: $progressoPercent%")
+                            OverlayManager.showOverlay(appContext, appContext.getString(R.string.notification_title_video_render), progressoPercent)
+                            updateNotification(progressoPercent, "$progressoPercent%")
+                            setProgressAsync(workDataOf(KEY_PROGRESS to (progressoPercent / 100f)))
+                            pro = progressoPercent
+                        }
+                        
+                        Log.w(TAG, "loteAtual=$loteAtual, totalLotes=$totalLotes, duracao=$duracao, concluido=$concluido, progressoPercent=$progressoPercent, pro=$pro")
+                    
+           
                     }
+                    
                 }
             )
 
             if (finalVideoPath.isNotBlank()) {
+                OverlayManager.hideOverlay(appContext) 
+                        
                 updateNotification(100, "Concluído!", isFinished = true)
                 return Result.success(workDataOf(KEY_OUTPUT_VIDEO_PATH to finalVideoPath))
             } else {

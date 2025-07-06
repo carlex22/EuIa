@@ -10,6 +10,29 @@
     <!-- Cores existentes no seu tema (ex: Purple80, PurpleGrey80, etc.) -->
     <!-- ... -->
 
+<!-- app/src/main/res/values/strings.xml -->
+
+    <!-- Outras strings existentes -->
+
+    <!-- Strings para VideoRenderWorker (NOVAS ou VERIFICAR) -->
+    <string name="video_render_notification_concatenating_batches">Concatenando lotes de vídeo...</string>
+    <string name="video_render_notification_mixing_audio_subtitles">Mixando áudio e adicionando legendas...</string>
+    <string name="video_render_notificagtion_title">Renderização de Vídeo</string>
+    <string name="overlay_stayrting">Iniciando processo...</string>
+
+    <!-- Strings de Erro/Status (VERIFICAR ou ADICIONAR) -->
+    <string name="error_rendering_duplicate">Erro: Uma renderização já está em andamento ou falhou. Cancele a tarefa anterior ou reinicie o app.</string>
+    <string name="error_missing_essential_data">Dados essenciais faltando. Cenas: %1$d, Áudio presente: %2$b</string>
+    <string name="error_video_editor_empty_path">Editor de vídeo retornou um caminho vazio.</string>
+    <string name="error_rendering_cancelled">Renderização cancelada.</string>
+    <string name="error_unknown">Erro desconhecido.</string>
+    <string name="status_completed">Concluído!</string>
+    <string name="status_failed">Falhou!</string>
+
+
+
+
+
 
 
 
