@@ -270,11 +270,11 @@ object FirebaseImagenApi {
                     val imagesDir = File(projectDir, "images")
                     if (!imagesDir.exists()) imagesDir.mkdirs()
 
-                    val outputFileName = "${cena}_${System.currentTimeMillis()}.jpg"
+                    val outputFileName = "${cena}_${System.currentTimeMillis()}.webp"
                     val outputFile = File(imagesDir, outputFileName)
 
                     FileOutputStream(outputFile).use { out ->
-                        val successCompress = geradaBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                        val successCompress = geradaBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 90, out)
                         if (!successCompress) {
                             Log.e(TAG, "Falha ao comprimir/salvar a imagem gerada: ${outputFile.absolutePath}")
                             return@withContext Result.failure(Exception("Falha ao salvar imagem gerada."))

@@ -4,8 +4,9 @@ package com.carlex.euia.api
 
 import android.app.Application
 import android.content.Context
-import android.graphics.Bitmap
+import android.graphics.Bitmap // Ainda pode ser necessário para outras funções, mas não mais para compressão direta
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.util.Base64
 import android.util.Log
 import com.carlex.euia.BuildConfig
@@ -105,6 +106,7 @@ object GeminiTextAndVisionProRestApi {
     
     private const val modelName = "gemini-2.5-pro"
     private const val TIPO_DE_CHAVE = "text"
+    private const val RETRY_DELAY_MILLIS = 1000L
 
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val gerenciadorDeChaves: GerenciadorDeChavesApi by lazy { GerenciadorDeChavesApi(firestore) }
@@ -136,9 +138,9 @@ object GeminiTextAndVisionProRestApi {
 
     suspend fun perguntarAoGemini(
         pergunta: String,
-        imagens: List<String>,
+        imagens: List<String>, // <<<< Continua recebendo caminhos de arquivo (strings)
         arquivoTexto: String? = null,
-        youtubeUrl: String? = null // Mantido para compatibilidade, embora não seja usado na requisição atual
+        youtubeUrl: String? = null
     ): Result<String> {
         val applicationContext = getApplicationFromContext()
             ?: return Result.failure(IllegalStateException("Contexto da aplicação não disponível."))
@@ -164,15 +166,17 @@ object GeminiTextAndVisionProRestApi {
                     try {
                         chaveAtual = gerenciadorDeChaves.getChave(TIPO_DE_CHAVE)
                         
-                        val bitmaps = processarImagens(ajustarCaminhosDeImagem(imagens))
+                        // <<<<< ALTERAÇÃO AQUI: Passamos os caminhos ajustados diretamente >>>>>
+                        val adjustedImagePaths = ajustarCaminhosDeImagem(imagens) 
                         val textoArquivoLido = arquivoTexto?.let { lerArquivoTexto(it) }
 
                         val result = performRestCall(
                             modelName = modelName,
                             apiKey = chaveAtual,
                             prompt = pergunta,
-                            bitmaps = bitmaps,
-                            additionalText = textoArquivoLido
+                            imagePaths = adjustedImagePaths, // <<<< AGORA PASSAMOS List<String>
+                            additionalText = textoArquivoLido,
+                            youtubeUrl = youtubeUrl
                         )
 
                         if (result.isSuccess) {
@@ -186,7 +190,7 @@ object GeminiTextAndVisionProRestApi {
                         if (chaveAtual != null) gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)
                         tentativas++
                         if (tentativas >= MAX_TENTATIVAS) throw Exception("Máximo de tentativas atingido. Último erro: ${e.message}", e)
-                        delay(1000)
+                        delay(RETRY_DELAY_MILLIS)
                     }
                 }
                 throw Exception("Falha ao obter resposta do Gemini após $MAX_TENTATIVAS tentativas.")
@@ -205,18 +209,56 @@ object GeminiTextAndVisionProRestApi {
         modelName: String,
         apiKey: String,
         prompt: String,
-        bitmaps: List<Bitmap>,
-        additionalText: String?
+        imagePaths: List<String>, // <<<< ALTERAÇÃO: Parâmetro agora é List<String>
+        additionalText: String?,
+        youtubeUrl: String?
     ): Result<String> {
         val parts = mutableListOf<RestPart>()
+        
+        if (!youtubeUrl.isNullOrBlank() && (youtubeUrl.contains("youtube.com", ignoreCase = true) || youtubeUrl.contains("youtu.be", ignoreCase = true))) {
+            parts.add(RestPart(text = "Por favor, analise e considere o conteúdo deste vídeo do YouTube para a sua resposta: $youtubeUrl\n"))
+            Log.d(TAG, "YouTube URL adicionada como texto ao prompt: $youtubeUrl")
+        }
+
         parts.add(RestPart(text = prompt))
         if (additionalText != null) parts.add(RestPart(text = additionalText))
-        bitmaps.forEach { bitmap ->
-            val baos = java.io.ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
-            val encodedImage = Base64.encodeToString(baos.toByteArray(), Base64.DEFAULT)
-            parts.add(RestPart(inlineData = RestInlineData("image/jpeg", encodedImage)))
+        
+        // <<<<< ALTERAÇÃO AQUI: LER BYTES DIRETAMENTE DO ARQUIVO >>>>>
+        for (imagePath in imagePaths) {
+            val file = File(imagePath)
+            if (!file.exists()) {
+                Log.w(TAG, "Imagem de referência não encontrada no caminho: $imagePath. Pulando.")
+                continue // Pula para a próxima imagem se o arquivo não existe
+            }
+            try {
+                // Lê todos os bytes do arquivo. Esta é a forma "dupla compressão".
+                val imageBytes = withContext(Dispatchers.IO) { file.readBytes() }
+                
+                // Codifica os bytes brutos para Base64 (sem quebras de linha).
+                val encodedImage = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+                
+                // Determina o MIME type baseado na extensão do arquivo.
+                val mimeType = when (file.extension.lowercase()) {
+                    "webp" -> "image/webp"
+                    "jpg", "jpeg" -> "image/jpeg"
+                    "png" -> "image/png"
+                    // Adicione outros tipos se necessário ou use um fallback mais genérico
+                    else -> {
+                        Log.w(TAG, "Formato de imagem desconhecido para ${file.name}. Usando image/jpeg como fallback.")
+                        "image/jpeg" // Fallback para tipos desconhecidos
+                    }
+                }
+                
+                parts.add(RestPart(inlineData = RestInlineData(mimeType, encodedImage)))
+                Log.d(TAG, "Imagem '${file.name}' (${mimeType}) codificada para Base64 (tamanho Base64: ${encodedImage.length}).")
+
+            } catch (e: IOException) {
+                Log.e(TAG, "Erro de I/O ao ler arquivo de imagem para Base64: $imagePath", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro inesperado ao codificar imagem para Base64: $imagePath", e)
+            }
         }
+        // <<<<< FIM DA ALTERAÇÃO >>>>>
 
         val request = RestGeminiRequest(
             contents = listOf(RestContent(parts = parts)),
@@ -233,15 +275,9 @@ object GeminiTextAndVisionProRestApi {
         return Result.success(fullResponseText)
     }
 
-    // File: euia/api/GeminiTextAndVisionProRestApi.kt
-
-// ... (todo o resto da classe permanece igual)
-
     private fun processStream(body: ResponseBody): String {
         val fullJsonResponse = StringBuilder()
         BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8)).use { reader ->
-            // Simplesmente junta cada linha em uma única string.
-            // A API do Gemini em stream às vezes envia os JSONs quebrados em várias linhas.
             reader.forEachLine { line ->
                 fullJsonResponse.append(line)
             }
@@ -252,17 +288,13 @@ object GeminiTextAndVisionProRestApi {
 
         val finalConcatenatedText = StringBuilder()
         try {
-            // Decodifica a string completa como um Array de elementos JSON.
-            // Não adicionamos mais colchetes, pois a resposta já é um array.
             val jsonArray = jsonParser.decodeFromString<JsonArray>(rawJsonStreamString)
 
             for (jsonElement in jsonArray) {
                 try {
-                    // Decodifica cada elemento do array na nossa data class.
                     val streamResponse = jsonParser.decodeFromJsonElement<RestStreamResponse>(jsonElement)
                     streamResponse.candidates?.firstOrNull()?.content?.parts?.forEach { part ->
                         part.text?.let { textChunk ->
-                            // Remove os marcadores de código ```json e ``` da resposta da IA.
                             val cleanedChunk = textChunk
                                 .replace("```json", "")
                                 .replace("```", "")
@@ -277,21 +309,11 @@ object GeminiTextAndVisionProRestApi {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao processar o JSON Array completo do stream. Retornando resposta bruta como fallback. Erro: ${e.message}", e)
-            // Fallback: Se o parse do array inteiro falhar, retorna o que foi recebido.
             return rawJsonStreamString
         }
 
-        // Limpeza final de caracteres escapados que a IA pode ter enviado
         return finalConcatenatedText.toString()
-           /* .replace("\\n", "\n")
-            .replace("\\\"", "\"")
-            .replace("\\u0026", "&")*/
     }
-
-// ... (o resto do arquivo permanece igual)
-
-
-
 
     private object AppContextHolder { var application: Application? = null }
     fun setApplicationContext(app: Application) { AppContextHolder.application = app }
@@ -305,6 +327,11 @@ object GeminiTextAndVisionProRestApi {
             } else { path }
         }
 
+    // <<<<< ALTERAÇÃO AQUI: A função processarImagens não é mais usada neste fluxo >>>>>
+    // Ela não precisa ser removida do arquivo se for usada em outro lugar,
+    // mas não será mais chamada por perguntarAoGemini no contexto da REST API.
+    // Se não for usada em mais nenhum lugar, você pode removê-la para limpar o código.
+    /*
     private fun processarImagens(imagePaths: List<String>): List<Bitmap> =
         imagePaths.mapNotNull { path ->
             try { BitmapFactory.decodeFile(path) } 
@@ -313,6 +340,7 @@ object GeminiTextAndVisionProRestApi {
                 null
             }
         }
+    */
 
     private fun lerArquivoTexto(caminhoArquivo: String): String? =
         try { File(caminhoArquivo).readText() } 

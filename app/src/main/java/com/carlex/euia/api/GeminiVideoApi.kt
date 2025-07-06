@@ -227,11 +227,11 @@ object GeminiVideoApi {
                             )
                             if (imageBitmap != null) {
                                 val outputStream = ByteArrayOutputStream()
-                                imageBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream) // Comprime como JPEG
+                                imageBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 85, outputStream) // Comprime como webp
                                 val imageBytes = outputStream.toByteArray()
                                 val encodedImage = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
-                                videoImageInput = VideoImageInput(bytesBase64Encoded = encodedImage, mimeType = "image/jpeg") // Define mimeType como JPEG
-                                Log.d(TAG, "Imagem de referência processada (JPEG): $imagemReferenciaPath")
+                                videoImageInput = VideoImageInput(bytesBase64Encoded = encodedImage, mimeType = "image/webp") // Define mimeType como JPEG
+                                Log.d(TAG, "Imagem de referência processada (webp): $imagemReferenciaPath")
                             } else {
                                 Log.w(TAG, "Falha ao decodificar imagem de referência: $imagemReferenciaPath")
                             }

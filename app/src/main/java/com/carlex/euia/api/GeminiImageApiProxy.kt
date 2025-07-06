@@ -248,7 +248,7 @@ object GeminiImageApiProxy {
                     imageBitmap = BitmapUtils.decodeSampledBitmapFromUri(context, Uri.fromFile(imageFile), finalWidth, finalHeight)
                     if (imageBitmap != null) {
                         val outputStream = ByteArrayOutputStream()
-                        imageBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+                        imageBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 85, outputStream)
                         val imageBytes = outputStream.toByteArray()
                         base64List.add(Base64.encodeToString(imageBytes, Base64.NO_WRAP))
                     }

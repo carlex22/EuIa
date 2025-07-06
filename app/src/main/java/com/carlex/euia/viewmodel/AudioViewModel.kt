@@ -161,7 +161,22 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     private val urlImportWorkObserver = Observer<List<WorkInfo>> { workInfos ->
         val isStillImporting = workInfos.any {
             it.tags.contains(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT) || it.tags.contains(UrlImportWorker.TAG_URL_IMPORT_WORK_CONTENT_DETAILS)
-        } && workInfos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+        } && workInfos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.BLOCKED} // Adicionado BLOCKED
+        
+        // CORREÇÃO: Esta linha estava faltando!
+        _isUrlImporting.value = isStillImporting
+        // FIM DA CORREÇÃO
+
+        // Considerar a lógica de erro aqui, se um worker falhou
+        val failedWork = workInfos.firstOrNull { it.state == WorkInfo.State.FAILED }
+        if (failedWork != null && !isStillImporting) {
+            val errorMessage = failedWork.outputData.getString(UrlImportWorker.KEY_OUTPUT_ERROR_MESSAGE)
+            viewModelScope.launch {
+                // Atualiza o estado de erro global para que o UI possa reagir
+                audioDataStoreManager.setGenerationError(errorMessage) 
+                Log.e(TAG, "Importação de URL falhou com mensagem: $errorMessage")
+            }
+        }
     }
 
 

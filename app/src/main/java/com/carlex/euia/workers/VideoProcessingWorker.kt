@@ -432,7 +432,7 @@ class VideoProcessingWorker(
                                 projectDirName = projectDirName,
                                 subDir = "generated_thumbnails",
                                 baseName = baseNameThumb,
-                                format = Bitmap.CompressFormat.JPEG,
+                                format = Bitmap.CompressFormat.WEBP_LOSSLESS,
                                 quality = 65
                             )
                             BitmapUtils.safeRecycle(finalThumbBitmap, "VideoWorker_FinalThumb")

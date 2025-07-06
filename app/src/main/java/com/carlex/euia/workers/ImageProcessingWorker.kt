@@ -580,13 +580,13 @@ class ImageProcessingWorker(
             val originalName = getFileNameFromUri(context, uri) ?: "image_${UUID.randomUUID()}"
             val sanitizedName = originalName.replace(Regex("[/\\\\:*?\"<>|\\s]"), "_")
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
-            val fileExtension = "jpg"
+            val fileExtension = "webp"
             val fileName = "${sanitizedName}_${timestamp}.$fileExtension"
             val file = File(directory, fileName)
 
             try {
                 FileOutputStream(file).use { outputStream ->
-                    val success = finalBitmapToSave.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+                    val success = finalBitmapToSave.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 85, outputStream)
                     if (!success) {
                          Log.w(TAG_WORKER, "saveImageToStorage: Compressão falhou para: ${file.absolutePath}")
                     }

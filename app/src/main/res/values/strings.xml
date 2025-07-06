@@ -10,6 +10,10 @@
     <!-- Cores existentes no seu tema (ex: Purple80, PurpleGrey80, etc.) -->
     <!-- ... -->
 
+
+
+
+
     <!-- Cores para o Overlay -->
     <color name="overlay_discard_active_color">#FF4081</color> <!-- Vermelho vibrante para a lixeira ativa (ex: Color.Magenta ou similar) -->
     <color name="overlay_discard_inactive_color">#99FF0000</color> <!-- Vermelho semi-transparente para a lixeira inativa (Alpha 99 para ser visível mas discreto) -->

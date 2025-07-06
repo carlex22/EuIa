@@ -191,7 +191,7 @@ object YouTubeUploadService {
         }
         Log.d(TAG, "Iniciando upload da thumbnail para o videoId: $videoId")
         try {
-            val requestBody = thumbnailFile.asRequestBody("image/jpeg".toMediaType())
+            val requestBody = thumbnailFile.asRequestBody("image/webp".toMediaType())
             val response = youtubeApiService.setThumbnail(
                 apiKey = YOUR_GOOGLE_API_KEY,
                 videoId = videoId,

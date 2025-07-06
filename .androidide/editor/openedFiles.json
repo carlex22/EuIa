@@ -1,17 +1,77 @@
 {
   "allFiles": [
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/VideoEditorComTransicoes.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/services/OverlayService.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 794,
+          "line": 25
+        },
+        "start": {
+          "column": 0,
+          "index": 794,
+          "line": 25
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/services/CircularProgressBarView.kt",
       "selection": {
         "end": {
           "column": 34,
-          "index": 1509,
-          "line": 39
+          "index": 3391,
+          "line": 99
         },
         "start": {
           "column": 34,
-          "index": 1509,
-          "line": 39
+          "index": 3391,
+          "line": 99
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 433,
+          "line": 13
+        },
+        "start": {
+          "column": 0,
+          "index": 433,
+          "line": 13
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/SrtToAssConverter.kt",
+      "selection": {
+        "end": {
+          "column": 30,
+          "index": 4656,
+          "line": 72
+        },
+        "start": {
+          "column": 16,
+          "index": 4642,
+          "line": 72
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/VideoEditorComTransicoes.kt",
+      "selection": {
+        "end": {
+          "column": 45,
+          "index": 12488,
+          "line": 236
+        },
+        "start": {
+          "column": 45,
+          "index": 12488,
+          "line": 236
         }
       }
     }

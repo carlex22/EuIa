@@ -2,23 +2,23 @@
 package com.carlex.euia.utils
 
 import android.content.Context
-import android.graphics.Bitmap // Adicionado
-import android.graphics.Canvas // Adicionado
-import android.graphics.Color  // Adicionado
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.util.Log
 import com.arthenica.ffmpegkit.*
 import android.graphics.BitmapFactory
 import com.carlex.euia.data.SceneLinkData
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import java.io.File
-import java.io.FileOutputStream // Adicionado
-import java.io.IOException      // Adicionado
+import java.io.FileOutputStream
+import java.io.IOException
 import kotlin.math.max
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import java.util.Locale
-import java.util.UUID // Adicionado
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -49,10 +49,7 @@ object VideoEditorComTransicoes {
         canvas.drawColor(Color.BLACK)
 
         val tempDir = getProjectSpecificDirectory(context, projectDirName, "temp_ffmpeg_assets")
-        if (!tempDir.exists() && !tempDir.mkdirs()) {
-            Log.e(TAG, "Falha ao criar diretório temporário para imagem preta: ${tempDir.absolutePath}")
-            return null
-        }
+        
 
         val file = File(tempDir, "black_padding_end_${System.currentTimeMillis()}.png")
         return try {
@@ -61,11 +58,11 @@ object VideoEditorComTransicoes {
             }
             bitmap.recycle()
             Log.d(TAG, "Imagem preta temporária criada em: ${file.absolutePath}")
-            file.absolutePath
+            return file.absolutePath
         } catch (e: IOException) {
             Log.e(TAG, "Erro ao criar imagem preta temporária: ${e.message}", e)
             bitmap.recycle()
-            null
+            return null
         }
     }
 
@@ -75,7 +72,7 @@ object VideoEditorComTransicoes {
         scenes: List<SceneLinkData>,
         audioPath: String,
         musicaPath: String,
-        legendaPath: String,
+        legendaPath: String, // Este é o caminho do arquivo SRT gerado
         logCallback: (String) -> Unit
     ): String {
         Log.d(TAG, "🎬 Iniciando gerarVideo com ${scenes.size} cenas SceneLinkData")
@@ -193,13 +190,94 @@ object VideoEditorComTransicoes {
         }
         // --- FIM DA LÓGICA PARA ADICIONAR CENA PRETA ---
 
-        val legendaPathAjustada = legendaPath
+        // <<< INÍCIO DA NOVA LÓGICA DE CONVERSÃO SRT para ASS >>>
+        var finalLegendaFilePath: String = "" // Caminho para o arquivo ASS temporário
+        var tempAssFile: File? = null // Variável para rastrear o arquivo ASS temporário para limpeza
+
+        if (enableSubtitlesPref && legendaPath.isNotBlank()) {
+            val srtFile = File(legendaPath)
+            if (srtFile.exists()) {
+                try {
+                    val srtContent = srtFile.readText()
+                    
+                    // <<< CHAMADA DO CONVERSOR COM TODOS OS NOVOS PARÂMETROS >>>
+                    val assConverter = SrtToAssConverter(
+                        // Cores
+                        primaryColor = "&H00FFFFFF", // Branco
+                        outlineColor = "&H00000000", // Preto
+                        shadowColor = "&H80000000",  // Preto 50% transparente
+
+                        // Flags de Efeito
+                        enableFadeEffect = true,
+                        enableZoomInEffect = true,
+                        enableTiltEffect = true,
+                        
+                        // Tamanhos/Valores de Estilo e Posição
+                        outlineSizePixels = 2,
+                        shadowOffsetPixels = 4,
+                        fontSizeBaseMultiplier = 0.14f, // Base para o cálculo dinâmico da fonte
+                        textBlockWidthPercentage = 80, // Largura que o bloco de texto deve ocupar
+
+                        // Parâmetros de Alinhamento Vertical
+                        fixedCenterYRatio = 0.85f, // Ponto fixo para o centro da legenda (85% da altura do vídeo)
+                        fixedCenterYRatioInImage = 0.90f, // Ponto fixo para o centro da legenda dentro da imagem (90% da altura da imagem visível)
+
+                        // Parâmetros de Animação
+                        tiltAngleDegrees = 5,
+                        tiltAnimationDurationMs = 150,
+                        zoomInAnimationDurationMs = 200,
+                        zoomOutAnimationDurationMs = 200,
+                        initialZoomScalePercentage = 80,
+                        fadeDurationMs = 100,
+
+                        // NOVOS PARÂMETROS PARA CONTROLE DE FONTE DINÂMICA
+                        minFontSizeRatio = 0.14f, 
+                        maxFontSizeRatio = 0.25f, 
+                        idealCharsForScaling = 12,
+                        marginInferior = 0.15
+                    )
+                    
+                    val assContent = assConverter.convertSrtToAss(
+                        srtContent = srtContent,
+                        videoWidth = larguraVideoParaProcessamento,
+                        videoHeight = alturaVideoParaProcessamento
+                    )
+                    // <<< FIM DA CHAMADA >>>
+
+                    // Salvar o conteúdo ASS em um novo arquivo temporário .ass
+                    val tempAssDir = getProjectSpecificDirectory(context, projectDirName, "temp_ffmpeg_assets")
+                    if (tempAssDir == null) {
+                        Log.e(TAG, "Falha ao criar diretório temporário para ASS. Gerando vídeo sem legendas.")
+                        logCallback("❌ Erro interno: não foi possível criar diretório para legendas ASS. Gerando sem legendas.")
+                        finalLegendaFilePath = ""
+                    } else {
+                        val uniqueAssFileName = "temp_legenda_${UUID.randomUUID()}.ass"
+                        tempAssFile = File(tempAssDir, uniqueAssFileName)
+                        tempAssFile.writeText(assContent)
+                        finalLegendaFilePath = tempAssFile.absolutePath
+                        Log.i(TAG, "Legenda SRT convertida para ASS e salva temporariamente em: $finalLegendaFilePath")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao converter SRT para ASS ou salvar arquivo temporário: ${e.message}", e)
+                    logCallback("❌ Erro ao preparar legendas. Gerando vídeo sem legendas. Detalhes: ${e.message}")
+                    finalLegendaFilePath = "" // Garante que nenhuma legenda seja usada se a conversão falhar
+                }
+            } else {
+                Log.w(TAG, "Arquivo de legenda SRT não encontrado em: $legendaPath. Não serão usadas legendas.")
+                logCallback("⚠️ Arquivo de legenda SRT não encontrado. Gerando vídeo sem legendas.")
+                finalLegendaFilePath = ""
+            }
+        } else {
+            Log.d(TAG, "Legendas desabilitadas ou caminho da legenda vazio. Não serão usadas legendas.")
+            finalLegendaFilePath = ""
+        }
+        // <<< FIM DA NOVA LÓGICA DE CONVERSÃO SRT para ASS >>>
 
         Log.d(TAG, "🖼️ Mídias FINAIS para FFmpeg (${finalMediaPathsOriginal.size}): ${finalMediaPathsOriginal.joinToString { File(it).name }}")
         Log.d(TAG, "⏱️ Durações Cenas FINAIS (s) para FFmpeg: $duracaoCenasOriginal")
         Log.d(TAG, "🔊 Áudio principal: $audioPath")
         Log.d(TAG, "🎵 Música: $musicaPath")
-        Log.d(TAG, "📝 Legenda original: $legendaPath, Legenda ajustada para uso: $legendaPathAjustada (Usar legendas no vídeo: $enableSubtitlesPref)")
+        Log.d(TAG, "📝 Legenda original: $legendaPath, Legenda ajustada para uso: $finalLegendaFilePath (Usar legendas no vídeo: $enableSubtitlesPref)")
 
         finalMediaPathsOriginal.forEach {
             if (!File(it).exists()) throw IllegalArgumentException("Arquivo de mídia não encontrado: $it")
@@ -207,8 +285,9 @@ object VideoEditorComTransicoes {
         if (!File(audioPath).exists()) throw IllegalArgumentException("Áudio principal não encontrado: $audioPath")
         if (musicaPath.isNotBlank() && !File(musicaPath).exists()) throw IllegalArgumentException("Música de fundo não encontrada: $musicaPath")
 
-        if (enableSubtitlesPref && legendaPathAjustada.isNotBlank() && !File(legendaPathAjustada).exists()) {
-            throw IllegalArgumentException("Arquivo de legenda ajustada '$legendaPathAjustada' não encontrado, mas legendas estão habilitadas.")
+        // Agora, a verificação de existência do arquivo de legenda deve ser feita para o `finalLegendaFilePath`
+        if (enableSubtitlesPref && finalLegendaFilePath.isNotBlank() && !File(finalLegendaFilePath).exists()) {
+            throw IllegalArgumentException("Arquivo de legenda ajustada '$finalLegendaFilePath' não encontrado, mas legendas estão habilitadas.")
         }
 
         val fonteArialPath = try {
@@ -225,7 +304,7 @@ object VideoEditorComTransicoes {
             duracaoCenas = duracaoCenasOriginal,   // Usa a lista potencialmente modificada
             audioPath = audioPath,
             musicaPath = musicaPath,
-            legendaPath = legendaPathAjustada,
+            legendaPath = finalLegendaFilePath, // Passa o caminho do arquivo ASS temporário
             outputPath = outputPath,
             fonteArialPath = fonteArialPath,
             usarLegendas = enableSubtitlesPref,
@@ -248,10 +327,22 @@ object VideoEditorComTransicoes {
                         if (tempFile.delete()) {
                             Log.i(TAG, "Imagem preta temporária ($it) excluída.")
                         } else {
-                            Log.w(TAG, "Falha ao excluir imagem preta temporária ($it).")
+                            Log.w(TAG, "Falha ao deletar imagem preta temporária ($it).")
                         }
                     }
                 }
+
+                // <<< INÍCIO DA LIMPEZA DO ARQUIVO ASS TEMPORÁRIO >>>
+                tempAssFile?.let { file ->
+                    if (file.exists()) {
+                        if (file.delete()) {
+                            Log.i(TAG, "Arquivo ASS temporário deletado: ${file.name}")
+                        } else {
+                            Log.w(TAG, "Falha ao deletar arquivo ASS temporário: ${file.name}")
+                        }
+                    }
+                }
+                // <<< FIM DA LIMPEZA DO ARQUIVO ASS TEMPORÁRIO >>>
 
                 val returnCode = completedSession.returnCode
                 val logs = completedSession.allLogsAsString
@@ -272,6 +363,7 @@ object VideoEditorComTransicoes {
                 } else {
                     logCallback("❌ FFmpeg FALHOU com código de retorno: $returnCode (Tempo: ${"%.2f".format(Locale.US, timeElapsed)}s)")
                     Log.e(TAG, "--- Logs Completos da Falha --- \n$logs\n --- Fim dos Logs ---")
+                    File(outputPath).delete() // Tenta deletar o arquivo de saída parcial em caso de falha
                     cont.resumeWithException(VideoGenerationException("Falha na execução do FFmpeg (Código: $returnCode). Logs:\n$logs"))
                 }
             }, { log ->
@@ -292,6 +384,11 @@ object VideoEditorComTransicoes {
                     val tempFile = File(it)
                     if (tempFile.exists()) tempFile.delete()
                 }
+                // <<< INÍCIO DA LIMPEZA DO ARQUIVO ASS TEMPORÁRIO EM CASO DE CANCELAMENTO >>>
+                tempAssFile?.let { file ->
+                    if (file.exists()) file.delete()
+                }
+                // <<< FIM DA LIMPEZA DO ARQUIVO ASS TEMPORÁRIO EM CASO DE CANCELAMENTO >>>
             }
         }
     }
@@ -307,7 +404,7 @@ private fun buildFFmpeg(
     duracaoCenas: List<Double>,
     audioPath: String,
     musicaPath: String,
-    legendaPath: String,
+    legendaPath: String, // Este agora será o caminho para o arquivo ASS
     outputPath: String,
     fonteArialPath: String,
     usarLegendas: Boolean,
@@ -324,9 +421,11 @@ private fun buildFFmpeg(
     val alturaFinalVideo = (alturaVideoPreferida ?: DEFAULT_VIDEO_HEIGHT).coerceAtLeast(100)
     Log.i(TAG, "FFmpeg VIDEO ${larguraFinalVideo}x${alturaFinalVideo} | FPS: $fps | HD Motion: $hdMotion | Transições: $usarTransicoes | ZoomPan: $usarZoomPan | Legendas: $usarLegendas")
     val tempoDeTransicaoEfetivo = if (usarTransicoes && mediaPaths.size > 1) tempoTransicaoPadrao else 0.0
-    val safeLegendaPath = if (legendaPath.isNotBlank()) legendaPath.replace("\\", "/").replace(":", "\\\\:") else ""
+    
+    // Apenas a fonte para as legendas, não precisa do `legendaPath` aqui.
     val fonteDir = File(fonteArialPath).parent?.replace("\\", "/")?.replace(":", "\\\\:") ?: "."
     val fonteNome = File(fonteArialPath).nameWithoutExtension
+    
     var inputIndex = 0
     if (musicaPath.isNotBlank()) {
         cmd.append("-i \"$musicaPath\" ")
@@ -345,7 +444,7 @@ private fun buildFFmpeg(
             Log.d(TAG, "Cena MidiaAdd $ii | duracaoDestaCena: %.2f".format(duracaoDestaCena))
             cmd.append(String.format(Locale.US, "-stream_loop -1 -t %.4f -i \"%s\" -an ", duracaoDestaCena, path))
         } else {
-            Log.d(TAG, "Cena MidiaAdd $ii | inputDurationParaComando: %.2f".format(inputDurationParaComando))
+            Log.d(TAG, "Cena MidiaAdd $ii | inputDurationParaComando: %.4f".format(inputDurationParaComando))
             cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", fps, inputDurationParaComando, path))
         }
         ii++
@@ -495,13 +594,22 @@ val videoStreamFinal: String = when {
 }
 
 
-    // Legendas
+    // Legendas (usando o caminho do arquivo ASS, se definido)
     val videoComLegendasPad: String =
-        if (usarLegendas && legendaPath.isNotBlank() && safeLegendaPath.isNotBlank()) {
-            val escapedLegendaPath = safeLegendaPath.replace("'", "'\\''")
+        if (usarLegendas && legendaPath.isNotBlank()) {
+            val escapedLegendaPath = legendaPath.replace("'", "'\\''") // Escapa aspas simples
+                .replace("\\", "/") // Normaliza barras (Windows para Unix-like)
+                .replace(":", "\\\\:") // Escapa dois pontos (para paths em Windows)
+
             filterComplex.append("  $videoStreamFinal subtitles=filename='$escapedLegendaPath'")
             filterComplex.append(":fontsdir='$fonteDir'")
-            filterComplex.append(":force_style='FontName=$fonteNome,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BackColour=&H80000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginL=25,MarginR=25,MarginV=55'")
+            // Ao usar ASS, o estilo é definido NO ARQUIVO ASS. O force_style aqui deve ser mínimo para não sobrescrever o ASS.
+            // Apenas definimos Alignment e Margins se necessário, para garantir consistência ou corrigir falhas no ASS.
+            // Para efeitos avançados, é crucial que o estilo venha do ASS, não do FFmpeg `force_style`.
+            // O filtro `subtitles` lê o estilo do .ass, então podemos remover a maioria dos parâmetros daqui.
+            // Podemos manter Alignment e Margins se quisermos um fallback ou ajuste final universal.
+            // Remover `FontName` daqui, pois ele já está no ASS.
+            filterComplex.append(":force_style='Alignment=2'") // Ajustado para ser menos intrusivo
             filterComplex.append("[v_out];\n")
             "[v_out]"
         } else {
@@ -622,7 +730,7 @@ fun gerarZoompanExpressao(
         return outFile.absolutePath
     }
 
-    private fun getProjectSpecificDirectory(context: Context, projectDirName: String, subDir: String): File {
+    private fun getProjectSpecificDirectory(context: Context, projectDirName: String, subDir: String): File? { // Retorna nullable agora
         val baseAppDir: File?
         if (projectDirName.isNotBlank()) {
             baseAppDir = context.getExternalFilesDir(null)
@@ -631,6 +739,7 @@ fun gerarZoompanExpressao(
                 val finalDir = File(projectPath, subDir)
                 if (!finalDir.exists() && !finalDir.mkdirs()) {
                     Log.e(TAG, "Falha ao criar diretório do projeto (externo): ${finalDir.absolutePath}")
+                    return null // Retorna null em caso de falha na criação
                 }
                 return finalDir
             } else {
@@ -639,6 +748,7 @@ fun gerarZoompanExpressao(
                 val finalInternalDir = File(internalProjectPath, subDir)
                  if (!finalInternalDir.exists() && !finalInternalDir.mkdirs()) {
                      Log.e(TAG, "Falha ao criar diretório interno do projeto (fallback A): ${finalInternalDir.absolutePath}")
+                     return null // Retorna null em caso de falha na criação
                  }
                 return finalInternalDir
             }
@@ -648,13 +758,18 @@ fun gerarZoompanExpressao(
         val fallbackDir = File(File(context.filesDir, defaultParentDirName), subDir)
         if (!fallbackDir.exists() && !fallbackDir.mkdirs()) {
             Log.e(TAG, "Falha ao criar diretório de fallback interno: ${fallbackDir.absolutePath}")
+            return null // Retorna null em caso de falha na criação
         }
         return fallbackDir
     }
 
+
     private fun createOutputFilePath(context: Context, prefix: String, projectDirName: String): String {
         val subDiretorioVideos = "edited_videos"
         val outputDir = getProjectSpecificDirectory(context, projectDirName, subDiretorioVideos)
+            ?: File(context.cacheDir, "edited_videos_fallback") // Fallback para cacheDir se a criação falhar
+        if (!outputDir.exists()) outputDir.mkdirs() // Tenta criar novamente se o fallback não existir
+        
         val timestamp = System.currentTimeMillis()
         val filename = "${prefix}_${timestamp}.mp4"
         val outputFile = File(outputDir, filename)

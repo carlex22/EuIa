@@ -1,9 +1,9 @@
-// File: api/GeminiImageApi.kt
+// File: euia/api/GeminiImagenApi.kt
 package com.carlex.euia.api
 
 import android.app.Application
 import android.content.Context
-import android.graphics.Bitmap
+import android.graphics.Bitmap // Mantido para outras funções, mas não para compressão direta
 import android.net.Uri
 import android.os.Build
 import android.util.Base64
@@ -14,7 +14,7 @@ import com.carlex.euia.data.VideoDataStoreManager
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.carlex.euia.managers.GerenciadorDeChavesApi
 import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
-import com.carlex.euia.utils.BitmapUtils
+import com.carlex.euia.utils.BitmapUtils // Mantido para ajustarCaminhoThumbnail
 import com.carlex.euia.viewmodel.AuthViewModel
 import com.carlex.euia.viewmodel.TaskType
 import com.google.firebase.firestore.FirebaseFirestore
@@ -123,7 +123,8 @@ object GeminiImageApi{
     private const val TAG = "GeminiImageApiDirect"
     private const val TIPO_DE_CHAVE = "img"
     
-    private const val DEFAULT_WIDTH = 720
+    // DEFAULT_WIDTH/HEIGHT ainda são relevantes para `saveGeneratedBitmap`, mas não para a entrada da API.
+    private const val DEFAULT_WIDTH = 720 
     private const val DEFAULT_HEIGHT = 1280
 
     private val API_TEMPERATURE: Float? = 0.6f
@@ -140,7 +141,7 @@ object GeminiImageApi{
         cena: String,
         prompt: String,
         context: Context,
-        imagensParaUpload: List<ImagemReferencia>
+        imagensParaUpload: List<ImagemReferencia> // Continua recebendo ImagemReferencia
     ): Result<String> {
         val authViewModel = AuthViewModel(context.applicationContext as Application)
         var creditsDeducted = false
@@ -153,14 +154,14 @@ object GeminiImageApi{
                     return@withContext Result.failure(deductionResult.exceptionOrNull()!!)
                 }
                 creditsDeducted = true
-                Log.i(TAG, "Créditos (${TaskType.IMAGE.cost}) deduzidos. Prosseguindo.")
+                Log.i(TAG, "Créditos (${TaskType.IMAGE.cost}) deduzidos para API Standard. Prosseguindo.")
 
-                // ETAPA 2: LÓGICA DE GERAÇÃO COM TENTATIVAS
+                // ETAPA 2: LÓGICA DE GERAÇÃO COM TENTATIVAS DINÂMICAS
                 val keyCount = try {
                     firestore.collection("chaves_api_pool").get().await().size()
                 } catch (e: Exception) {
                     Log.w(TAG, "Falha ao obter contagem de chaves, usando fallback 10.", e)
-                    10
+                    10 // Fallback
                 }
                 val MAX_TENTATIVAS = if (keyCount > 0) keyCount else 10
 
@@ -171,7 +172,9 @@ object GeminiImageApi{
                         chaveAtual = gerenciadorDeChaves.getChave(TIPO_DE_CHAVE)
                         Log.d(TAG, "Tentativa ${tentativas + 1}/$MAX_TENTATIVAS ($TIPO_DE_CHAVE): Chave '${chaveAtual.takeLast(4)}'")
 
-                        val (_, partsList) = prepararDadosParaApi(context, prompt, imagensParaUpload)
+                        // <<<<< ALTERAÇÃO AQUI: Chamar prepararDadosParaApi com o `context` >>>>>
+                        val (_, partsList) = prepararDadosParaApi(context, prompt, imagensParaUpload) 
+
                         val generationConfig = ImgGenerationConfig(temperature = API_TEMPERATURE, topP = API_TOP_P, topK = API_TOP_K, candidateCount = API_CANDIDATE_COUNT)
                         val request = ImgGeminiRequest(listOf(ImgContent(partsList)), generationConfig)
 
@@ -186,7 +189,7 @@ object GeminiImageApi{
                                 throw Exception("API retornou sucesso, mas sem dados de imagem. Detalhe: cod.${response.code()} ${apiResponse?.error?.message ?: response.message()}")
                             }
 
-                            Log.i(TAG, "SUCESSO na tentativa ${tentativas + 1} com a chave '${chaveAtual.takeLast(4)}'.")
+                            Log.i(TAG, "SUCESSO na tentativa ${tentativas + 1} ($TIPO_DE_CHAVE) com a chave '${chaveAtual.takeLast(4)}'.")
                             gerenciadorDeChaves.setChaveEmUso(chaveAtual, TIPO_DE_CHAVE)
 
                             val apiBitmap = BitmapUtils.decodeBitmapFromBase64(base64ImageString, DEFAULT_WIDTH, DEFAULT_HEIGHT) ?: throw Exception("Falha ao decodificar bitmap da resposta da API.")
@@ -228,14 +231,16 @@ object GeminiImageApi{
         }
     }
 
+    // <<<<< ALTERAÇÃO AQUI: Mudança na lógica de preparação de dados >>>>>
     private suspend fun prepararDadosParaApi(
-        context: Context,
+        context: Context, // `context` é necessário aqui
         basePrompt: String,
-        imagensParaUpload: List<ImagemReferencia>
+        imagensParaUpload: List<ImagemReferencia> // Recebe ImagemReferencia diretamente
     ): Pair<String, List<ImgPart>> {
         val videoPreferencesManager = VideoPreferencesDataStoreManager(context)
-        val larguraPreferida = videoPreferencesManager.videoLargura.first()
-        val alturaPreferida = videoPreferencesManager.videoAltura.first()
+        // Largura/Altura preferidas não são mais usadas para *entrada* da imagem, apenas para a saída gerada
+        // val larguraPreferida = videoPreferencesManager.videoLargura.first()
+        // val alturaPreferida = videoPreferencesManager.videoAltura.first()
 
         var imagensEfetivas = imagensParaUpload
         if (imagensParaUpload.isEmpty()) {
@@ -252,20 +257,36 @@ object GeminiImageApi{
         val promptFinal = buildComplexPrompt(basePrompt, imagensEfetivas, context)
         partsList.add(ImgTextPart("prompt_da_imagem: $promptFinal"))
 
+        // <<<<< ALTERAÇÃO AQUI: LER BYTES DIRETAMENTE DO ARQUIVO >>>>>
         for (imagemRef in imagensEfetivas) {
             val pathToLoad = ajustarCaminhoThumbnail(imagemRef.path)
             val imageFile = File(pathToLoad)
             if (imageFile.exists()) {
-                val bitmap = BitmapUtils.decodeSampledBitmapFromUri(context, Uri.fromFile(imageFile), larguraPreferida ?: DEFAULT_WIDTH, alturaPreferida ?: DEFAULT_HEIGHT)
-                if (bitmap != null) {
-                    val outputStream = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
-                    val encodedImage = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
-                    partsList.add(ImgInlineDataPart(ImgInlineData("image/jpeg", encodedImage)))
-                    BitmapUtils.safeRecycle(bitmap, "prepararDadosParaApi loop")
+                try {
+                    val imageBytes = withContext(Dispatchers.IO) { imageFile.readBytes() } // Lê os bytes brutos
+                    val encodedImage = Base64.encodeToString(imageBytes, Base64.NO_WRAP) // Codifica para Base64 sem quebras de linha
+
+                    val mimeType = when (imageFile.extension.lowercase()) { // Determina o MIME type pela extensão
+                        "webp" -> "image/webp"
+                        "jpg", "jpeg" -> "image/jpeg"
+                        "png" -> "image/png"
+                        else -> {
+                            Log.w(TAG, "Formato de imagem desconhecido para ${imageFile.name}. Usando image/jpeg como fallback.")
+                            "image/jpeg" 
+                        }
+                    }
+                    partsList.add(ImgInlineDataPart(ImgInlineData(mimeType, encodedImage)))
+                    Log.d(TAG, "Imagem de referência '${imageFile.name}' (${mimeType}) codificada para Base64 (tamanho Base64: ${encodedImage.length}).")
+                } catch (e: IOException) {
+                    Log.e(TAG, "Erro de I/O ao ler arquivo de imagem de referência: $pathToLoad", e)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro inesperado ao codificar imagem de referência para Base64: $pathToLoad", e)
                 }
+            } else {
+                Log.w(TAG, "Arquivo de imagem de referência não encontrado: $pathToLoad. Pulando.")
             }
         }
+        // <<<<< FIM DA ALTERAÇÃO >>>>>
         
         return Pair(promptFinal, partsList)
     }
@@ -298,7 +319,7 @@ object GeminiImageApi{
         }
 
         val finalPromptComContextoDasImagens = if (allImageContextText.toString().lines().count { it.isNotBlank() } > 2) {
-            promptLimpo //+ allImageContextText.toString()
+            promptLimpo //+ allImageContextText.toString() // Comentei esta linha em outra revisão, mantenha o que você preferir para o prompt
         } else {
             promptLimpo
         }
@@ -311,11 +332,11 @@ object GeminiImageApi{
             if (refObjetoDetalhesJson.isNotBlank() && refObjetoDetalhesJson != "{}") {
                 appendLine()
                 appendLine()
-               // append("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES DE OBJETOS OU ROUPAS DA IMAGEN ---")
+               // append("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES DE OBJETOS OU ROUPAS DA IMAGEN ---") // Comentei esta linha em outra revisão, mantenha o que você preferir
                 appendLine()
                 append(refObjetoDetalhesJson)
                 appendLine()
-               // append("--- FIM DAS INFORMAÇÕES ADICIONAIS ---")
+               // append("--- FIM DAS INFORMAÇÕES ADICIONAIS ---") // Comentei esta linha em outra revisão, mantenha o que você preferir
             }
         }
     }
@@ -339,13 +360,14 @@ object GeminiImageApi{
             var finalWidth = targetWidth ?: DEFAULT_WIDTH
             var finalHeight = targetHeight ?: DEFAULT_HEIGHT
             
+            // Lógica para manter proporção que você já tinha:
             if (finalWidth > finalHeight)
                 finalWidth = (finalWidth).toInt()
             else
                 finalHeight = (finalHeight).toInt()
             
-            resizedBitmap = //apiBitmap
-            BitmapUtils.resizeWithTransparentBackground(apiBitmap, finalWidth, finalHeight)
+            // Aqui ainda é necessário redimensionar, pois a API retorna um bitmap que pode não ter as dimensões desejadas
+            resizedBitmap = BitmapUtils.resizeWithTransparentBackground(apiBitmap, finalWidth, finalHeight)
                 ?: return null
 
             val saveFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSLESS else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP
