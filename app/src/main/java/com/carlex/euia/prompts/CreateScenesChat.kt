@@ -82,9 +82,9 @@ class CreateScenesChat(
         exempo: 
         
         antes da divisao:
-        cena 1{TEMPO_INICIo:0, TEMPO_FIM:9, PROMPT_PARA_IMAGEM:1},
-        cena 2{TEMPO_INICIO:9, TEMPO_FIM:18, PROMPT_PARA_IMAGEM:2},
-        cena 3{TEMPO_INICIO:18, TEMPO_FIM:21, PROMPT_PARA_IMAGEM:3}
+        cena 1{TEMPO_INICIo:0.00, TEMPO_FIM:9.00, PROMPT_PARA_IMAGEM:1},
+        cena 2{TEMPO_INICIO:9.00, TEMPO_FIM:18.00, PROMPT_PARA_IMAGEM:2},
+        cena 3{TEMPO_INICIO:18.00, TEMPO_FIM:21, PROMPT_PARA_IMAGEM:3}
        
         apos a divisao versao final: 
         cena 1{TEMPO_INICIO:0, TEMPO_FIM:3, PROMPT_PARA_IMAGEM:1a}, cena 2{TEMPO_INICIO:3, TEMPO_FIM:5, PROMPT_PARA_IMAGEM:1b}, cena 3{TEMPO_INICIO:5, TEMPO_FIM:9, PROMPT_PARA_IMAGEM:1c},

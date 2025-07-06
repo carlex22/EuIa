@@ -178,6 +178,10 @@ object GeminiTextAndVisionProRestApi {
                             additionalText = textoArquivoLido,
                             youtubeUrl = youtubeUrl
                         )
+                        
+                        // Log.i(TAG, "textoArquivoLido $textoArquivoLido")
+                        // Log.i(TAG, "prompt $pergunta")
+
 
                         if (result.isSuccess) {
                             gerenciadorDeChaves.setChaveEmUso(chaveAtual, TIPO_DE_CHAVE)

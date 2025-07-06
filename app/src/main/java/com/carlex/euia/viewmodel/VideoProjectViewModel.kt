@@ -428,7 +428,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         val respostaResult = GeminiTextAndVisionProRestApi.perguntarAoGemini(
             pergunta = promptGerarCenas,
             imagens = imagePathsForGemini,
-            arquivoTexto = legendaPathParaApi
+            arquivoTexto = "${legendaPathParaApi}.raw_transcript.json"
         )
 
         if (respostaResult.isSuccess) {

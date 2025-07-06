@@ -1,80 +1,110 @@
 {
   "allFiles": [
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/SrtToAssConverter.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/prompts/CreateScenes.kt",
       "selection": {
         "end": {
-          "column": 40,
-          "index": 40,
-          "line": 0
+          "column": 58,
+          "index": 8912,
+          "line": 145
         },
         "start": {
-          "column": 20,
-          "index": 20,
-          "line": 0
+          "column": 58,
+          "index": 8912,
+          "line": 145
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/VideoEditorComTransicoes.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/api/GeminiTextAndVisionProRestApi.kt",
       "selection": {
         "end": {
-          "column": 39,
-          "index": 33337,
-          "line": 655
+          "column": 26,
+          "index": 6734,
+          "line": 182
         },
         "start": {
-          "column": 39,
-          "index": 33337,
-          "line": 655
+          "column": 26,
+          "index": 6734,
+          "line": 182
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/VideoRenderWorker.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoProjectViewModel.kt",
       "selection": {
         "end": {
-          "column": 23,
-          "index": 7042,
-          "line": 135
+          "column": 58,
+          "index": 27748,
+          "line": 537
         },
         "start": {
-          "column": 23,
-          "index": 7042,
-          "line": 135
+          "column": 28,
+          "index": 27718,
+          "line": 537
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/services/OverlayService.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/api/Audio.kt",
       "selection": {
         "end": {
-          "column": 37,
-          "index": 1758,
-          "line": 51
+          "column": 65,
+          "index": 33798,
+          "line": 724
         },
         "start": {
-          "column": 18,
-          "index": 1739,
-          "line": 51
+          "column": 65,
+          "index": 33798,
+          "line": 724
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/services/OverlayManager.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/prompts/CreateScenesChat.kt",
       "selection": {
         "end": {
-          "column": 5,
-          "index": 2103,
-          "line": 58
+          "column": 0,
+          "index": 8426,
+          "line": 101
         },
         "start": {
-          "column": 5,
-          "index": 2103,
-          "line": 58
+          "column": 4,
+          "index": 6597,
+          "line": 77
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml",
+      "selection": {
+        "end": {
+          "column": 59,
+          "index": 83035,
+          "line": 1212
+        },
+        "start": {
+          "column": 59,
+          "index": 83035,
+          "line": 1212
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/api/GeminiAudio.kt",
+      "selection": {
+        "end": {
+          "column": 120,
+          "index": 17796,
+          "line": 342
+        },
+        "start": {
+          "column": 120,
+          "index": 17796,
+          "line": 342
         }
       }
     }
   ],
-  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/VideoEditorComTransicoes.kt"
+  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoProjectViewModel.kt"
 }

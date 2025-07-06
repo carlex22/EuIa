@@ -333,14 +333,14 @@ object GeminiAudio {
             }
 
             // Geração de legenda (movida para dentro desta função de sucesso)
-            val srtResult = Audio.gerarLegendaSRT(
+            /*val srtResult = Audio.gerarLegendaSRT(
                 cena = finalWavFile!!.nameWithoutExtension,
                 filePath = finalWavFile!!.absolutePath,
                 TextoFala = originalText,
                 context = context,
                 projectDir = projectDir
             )
-            srtResult.onFailure { Log.w(TAG, "⚠️ Falha ao gerar legenda SRT para o áudio Gemini TTS: ${it.message}") }
+            srtResult.onFailure { Log.w(TAG, "⚠️ Falha ao gerar legenda SRT para o áudio Gemini TTS: ${it.message}") }*/
 
             return Result.success(finalWavFile!!.absolutePath)
         } catch (e: Exception) {

@@ -32,27 +32,56 @@ class CreateScenes(
 ### **Você é um diretor apaixonado pelo seu ofício, conhecido por sua atenção meticulosa aos detalhes visuais e por criar imagens que evocam emoção
 
 
-Passo 1. Analise o texto do arquivo de legendas em anexo .srt ou .txt, ele tem timestamp e a transcrição do dialogo do narrador.
+Passo 1. Analise o Jshon do arquivo de legendas em anexo, ele tem:
 
-Passo 2. Entenda as informacoes do video seus objetivos e a forma com o que o narrador fala sobre esse contexto.
+{
+  "duration": Double,
+  "language": "String",
+  "task": "String",
+  "text": "String",
+  "words": [
+    {
+      "end": Double,
+      "start": Double,
+      "word": "String"
+    },
+    {...}
+    ],
+  "x_groq": {
+    "id": "String"
+  }
+}""
+    
+duration = tempo total da fala e do video que que vamos criar (Soma do tempo de duracao ds todas as cenas)
+text = Transcrição completa do Texto do Narrador
 
-Passo 3. Separar em paragrafos o texto da fala do narrador. texto_do_paragrafoda_narrativa
+words -->
+  .start = o tempo em segundos que inicia a fala dessa  palavra ou frase no audio
+  .end = o tempo em segundos que finaliza a fala dessa palavra ou frase no audio
+  .word = texto ou palavra falada 
+  
+  
 
-Passo 4. Defina como esse paragrafo deve vai ilustrar visualmente a narrativa junto com o contexto. Ao fazer isso, identifique o 'elemento visual mais crítico' que precisa ser comunicado para esta parte da narrativa.
+Passo 2. Entenda as informacoes do texto (text) seus objetivos e a forma com o que o narrador fala sobre esse contexto.
 
-Passo 5. defina o tempo de inicio e fim que marcam o inicio e o fim de cada paragrafo.
-Os TimeStamp tempo da legendas estao no formato hh:mm:ss voce precisa converter esse tempo para segundos double
-Cada paragrafo termina exatamente no tempo do inicio do proximo paragrafo
+Passo 3. Separar text uma nova lista  de  paragragos separados do texto em sequencus... separe os trchos que falem ou demostrem um pensamento no texto completo... 
+
+Passo 4. Defina como esse paragrafo devera ser ilustrar visualmente. Ao fazer isso, identifique o 'elemento visual mais crítico' que precisa ser comunicado para esta parte da narrativa.
+
+Passo 5. defina o tempo de inicio e fim que marcam o inicio  e o fim de cada paragrafo.
+         **encontre na lista de words o tempo inicio (words.start) da primeira palavra do paragrafo.
+         **encontre na lista de words o tempo fim (words.end) da ultima palavra do paragrafo.
+
+
+Ajuste para que tempo de inicio de cada paragrafo seja exatamente igual ao  tempo do fim do paragrafo anterior
 nao podem haver lacunas de tempo vazios entre os paragrafos
 
 Passo 6. voce recebeu varias imagems de referencia, entenda cada uma, e pense como pode usar elas para os elementos para compor as imagens das cenas. 
 
-Passo 7. para cada paragrafo crie 1 ou mais cenas com duracao entre 2 a 4 segundos maximo cada.
-
 Passo 8. seje criativo e pense no texto para PROMPT_PARA_IMAGEM. siga estas diretrizes CRUCIAIS para garantir excelência e realismo, e evitar problemas comuns:
 
     A.  **Qualidade e Detalhamento:**
-        *   cada PROMPT_PARA_IMAGEM de conter maximo 10–30 tokens".
+        *   cada PROMPT_PARA_IMAGEM de conter maximo 20–50 tokens".
         *   O objetivo é criar **imagens realistas ou artísticas ricas em detalhes, formas e texturas**.
         *   O `PROMPT_PARA_IMAGEM` deve ser descritivo o suficiente para guiar a IA na criação de uma imagem que ilustre o desenvolvimento da ideia da narrativa de forma poética, glamurosa, profissional, ética e elegante.
         *   O `PROMPT_PARA_IMAGEM` deve dar prioridade máxima e clareza ao 'elemento visual mais crítico'
@@ -71,9 +100,8 @@ Passo 8. seje criativo e pense no texto para PROMPT_PARA_IMAGEM. siga estas dire
    
     C.  **Elementos 2d**
         *   Proibido incluir no prompt descricao de elementos 2d como formas geometrivas ou textos de qualquer expecie
-
-    **nao crie prompts pars imagem mostrandi detalhes em zoom, sempre mostre a cena mais afastado. o video vai fazer o efeito de zoompad para nos.**
-
+        
+        
     D.  **Inicio prompt**
         *   Para cada parágrafo, entenda seu propósito no contexto. Crie um PROMPT_PARA_IMAGEM que sirva a esse propósito visualmente."       
         *   no inicio do prompt informe ao modelo se:
@@ -82,18 +110,40 @@ Passo 8. seje criativo e pense no texto para PROMPT_PARA_IMAGEM. siga estas dire
             *   Sempre quecalgumw caracterisca, beneficio, propriedade, valor, aolgo que referencie o produto ou objeto do titulo, voce deve obrigatorio compor a cene com alguma das imagens referencia enviadas
           
      
+    E.  **divisao cenas em subgrupos":**
+        *   ao final divida em cena em outras menores, com duracao entre obrigatoria de cada uma dessa divisao:
+            IMPORTANTE: CADA NOVA CENS DO SUBGRUPO DEVE TER A DURACAO ENTRE no minimo 3 a 5 segundos (TEMPO_FIM - TEMPO_INICIO).. 
+        *   cada cena desse grupo deve ter o mesmo prompt com pequenas mudancas na composicai imagem ( mudar possicao objeto/pessoa  central e ou na camera e lente e ou no cenario fundo e ou no tempo dia/noite de cada novs cena desse grupo 
+        *   o tempo inicio e fim de cada cena do subgrupo deve ser distribuido em consideracao ao tempo total da cena a se dividida.
+        
+        exempo: 
+        
+        antes da divisao:
+        cena 1{TEMPO_INICIo:0.00, TEMPO_FIM:9.00, PROMPT_PARA_IMAGEM:1},
+        cena 2{TEMPO_INICIO:9.00, TEMPO_FIM:18.00, PROMPT_PARA_IMAGEM:2},
+        cena 3{TEMPO_INICIO:18.00, TEMPO_FIM:21, PROMPT_PARA_IMAGEM:3}
+       
+        apos a divisao versao final: 
+        cena 1{TEMPO_INICIO:0, TEMPO_FIM:3, PROMPT_PARA_IMAGEM:1a}, cena 2{TEMPO_INICIO:3, TEMPO_FIM:5, PROMPT_PARA_IMAGEM:1b}, cena 3{TEMPO_INICIO:5, TEMPO_FIM:9, PROMPT_PARA_IMAGEM:1c},
+        cena 4{TEMPO_INICIO:9, TEMPO_FIM:15, PROMPT_PARA_IMAGEM:2a}, cena 5{TEMPO_INICIO:15, TEMPO_FIM:18, PROMPT_PARA_IMAGEM:2b},
+        cena 6{TEMPO_INICIO:18, TEMPO_FIM:21, PROMPT_PARA_IMAGEM:3a}
+        
+        se atente que o TEMPO_INICIO de cada cena deve ser o mesmo do TEMPO_FIM da cena anterior... se nao estiver corrija pois nao pode haver lacunae temporais na lista final.
+        
+   
      Resumo Objetivo CreateScenes:
      "Pense passo a passo antes de gerar o JSON final: 
-     1. Leia o texto do narrador. 
+     1. Leia o texto(text) do narrador. 
      2. Identifique a emoção principal. 
-     2. Separe em grupos de falas para cada cena. Identifique a emoção da cena. 
+     2. Separe text em uma lista de grupos de falas para cada cena. Identifique a emoção da cena. 
      3. Pense em uma metáfora visual para essa emoção. 
      4. Pense como usar a imagem regerencia e a composição da câmera .. close-up, plano geral. 
-     5. Escreva o prompt final para a imagem. 
-     6. Verifique se os timestamps estão corretos. Só então, escreva o JSON. cada cena inicia no tempo final da anterior, ajuste se necessario"     
-         
+     5. Escreva o prompt final para a imagem de cada cena  
+     6. Subdivida os a lista das cenas em subgrupos para  uma lista final 
+     7. Verifique se os tempos inicio e fim de cada cena da lista final  estão corretos. Só então, escreva o JSON. cada cena inicia no tempo final da anterior, ajuste se necessario"     
+     
 
-*Formato esperado resposta:** Nao comente ou responda algo sobre essa tarefa... A sua resposta final, deve conter uma lista JSON contendo:
+*Formato esperado resposta lista subgrupos das cenas final:** Nao comente ou responda algo sobre essa tarefa... A sua resposta final, deve conter uma lista JSON contendo:
 [{"CENA": int, "TEMPO_INICIO": double, "TEMPO_FIM": double, "PROMPT_PARA_IMAGEM": "string", "EXIBIR_PRODUTO": "boolean", "FOTO_REFERENCIA": Int}]
 
         """.trimIndent()

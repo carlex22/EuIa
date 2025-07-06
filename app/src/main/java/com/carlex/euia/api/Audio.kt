@@ -440,20 +440,20 @@ object Audio {
                 val concatenatedAudioPath = concatResult.getOrThrow()
                 Log.d(TAG, "✅ Áudios concatenados com sucesso com FFmpeg em: $concatenatedAudioPath")
 
-                val srtFileNameBase = File(concatenatedAudioPath).nameWithoutExtension
-                val srtResult = gerarLegendaSRT(
+                // val srtFileNameBase = File(concatenatedAudioPath).nameWithoutExtension
+                /*val srtResult = gerarLegendaSRT(
                     cena = srtFileNameBase,
                     filePath = concatenatedAudioPath,
                     TextoFala = cleanedOriginalText,
                     context = context, // Passa o contexto para uso futuro se necessário (ex: cache)
                     projectDir = projectDir // Passa o diretório do projeto para salvar o SRT
-                )
+                )*/
 
-                if (srtResult.isSuccess) {
+                /*  if (srtResult.isSuccess) {
                     Log.d(TAG, "✅ Legenda SRT gerada com sucesso: ${srtResult.getOrNull()}")
                 } else {
                     Log.w(TAG, "⚠️ Falha ao gerar legenda SRT para o áudio concatenado: ${srtResult.exceptionOrNull()?.message}. O áudio ainda foi gerado.")
-                }
+                }*/
 
                 Result.success(concatenatedAudioPath)
 
@@ -552,7 +552,7 @@ object Audio {
                     return@withContext Result.failure(NullPointerException(errorMsg))
                 }
                 try {
-                    val rawTranscriptFileName = "$srtBaseName.raw_transcript.json"
+                    val rawTranscriptFileName = "$srtBaseName.srt.raw_transcript.json"
                     // Salva o JSON bruto no diretório do projeto
                     saveRawTranscriptAsJson(projectDir, transcriptionResponse, rawTranscriptFileName)
                 } catch (e: Exception) {
@@ -722,7 +722,7 @@ private fun generateSrtContent1(
                 val lineText = currentLineBuffer.joinToString(" ") { it.word }
                 
                 // Agora todas estas variáveis são Double, resolvendo os erros
-                val srtStartTime = previousEndTime
+                val srtStartTime = currentLineBuffer.last().start //previousEndTime
                 val srtEndTime = currentLineBuffer.last().end
 
                 srtBuilder.append("$entryIndex\n")
