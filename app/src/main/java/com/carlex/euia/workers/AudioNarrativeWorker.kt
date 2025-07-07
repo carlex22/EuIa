@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.carlex.euia.utils.ProjectPersistenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ForegroundInfo
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.ExperimentalSerializationApi
 import java.io.BufferedReader
 import java.util.UUID
+import com.carlex.euia.utils.*
 
 // --- CONSTANTES NO NÍVEL DO ARQUIVO ---
 const val KEY_PROMPT_TO_USE = "promptToUse"
@@ -123,6 +125,8 @@ class AudioNarrativeWorker(
     @OptIn(ExperimentalSerializationApi::class)
     override suspend fun doWork(): Result = coroutineScope {
         Log.d(TAG, "doWork() Iniciado.")
+        
+                OverlayManager.showOverlay(appContext, "🔊", 0) 
 
         val promptToUseInput = inputData.getString(KEY_PROMPT_TO_USE) ?: ""
         val isNewNarrative = inputData.getBoolean(KEY_IS_NEW_NARRATIVE, true)
@@ -191,6 +195,8 @@ class AudioNarrativeWorker(
                         videoObjectiveIntroduction, videoObjectiveVideo, videoObjectiveOutcome, videoTimeSeconds, "${audioDataStoreManager.voiceSpeaker1.first()}", "${audioDataStoreManager.sexo.first()}"
                     )
                 }
+                
+                OverlayManager.showOverlay(appContext, "🔊", 5) 
 
                 val contextFilePath = audioDataStoreManager.narrativeContextFilePath.first()
                 var contextFileContent: String? = null
@@ -214,6 +220,10 @@ class AudioNarrativeWorker(
 
                 val refinedPromptResult = gerarPromptAudioWorker(promptBaseGemini, imagePathsForSingleNarrator, arquivoTextoParaGemini)
 
+
+
+                OverlayManager.showOverlay(appContext, "🔊", 20) 
+                
                 if (refinedPromptResult is Result.Success) {
                     val geminiResponseFilePath = refinedPromptResult.outputData.getString(KEY_GENERATED_PROMPT_FILE_PATH) ?: ""
                     if (geminiResponseFilePath.isNotEmpty()) {
@@ -271,6 +281,8 @@ class AudioNarrativeWorker(
                 updateNotificationProgress(appContext.getString(R.string.notification_content_audio_using_existing_text))
                 updateWorkerProgress("Usando texto existente...", true)
             }
+            
+            OverlayManager.showOverlay(appContext, "🔊", 50) 
 
             if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_task_cancelled_before_audio_generation))
 
@@ -286,7 +298,7 @@ class AudioNarrativeWorker(
                 updateNotificationProgress(appContext.getString(R.string.notification_content_audio_generating_dialog))
                 updateWorkerProgress("Gerando áudio do diálogo...", true)
                 audioResult = GeminiMultiSpeakerAudio.generate(dialogText = finalPromptUsed, speakerVoiceMap = speakerMap, context = applicationContext, projectDir = projectDir)
-     8       } else {
+            } else {
                 val vozParaGerar = voiceOverrideInput ?: voiceSpeaker1Input ?: audioDataStoreManager.voz.first()
                 if (vozParaGerar.isBlank()) {
                     throw IllegalStateException(appContext.getString(R.string.error_no_voice_selected_for_single_narrator))
@@ -295,6 +307,8 @@ class AudioNarrativeWorker(
                 updateWorkerProgress("Gerando áudio (narrador único)...", true)
                 audioResult = GeminiAudio.generate(text = finalPromptUsed, voiceName = vozParaGerar, context = applicationContext, projectDir = projectDir)
             }
+            
+            OverlayManager.showOverlay(appContext, "🔊", 80) 
 
             if (audioResult.isSuccess) {
                 generatedAudioPath = audioResult.getOrThrow()
@@ -311,6 +325,8 @@ class AudioNarrativeWorker(
                     cena = File(generatedAudioPath!!).nameWithoutExtension, filePath = generatedAudioPath!!,
                     TextoFala = finalPromptUsed, context = applicationContext, projectDir = projectDir
                 )
+                
+                OverlayManager.showOverlay(appContext, "🔊", 90) 
                 
                 if (legendaResult.isSuccess) {
                     val generatedLegendaPath = legendaResult.getOrThrow()
@@ -329,6 +345,8 @@ class AudioNarrativeWorker(
                 updateNotificationProgress(appContext.getString(R.string.notification_content_audio_generation_failed, finalErrorMessage.take(30)), true)
                 overallSuccess = false
             }
+            
+            OverlayManager.showOverlay(appContext, "🔊", 100) 
 
             if (overallSuccess) {
                 updateNotificationProgress(appContext.getString(R.string.notification_content_audio_process_completed_successfully), true)
@@ -347,6 +365,8 @@ class AudioNarrativeWorker(
             updateNotificationProgress(finalErrorMessage, true)
             return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalErrorMessage))
         } finally {
+            OverlayManager.hideOverlay(appContext) 
+            ProjectPersistenceManager.saveProjectState(appContext)
             audioDataStoreManager.setIsAudioProcessing(false)
             val finalProgressText = if (overallSuccess && finalErrorMessage == null) appContext.getString(R.string.status_finished) else finalErrorMessage ?: appContext.getString(R.string.status_finished_with_error)
             updateWorkerProgress(finalProgressText, false)

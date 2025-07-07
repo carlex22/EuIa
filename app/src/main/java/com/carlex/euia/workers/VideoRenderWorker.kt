@@ -11,6 +11,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
+import com.carlex.euia.utils.ProjectPersistenceManager
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -86,7 +87,7 @@ class VideoRenderWorker(
                 throw IllegalStateException(error)
             }
             
-            OverlayManager.showOverlay(appContext, appContext.getString(R.string.notification_title_video_render), 0) 
+            OverlayManager.showOverlay(appContext, "🎥", -1) 
 
             val totalDurationForProgress = scenesToInclude.sumOf { it.tempoFim!! - it.tempoInicio!! }
             var pro = -1
@@ -143,7 +144,7 @@ class VideoRenderWorker(
                         
                         if (progressoPercent > pro) {
                             Log.w(TAG, "Progresso global: $progressoPercent%")
-                            OverlayManager.showOverlay(appContext, appContext.getString(R.string.notification_title_video_render), progressoPercent)
+                            OverlayManager.showOverlay(appContext, "$progressoPercent %", progressoPercent)
                             updateNotification(progressoPercent, "$progressoPercent%")
                             setProgressAsync(workDataOf(KEY_PROGRESS to (progressoPercent / 100f)))
                             pro = progressoPercent
@@ -172,6 +173,7 @@ class VideoRenderWorker(
             return Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMessage))
         } finally {
             // 3. DESLIGAR O LOCK, ACONTEÇA O QUE ACONTECER
+            ProjectPersistenceManager.saveProjectState(appContext)
             Log.d(TAG, "Bloco finally do Worker: Garantindo que o lock de renderização seja desativado.")
             videoGeneratorDataStoreManager.setCurrentlyGenerating(false)
         }

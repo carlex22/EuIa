@@ -62,7 +62,15 @@ data class RestContent(
 @Serializable
 data class RestPart(
     @SerialName("text") val text: String? = null,
-    @SerialName("inlineData") val inlineData: RestInlineData? = null
+    @SerialName("inlineData") val inlineData: RestInlineData? = null,
+    @SerialName("fileData") val fileData: FileData? = null
+)
+
+
+@Serializable
+data class FileData(
+    @SerialName("mimeType") val mimeType: String,
+    @SerialName("fileUri") val fileUri: String
 )
 
 @Serializable
@@ -219,9 +227,20 @@ object GeminiTextAndVisionProRestApi {
     ): Result<String> {
         val parts = mutableListOf<RestPart>()
         
+        
+        val videoFileData = FileData(
+            mimeType = "video/*", // Use "video/*" ou "video/mp4", etc.
+            fileUri = "$youtubeUrl?"
+        )
+        
+        
         if (!youtubeUrl.isNullOrBlank() && (youtubeUrl.contains("youtube.com", ignoreCase = true) || youtubeUrl.contains("youtu.be", ignoreCase = true))) {
-            parts.add(RestPart(text = "Por favor, analise e considere o conteúdo deste vídeo do YouTube para a sua resposta: $youtubeUrl\n"))
-            Log.d(TAG, "YouTube URL adicionada como texto ao prompt: $youtubeUrl")
+           val videoFileData = FileData(
+                mimeType = "video/*", // Use "video/*" ou "video/mp4", etc.
+                fileUri = youtubeUrl
+            )
+            parts.add(RestPart(fileData = videoFileData))
+            Log.d(TAG, "YouTube URL adicionada como FileData ao prompt (para Retrofit): $youtubeUrl")
         }
 
         parts.add(RestPart(text = prompt))

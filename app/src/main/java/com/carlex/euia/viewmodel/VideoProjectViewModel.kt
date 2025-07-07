@@ -40,7 +40,7 @@ import com.carlex.euia.worker.VideoProcessingWorker.Companion.TAG_PREFIX_SCENE_V
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_IMAGENS_REFERENCIA_JSON_INPUT
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_SOURCE_IMAGE_PATH_FOR_VIDEO
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_VIDEO_GEN_PROMPT
-
+import com.carlex.euia.utils.*
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -145,9 +145,26 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     val promptForRecreateImage: StateFlow<String?> = _promptForRecreateImage.asStateFlow()
     private val _sceneIdForReferenceChangeDialog = MutableStateFlow<String?>(null)
     val sceneIdForReferenceChangeDialog: StateFlow<String?> = _sceneIdForReferenceChangeDialog.asStateFlow()
+    
+    
+    var roteiroCenasFinal = JSONArray()
+
+    
     private val workInfoObserver = Observer<List<WorkInfo>> { workInfos ->
         val isAnyWorkRunning = workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
         Log.d(TAG, "Observador de WorkInfo (tag ${WorkerTags.VIDEO_PROCESSING}): ${workInfos.size} trabalhos. Algum rodando? $isAnyWorkRunning")
+        if (!isAnyWorkRunning ){
+            OverlayManager.hideOverlay(application) 
+        } else {
+            val runningCount = workInfos.count { it.state == WorkInfo.State.RUNNING }
+            val enqueuedCount = workInfos.count { it.state == WorkInfo.State.ENQUEUED }
+            val totalActiveCount = runningCount + enqueuedCount
+            val quantidadeDeRegistros = sceneLinkDataList.value.size
+            val quantidadeOk = sceneLinkDataList.value.count { it.imagemReferenciaPath == null }
+            
+            val progresso = ((quantidadeDeRegistros - totalActiveCount + quantidadeOk).toFloat() / (quantidadeDeRegistros.toFloat()+1)) * 100
+            OverlayManager.showOverlay(application, "$totalActiveCount/$quantidadeDeRegistros",  progresso.toInt())
+        }
     }
 
 
@@ -378,6 +395,9 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         narrativaOuDialogo: String,
         legendaPathParaApi: String
     ) {
+    
+        OverlayManager.showOverlay(applicationContext, "📸", -1) 
+        
         if (_isProcessingGlobalScenes.value ) {
             Log.d(TAG, "performFullSceneGeneration: Geração global já em progresso. Retornando.")
             return
@@ -395,6 +415,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         val promptGerarCenas: String
         if (isChat) {
             promptGerarCenas = CreateScenesChat(
+                textNarrative = narrativaOuDialogo,
                 currentUserNameCompany = userInfoDataStoreManager.userNameCompany.first(),
                 currentUserProfessionSegment = userInfoDataStoreManager.userProfessionSegment.first(),
                 currentUserAddress = userInfoDataStoreManager.userAddress.first(),
@@ -430,12 +451,18 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             imagens = imagePathsForGemini,
             arquivoTexto = "${legendaPathParaApi}.raw_transcript.json"
         )
+        
+        
 
         if (respostaResult.isSuccess) {
+        
+        OverlayManager.showOverlay(applicationContext, "📸", 50) 
+        
             val resposta = respostaResult.getOrNull()
             if (resposta.isNullOrBlank()){
                 _globalSceneError.value = applicationContext.getString(R.string.error_ai_empty_response_scenes)
                 _isProcessingGlobalScenes.value = false
+                OverlayManager.hideOverlay(applicationContext) 
                 return
             }
 
@@ -445,14 +472,14 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 Log.d(TAG, "Resposta da IA recebida. Aguardando 0.5 segundos antes de processar e exibir as cenas.")
                 delay(500)
 
-                val roteiroCenasFinal = JSONArray(respostaAjustada)
+                roteiroCenasFinal = JSONArray(respostaAjustada)
                 val generatedSceneDataList = mutableListOf<SceneLinkData>()
                 
                 var temoIni : Double? = 0.0
                 for (i in 0 until roteiroCenasFinal.length()) {
                     val cenaObj = roteiroCenasFinal.getJSONObject(i)
                     val originalImageIndexFromApi = cenaObj.optString("FOTO_REFERENCIA", null)?.toIntOrNull()
-
+                    OverlayManager.showOverlay(applicationContext, "📸", 50+i) 
                     var refImagePathForScene = ""
                     var refDescriptionForScene = applicationContext.getString(R.string.scene_no_reference_image)
                     var videoPathFromRef: String? = null
@@ -479,7 +506,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                         }
                     }
                      
-                     
+                     OverlayManager.showOverlay(applicationContext, "📸", 100) 
                      
                      generatedSceneDataList.add(SceneLinkData(
                          id = UUID.randomUUID().toString(),
@@ -510,6 +537,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 val scenesThatNeedGeneration = generatedSceneDataList.filter {
                     it.promptGeracao?.isNotBlank() == true && it.imagemGeradaPath == null
                 }
+                
+                
 
                 if (scenesThatNeedGeneration.isNotEmpty()) {
                     val imgCu = AppConfigManager.getInt("task_COST_DEB_IMG") ?: 10
@@ -521,6 +550,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                     if (user != null && !user.isPremium && cred?.toInt()!! < totalCost) {
                         _globalSceneError.value = applicationContext.getString(R.string.error_insufficient_credits_for_batch, totalCost, user.creditos)
                     } else {
+                    
+                    OverlayManager.hideOverlay(applicationContext) 
                         _pendingImageBatchCost.value = totalCost.toLong()!!
                         _pendingSceneListForGeneration = generatedSceneDataList
                         _showImageBatchCostConfirmationDialog.value = true
@@ -529,12 +560,17 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                 } else {
                     Toast.makeText(applicationContext, "Estrutura de cenas criada. Nenhuma imagem nova para gerar via IA.", Toast.LENGTH_SHORT).show()
                 }
+                
+                OverlayManager.hideOverlay(applicationContext) 
 
             } catch (e: JSONException) {
+            OverlayManager.hideOverlay(applicationContext) 
                 _globalSceneError.value = applicationContext.getString(R.string.error_processing_ai_json_response_scenes)
                 _isProcessingGlobalScenes.value = false
             }
         } else {
+        OverlayManager.hideOverlay(applicationContext) 
+        
             val exception = respostaResult.exceptionOrNull()
             _globalSceneError.value = exception?.message ?: applicationContext.getString(R.string.error_api_failed_scenes_unknown)
             _isProcessingGlobalScenes.value = false

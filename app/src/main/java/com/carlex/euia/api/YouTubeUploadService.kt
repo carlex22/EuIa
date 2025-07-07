@@ -15,6 +15,12 @@ import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Converter
 import retrofit2.Response
+import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.*
@@ -182,34 +188,52 @@ object YouTubeUploadService {
      * Envia um arquivo de imagem como thumbnail para um vídeo já existente.
      */
     suspend fun setThumbnail(
-        oauthAccessToken: String,
-        videoId: String,
-        thumbnailFile: File
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        if (!thumbnailFile.exists()) {
-            return@withContext Result.failure(IOException("Arquivo da thumbnail não encontrado: ${thumbnailFile.absolutePath}"))
-        }
-        Log.d(TAG, "Iniciando upload da thumbnail para o videoId: $videoId")
-        try {
-            val requestBody = thumbnailFile.asRequestBody("image/webp".toMediaType())
-            val response = youtubeApiService.setThumbnail(
-                apiKey = YOUR_GOOGLE_API_KEY,
-                videoId = videoId,
-                authorization = "Bearer $oauthAccessToken",
-                imageFile = requestBody
-            )
-            
-            if(response.isSuccessful) {
-                Log.i(TAG, "Thumbnail enviada com sucesso para o videoId: $videoId")
-                return@withContext Result.success(Unit)
-            } else {
-                val errorBody = response.errorBody()?.string() ?: "Erro desconhecido"
-                Log.e(TAG, "Falha ao enviar thumbnail: HTTP ${response.code()} - $errorBody")
-                return@withContext Result.failure(IOException("Falha ao enviar thumbnail: ${response.code()} - $errorBody"))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Exceção durante upload da thumbnail: ${e.message}", e)
-            return@withContext Result.failure(e)
-        }
+    oauthAccessToken: String,
+    videoId: String,
+    thumbnailFile: File
+): Result<Unit> = withContext(Dispatchers.IO) {
+    if (!thumbnailFile.exists()) {
+        return@withContext Result.failure(IOException("Arquivo da thumbnail não encontrado: ${thumbnailFile.absolutePath}"))
     }
+    Log.d(TAG, "Iniciando upload da thumbnail para o videoId: $videoId")
+    try {
+        // Decodifica o arquivo WEBP para um Bitmap
+        val bitmap = BitmapFactory.decodeFile(thumbnailFile.absolutePath)
+        if (bitmap == null) {
+            Log.e(TAG, "Falha ao decodificar o arquivo WEBP para Bitmap.")
+            return@withContext Result.failure(IOException("Falha ao decodificar thumbnail WEBP."))
+        }
+
+        // Converte o bitmap para JPEG
+        val outputStream = ByteArrayOutputStream()
+        val compressSuccess = bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+        if (!compressSuccess) {
+            Log.e(TAG, "Falha ao comprimir bitmap para JPEG.")
+            return@withContext Result.failure(IOException("Falha ao converter thumbnail para JPEG."))
+        }
+        val jpegByteArray = outputStream.toByteArray()
+        val requestBody = jpegByteArray.toRequestBody("image/jpeg".toMediaType())
+
+        // Envia para a API
+        val response = youtubeApiService.setThumbnail(
+            apiKey = YOUR_GOOGLE_API_KEY,
+            videoId = videoId,
+            authorization = "Bearer $oauthAccessToken",
+            imageFile = requestBody
+        )
+
+        if (response.isSuccessful) {
+            Log.i(TAG, "Thumbnail enviada com sucesso para o videoId: $videoId")
+            return@withContext Result.success(Unit)
+        } else {
+            val errorBody = response.errorBody()?.string() ?: "Erro desconhecido"
+            Log.e(TAG, "Falha ao enviar thumbnail: HTTP ${response.code()} - $errorBody")
+            return@withContext Result.failure(IOException("Falha ao enviar thumbnail: ${response.code()} - $errorBody"))
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Exceção durante upload da thumbnail: ${e.message}", e)
+        return@withContext Result.failure(e)
+    }
+}
+
 }

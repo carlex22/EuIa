@@ -51,8 +51,8 @@ class SrtToAssConverter(
     // Parâmetros de Estilo e Posição - Tamanhos/Valores
     private val outlineSizePixels: Int = 2,
     private val shadowOffsetPixels: Int = 4,
-    private val fontSizeBaseMultiplier: Float = 0.07f, // Base para o cálculo dinâmico da fonte
-    private val textBlockWidthPercentage: Int = 80, // Largura que o bloco de texto deve ocupar
+    private val fontSizeBaseMultiplier: Float = 0.12f, // Base para o cálculo dinâmico da fonte
+    private val textBlockWidthPercentage: Int = 90, // Largura que o bloco de texto deve ocupar
 
     // Parâmetros de Alinhamento Vertical
     private val fixedCenterYRatio: Float = 0.85f, // Ponto fixo para o centro da legenda (85% da altura do vídeo)
@@ -67,10 +67,10 @@ class SrtToAssConverter(
     private val fadeDurationMs: Int = 100,
 
     // <<<<< NOVOS PARÂMETROS PARA CONTROLE DE FONTE DINÂMICA >>>>>
-    private val minFontSizeRatio: Float = 0.03f, // 3% da altura do vídeo
-    private val maxFontSizeRatio: Float = 0.08f, // 8% da altura do vídeo
-    private val idealCharsForScaling: Int = 30, // Número ideal de caracteres para o tamanho base
-    private val marginInferior: Double = 0.10
+    private val minFontSizeRatio: Float = 0.12f, // 3% da altura do vídeo
+    private val maxFontSizeRatio: Float = 0.25f, // 8% da altura do vídeo
+    private val idealCharsForScaling: Int = 10, // Número ideal de caracteres para o tamanho base
+    private val marginInferior: Double = 0.30
 ) {
 
     val TAG = "SrtToAssConverter"

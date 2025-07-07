@@ -68,15 +68,16 @@ class OverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val message = intent?.getStringExtra(EXTRA_OVERLAY_MESSAGE) ?: ""
         val progressValue = intent?.getStringExtra(EXTRA_OVERLAY_PROGRESSO)?.toIntOrNull() ?: 0
-        val porcentagem = "$progressValue%" // Isso será usado internamente pela CircularProgressBarView
+        val porcentagem = "$message" // Isso será usado internamente pela CircularProgressBarView
 
         when (intent?.action) {
             ACTION_SHOW_OVERLAY -> {
                 if (!isOverlayShowing && !isTrash) {
                     overlayMessageText = message
+                    if (progressValue>0)
                     overlayProgressBar = progressValue
-                    overlayMessagePercent = porcentagem // Atribuído, mas não usado por TextView separado
-                    Log.d(TAG, "ACTION_SHOW_OVERLAY overlayProgressBar: $overlayProgressBar%")
+                    overlayMessagePercent = message // Atribuído, mas não usado por TextView separado
+                    Log.d(TAG, "ACTION_SHOW_OVERLAY overlayProgressBar: $overlayProgressBar")
                     showOverlay()
                     isOverlayShowing = true
                     isTrash = false
@@ -95,10 +96,11 @@ class OverlayService : Service() {
             }
             ACTION_UPDATE_MESSAGE -> {
                 if (!isTrash && isOverlayShowing) {
-                    Log.d(TAG, "ACTION_UPDATE_MESSAGE: $message, Progress: $progressValue%")
+                    Log.d(TAG, "ACTION_UPDATE_MESSAGE: $message, Progress: $progressValue")
                     overlayMessageText = message
+                    if (progressValue>-1)
                     overlayProgressBar = progressValue
-                    overlayMessagePercent = porcentagem
+                    overlayMessagePercent = message
                     updateOverlayContent()
                 } else {
                     Log.d(TAG, "ACTION_UPDATE_MESSAGE ignored: isTrash=$isTrash or !isOverlayShowing=$isOverlayShowing")
@@ -258,7 +260,8 @@ class OverlayService : Service() {
 
     private fun updateOverlayContent() {
         // CORREÇÃO AQUI: Substituir `appContext` por `this`
-        
+        circularProgressBar.msg = overlayMessageText
+        if (overlayProgressBar>0)
         circularProgressBar.progress = overlayProgressBar // Atualiza o progresso na nova View
     }
 

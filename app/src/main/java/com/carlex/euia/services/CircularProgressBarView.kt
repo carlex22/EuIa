@@ -42,6 +42,13 @@ class CircularProgressBarView @JvmOverloads constructor(
             field = value.coerceIn(0, 100) // Garante que o valor esteja entre 0 e 100
             invalidate() // Solicita um redesenho da View
         }
+        
+        
+     var msg: String= ""
+        set(value) {
+            field = value // Garante que o valor esteja entre 0 e 100
+            invalidate() // Solicita um redesenho da View
+        }   
 
     // <<< INÍCIO DA CORREÇÃO: Renomeando as propriedades >>>
     var pbProgressColor: Int = Color.WHITE // Renomeado de progressColor
@@ -121,7 +128,7 @@ class CircularProgressBarView @JvmOverloads constructor(
         canvas.drawArc(rectF, 270f, angle, false, progressPaint)
 
         // Desenha o texto percentual no centro
-        val text = "$progress%"
+        val text = "$msg"
         val xPos = width / 2f
         // Calcula a posição Y para centralizar verticalmente o texto
         val yPos = (height / 2f) - ((textPaint.descent() + textPaint.ascent()) / 2f)

@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.media.MediaMetadataRetriever
+import com.carlex.euia.utils.ProjectPersistenceManager
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -49,6 +50,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.coroutines.coroutineContext
 import kotlin.math.min
+
+import com.carlex.euia.utils.*
 
 // Define TAG for logging
 private const val TAG_WORKER = "ImageProcWorker"
@@ -148,6 +151,8 @@ class ImageProcessingWorker(
     @OptIn(ExperimentalSerializationApi::class)
     override suspend fun doWork(): Result = coroutineScope {
         Log.d(TAG_WORKER, "doWork started.")
+        OverlayManager.showOverlay(appContext, "📝", -1)
+        
         val uriStrings = inputData.getStringArray(KEY_MEDIA_URIS)
 
         if (uriStrings.isNullOrEmpty()) {
@@ -171,6 +176,8 @@ class ImageProcessingWorker(
                 val progressText = appContext.getString(R.string.notification_content_media_processing_progress, index + 1, uris.size)
                 updateNotificationProgress(progressText)
                 Log.d(TAG_WORKER, progressText)
+                
+                OverlayManager.showOverlay(appContext, "📝", successfulCount*5)
 
                 val currentProjectDirName = videoPreferencesDataStoreManager.videoProjectDir.first()
                 val mimeType = getMimeType(uri)
@@ -237,7 +244,11 @@ class ImageProcessingWorker(
             updateNotificationProgress(errorMsg, true, isError = true)
             return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
         } finally {
+         OverlayManager.hideOverlay(appContext) 
             dataStoreManager.setIsProcessingImages(false) // Garante que a flag seja resetada
+            
+            ProjectPersistenceManager.saveProjectState(appContext)
+            
             Log.d(TAG_WORKER, "doWork finished.")
         }
     }

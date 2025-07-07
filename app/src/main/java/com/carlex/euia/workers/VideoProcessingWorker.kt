@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import com.carlex.euia.utils.ProjectPersistenceManager
 import android.graphics.Color
 import android.media.MediaMetadataRetriever
 import android.os.Build
@@ -46,6 +47,7 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.coroutineContext
 import kotlin.math.min
+import com.carlex.euia.utils.*
 import retrofit2.HttpException
 
 
@@ -154,6 +156,8 @@ class VideoProcessingWorker(
 
     override suspend fun doWork(): Result = coroutineScope {
         Log.d(TAG, "doWork() Iniciado.")
+        
+        OverlayManager.showOverlay(appContext, "🎬", -1)
 
         val sceneId = inputData.getString(KEY_SCENE_ID)
             ?: return@coroutineScope Result.failure(workDataOf("error" to appContext.getString(R.string.error_scene_id_missing)))
@@ -240,10 +244,15 @@ class VideoProcessingWorker(
                     }
                 }
             }
+            
+            ProjectPersistenceManager.saveProjectState(appContext)
+            
 
             if (!success) {
                 throw Exception(lastError ?: appContext.getString(R.string.error_max_attempts_reached, MAX_ATTEMPTS))
             }
+            
+            
             
             updateNotificationProgress(appContext.getString(R.string.notification_task_completed_success, taskType, sceneId.take(8)), true)
             return@coroutineScope Result.success()

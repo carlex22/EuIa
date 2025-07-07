@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.carlex.euia.utils.ProjectPersistenceManager
 import androidx.work.*
 import com.carlex.euia.MainActivity
 import com.carlex.euia.R
@@ -33,6 +34,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import com.carlex.euia.utils.*
+
 
 private const val TAG = "RefImageAnalysisWorker"
 
@@ -50,6 +53,10 @@ class RefImageAnalysisWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
+
+    
+    
+    val appContext1: Context = appContext
 
     private val refImageDataStoreManager = RefImageDataStoreManager(applicationContext)
     private val videoDataStoreManager = VideoDataStoreManager(applicationContext)
@@ -107,6 +114,9 @@ class RefImageAnalysisWorker(
         Log.d(TAG, "doWork started for RefImageAnalysisWorker.")
         updateNotification(applicationContext.getString(R.string.notification_content_ref_image_fetching_data))
 
+
+        OverlayManager.showOverlay(appContext1, "💾", -1)
+
         try {
             Log.d(TAG, "Buscando dados dos DataStores...")
             val tituloValue = audioDataStoreManager.videoTitulo.first()
@@ -120,6 +130,9 @@ class RefImageAnalysisWorker(
                      json.decodeFromString(ListSerializer(ImagemReferencia.serializer()), videoImagensReferenciaJsonString)
                  } else { emptyList() }
              } catch (e: Exception) {
+             
+             OverlayManager.hideOverlay(appContext1) 
+             
                  val errorMsg = "Erro ao carregar referências de imagem salvas: ${e.message}"
                  throw IllegalStateException(errorMsg, e)
              }
@@ -128,11 +141,19 @@ class RefImageAnalysisWorker(
             if (imagePaths.isEmpty()) {
                 val errorMsg = "Não há imagens de referência para analisar."
                 updateNotification(errorMsg, makeDismissible = true, isError = true)
+                OverlayManager.hideOverlay(appContext1) 
+                
                 return Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
             }
+            
+            
 
             updateNotification(applicationContext.getString(R.string.notification_content_ref_image_analyzing, imagePaths.size))
             val jsonArrayResult = gerarDetalhesVisuais(currentPrompt, imagePaths)
+            
+            
+            OverlayManager.hideOverlay(appContext1) 
+            
             
             if (jsonArrayResult.length() > 0) {
                 updateNotification(applicationContext.getString(R.string.notification_content_ref_image_saving))
@@ -142,13 +163,21 @@ class RefImageAnalysisWorker(
 
                 val successMsg = applicationContext.getString(R.string.notification_content_ref_image_success, flattenedMap.size)
                 updateNotification(successMsg, makeDismissible = true)
+                
+                ProjectPersistenceManager.saveProjectState(appContext1)
+                
                 return Result.success()
             } else {
+            
+            OverlayManager.hideOverlay(appContext1) 
+            
                 val errorMsg = "Análise da IA não retornou detalhes visuais."
                 updateNotification(errorMsg, makeDismissible = true, isError = true)
                 return Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMsg))
             }
         } catch (e: Exception) {
+        
+        OverlayManager.hideOverlay(appContext1) 
             val errorMessage = when (e) {
                 is CancellationException -> "Análise cancelada pelo usuário."
                 else -> e.message ?: "Erro desconhecido na análise."

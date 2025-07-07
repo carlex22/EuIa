@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.carlex.euia.utils.ProjectPersistenceManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -36,6 +37,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import com.carlex.euia.utils.*
 import kotlin.coroutines.coroutineContext
 
 // Constantes para a notificação
@@ -130,6 +132,8 @@ class UrlImportWorker(
         val action = inputData.getString(KEY_ACTION) ?: ACTION_PRE_CONTEXT_EXTRACTION
         Log.d(TAG_URL_IMPORT_WORKER, "Iniciando doWork com ação: $action")
         var finalResult: Result = Result.failure()
+        
+        OverlayManager.showOverlay(appContext, "📝", -1)
 
         try {
             val urlInputForNotification = inputData.getString(KEY_URL_INPUT)?.take(30) ?: appContext.getString(R.string.url_generic_placeholder)
@@ -164,14 +168,20 @@ class UrlImportWorker(
                 val errorMessage = finalResult.outputData.getString(KEY_OUTPUT_ERROR_MESSAGE) ?: appContext.getString(R.string.error_url_import_failed)
                 updateNotificationProgress(appContext.getString(R.string.notification_content_url_import_failed_details, urlInputForNotification, errorMessage.take(50)), true, isError = true)
             }
+            
+            ProjectPersistenceManager.saveProjectState(appContext)
+            OverlayManager.hideOverlay(appContext) 
+            
             return finalResult
 
         } catch (e: kotlinx.coroutines.CancellationException) {
+        OverlayManager.hideOverlay(appContext) 
             Log.w(TAG_URL_IMPORT_WORKER, "Importação de URL cancelada: ${e.message}", e)
             val cancelMsg = e.message ?: appContext.getString(R.string.error_url_import_cancelled)
             updateNotificationProgress(cancelMsg, true, isError = true)
             return Result.failure(workDataOf(KEY_OUTPUT_ERROR_MESSAGE to cancelMsg))
         } catch (e: Exception) {
+        OverlayManager.hideOverlay(appContext) 
             Log.e(TAG_URL_IMPORT_WORKER, "Erro catastrófico no UrlImportWorker: ${e.message}", e)
             val errorMsg = appContext.getString(R.string.error_critical_url_import, (e.message ?: e.javaClass.simpleName))
             updateNotificationProgress(errorMsg, true, isError = true)

@@ -32,6 +32,7 @@ class CreateScenes(
 ### **Você é um diretor apaixonado pelo seu ofício, conhecido por sua atenção meticulosa aos detalhes visuais e por criar imagens que evocam emoção
 
 
+
 Passo 1. Analise o Jshon do arquivo de legendas em anexo, ele tem:
 
 {

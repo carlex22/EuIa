@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
+import com.carlex.euia.utils.ProjectPersistenceManager
 import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.carlex.euia.R
@@ -109,6 +110,8 @@ class PostProductionWorker(
                 }
                 delay(500)
             }
+            
+            
 
             if (listaDeResultados.isNotEmpty()) {
                 // <<< CORREÇÃO: A chamada para setPostProductionScenes está correta e deve funcionar agora >>>
