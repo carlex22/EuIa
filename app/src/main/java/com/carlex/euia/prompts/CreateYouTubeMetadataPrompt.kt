@@ -26,15 +26,47 @@ class CreateYouTubeMetadataPrompt(
         - **Título Original/Tema:** "$originalTitle"
         - **Narrativa Completa (Roteiro):** "$videoNarrative"
         - **Estilo Visual Geral:** "$visualStyleDescription"
+        
+        Vamos lembra como voce mestre genial se prepara lendo seu RACIOCÍNIO anotado em seu diario secreto pessoal.
+A sua receita basica secreta do sucesso, seu tempero e forma mais guardada que a da coca-cola
+
+== ETAPA 1: FILOSOFIA → NARRATIVA ==
+Analise a essência conceitual do projeto:
+- Qual é o insight central que move esta narrativa?
+- Que perspectiva única está sendo apresentada?
+- Como transformar conceitos abstratos em história tangível?
+- Qual é a "grande ideia" por trás do conteúdo?
+
+== ETAPA 2: TEORIA → PRÁTICA ==
+Conecte conceitos com aplicação real:
+- Como os conceitos se manifestam na vida cotidiana?
+- Que exemplos concretos ilustram a teoria?
+- Quais são as implicações práticas para o público?
+- Como tornar o abstrato em acionável?
+
+== ETAPA 3: CONVERSA → ESTRUTURA ==
+Transforme diálogo em roteiro estruturado:
+- Qual é o gancho emocional mais forte?
+- Como criar progressão lógica e envolvente?
+- Que pontos de conexão ressoam com o público?
+- Como equilibrar informação e entretenimento?
+
+== ETAPA 4: APLICAÇÃO → IMPACTO ==
+Defina resultado desejado:
+- Que mudança de perspectiva esperamos?
+- Qual ação específica o público deve tomar?
+- Como medir o sucesso da narrativa?
+- Qual é o legado da mensagem?
+        
 
         **SUA TAREFA:**
         Com base no contexto fornecido, gere um objeto JSON com a seguinte estrutura e conteúdo:
 
-        1.  **"title"**: Crie um título OTIMIZADO para SEO e cliques (máximo de 70 caracteres). Deve ser cativante, claro e conter as palavras-chave mais relevantes para buscas no YouTube. Pense em como despertar curiosidade.
+        1.  **"title"**: Crie um título Inteligente OTIMIZADO para SEO em sites de buscas  (máximo de 70 caracteres). Deve ser cativante, claro e conter as palavras-chave mais relevantes para buscas no YouTube e Google. Pense em como despertar curiosidade, e gerar mais relevancias para motores de busca
         
         2.  **"description"**: Crie uma descrição detalhada e envolvente. Comece com 2-3 frases que resumem o vídeo e prendem a atenção do espectador, repetindo as palavras-chave do título naturalmente. Depois, se a narrativa permitir, adicione mais detalhes, expandindo os pontos principais. **Finalize a descrição com uma seção de 3 a 5 hashtags relevantes.**
         
-        3.  **"hashtags"**: Forneça uma string única contendo de 3 a 5 das hashtags mais importantes, separadas por espaço (ex: "IA, MarketingDigital, Automacao"). Estas são as hashtags que aparecerão acima do título do vídeo.
+        3.  **"hashtags"**: Forneça uma string única contendo de 5 a 8 das hashtags mais importantes, separadas por espaço (ex: "#IA, #MarketingDigital, #Automacao"). Estas são as hashtags que aparecerão acima do título do vídeo.
         
         4.  **"thumbnail_prompt"**: Esta é a sua obra de arte. Crie um prompt de texto para um gerador de imagens de IA (como Midjourney ou DALL-E) para criar a thumbnail perfeita para este vídeo. O prompt deve ser:
             - **Visualmente Impactante:** Descreva uma cena que gere uma forte emoção (curiosidade, surpresa, urgência) e que se destaque.

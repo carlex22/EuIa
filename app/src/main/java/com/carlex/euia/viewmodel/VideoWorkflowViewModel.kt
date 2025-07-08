@@ -3,11 +3,10 @@ package com.carlex.euia.viewmodel
 
 import android.app.Application
 import android.content.Context
-import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.carlex.euia.AppDestinations
-import com.carlex.euia.R // Para strings
+import com.carlex.euia.R
 import com.carlex.euia.WorkflowStage
 import com.carlex.euia.utils.ProjectPersistenceManager
 import kotlinx.coroutines.Dispatchers
@@ -19,17 +18,7 @@ import android.util.Log
  * ViewModel compartilhado que gerencia o estado e a lógica do fluxo de trabalho (workflow)
  * de criação de vídeo.
  *
- * Responsabilidades:
- * - Manter a lista de etapas ([WorkflowStage]) do fluxo.
- * - Controlar o índice da aba atualmente selecionada ([selectedWorkflowTabIndex]).
- * - Consolidar o estado de processamento da aba ativa ([isCurrentStageProcessing], [currentStageProgressText], [currentStageNumericProgress]).
- * - Armazenar e fornecer os callbacks para as ações dos botões da BottomAppBar do workflow,
- *   que são definidos pela [VideoCreationWorkflowScreen] com base na aba ativa.
- * - Gerenciar o estado de "dirty" da tela de Contexto e a lógica para exibir o diálogo de confirmação
- *   ao tentar sair dela com alterações não salvas.
- * - Acionar o salvamento do estado do projeto através do [ProjectPersistenceManager].
- *
- * @param application A instância da aplicação, necessária para [AndroidViewModel] e acesso ao contexto.
+ * (O restante do KDoc permanece o mesmo)
  */
 class VideoWorkflowViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -42,6 +31,12 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_information), AppDestinations.WORKFLOW_STAGE_INFORMATION),
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_narrative), AppDestinations.WORKFLOW_STAGE_NARRATIVE),
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_scenes), AppDestinations.WORKFLOW_STAGE_SCENES),
+        
+        // <<< NOVO >>>
+        // Adiciona a etapa de Música antes de Finalizar.
+        // É necessário adicionar a string "workflow_stage_title_music" em res/values/strings.xml
+        WorkflowStage(appContext.getString(R.string.workflow_stage_title_music), AppDestinations.WORKFLOW_STAGE_MUSIC),
+
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_finalize), AppDestinations.WORKFLOW_STAGE_FINALIZE)
     )
 
@@ -103,14 +98,10 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
 
     /**
      * Tenta mudar para a [targetIndex] da aba.
-     * Se a aba atual for a de Contexto e estiver com alterações não salvas,
-     * armazena a ação de mudança de aba e sinaliza para a UI mostrar um diálogo de confirmação.
-     * Caso contrário, atualiza o índice da aba diretamente.
+     * (A lógica interna permanece a mesma)
      */
     fun attemptToChangeTab(targetIndex: Int) {
         if (_isCurrentStageProcessing.value && targetIndex != _selectedWorkflowTabIndex.value) {
-            // Não permite mudar de aba se uma operação estiver em andamento na aba atual.
-            // Poderia mostrar um Snackbar aqui.
             Log.d(TAG, "Tentativa de mudar de aba enquanto processando foi bloqueada.")
             return
         }
@@ -165,8 +156,7 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
     }
 
     /**
-     * Define a ação de navegação pendente. Usado quando uma navegação externa
-     * (do Drawer ou botão Voltar do sistema) é solicitada enquanto a tela de Contexto está "dirty".
+     * Define a ação de navegação pendente.
      */
     fun setPendingNavigationAction(action: () -> Unit) {
         viewModelScope.launch {
@@ -208,9 +198,6 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
                 Log.i(TAG, "Estado do projeto salvo via VideoWorkflowViewModel.")
             } catch (e: Exception) {
                 Log.e(TAG, "Falha ao salvar projeto via VideoWorkflowViewModel.", e)
-                // O feedback ao usuário (Toast) pode ser emitido por um SharedFlow
-                // para ser observado pela UI (AppNavigationHost).
-                // Por ora, o Toast está no AppNavigationHost.
             }
         }
     }

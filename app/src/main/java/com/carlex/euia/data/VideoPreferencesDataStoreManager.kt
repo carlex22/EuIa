@@ -31,10 +31,16 @@ object VideoPrefKeys {
     val ENABLE_SUBTITLES = booleanPreferencesKey("enable_subtitles")
     val ENABLE_SCENE_TRANSITIONS = booleanPreferencesKey("enable_scene_transitions")
     val ENABLE_ZOOM_PAN = booleanPreferencesKey("enable_zoom_pan")
-    val VIDEO_FPS = intPreferencesKey("video_fps") // <<<< NOVO
-    val VIDEO_HD_MOTION = booleanPreferencesKey("video_hd_motion") // <<<< NOVO
+    val VIDEO_FPS = intPreferencesKey("video_fps") 
+    val VIDEO_HD_MOTION = booleanPreferencesKey("video_hd_motion") 
     val DEFAULT_SCENE_DURATION_SECONDS = floatPreferencesKey("default_scene_duration_seconds")
     val VIDEO_PROJECT_DIR = stringPreferencesKey("video_project_dir")
+
+    // <<< INÍCIO DAS NOVAS CHAVES >>>
+    val DEFAULT_SCENE_TYPE = stringPreferencesKey("default_scene_type") // Vídeo ou Imagem
+    val DEFAULT_IMAGE_STYLE = stringPreferencesKey("default_image_style") // Foto realista, Cartoon, etc.
+    val PREFERRED_AI_MODEL = stringPreferencesKey("preferred_ai_model") // Modelo de IA preferido
+    // <<< FIM DAS NOVAS CHAVES >>>
 }
 
 class VideoPreferencesDataStoreManager(context: Context) {
@@ -321,6 +327,33 @@ class VideoPreferencesDataStoreManager(context: Context) {
         }
         Log.d(TAG, "Nome do Diretório do Projeto Ativo definido: $sanitizedDirName")
     }
+
+    // <<< INÍCIO DAS NOVAS FUNÇÕES DE LEITURA E ESCRITA >>>
+    val defaultSceneType: Flow<String> = dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { it[VideoPrefKeys.DEFAULT_SCENE_TYPE] ?: "Vídeo" } // Valor padrão "Vídeo"
+
+    suspend fun setDefaultSceneType(type: String) {
+        dataStore.edit { it[VideoPrefKeys.DEFAULT_SCENE_TYPE] = type }
+    }
+
+    val defaultImageStyle: Flow<String> = dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { it[VideoPrefKeys.DEFAULT_IMAGE_STYLE] ?: "Foto realista" } // Valor padrão "Foto realista"
+
+    suspend fun setDefaultImageStyle(style: String) {
+        dataStore.edit { it[VideoPrefKeys.DEFAULT_IMAGE_STYLE] = style }
+    }
+
+    val preferredAiModel: Flow<String> = dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { it[VideoPrefKeys.PREFERRED_AI_MODEL] ?: "Gemini 2.5 Pro" } // Valor padrão
+
+    suspend fun setPreferredAiModel(model: String) {
+        dataStore.edit { it[VideoPrefKeys.PREFERRED_AI_MODEL] = model }
+    }
+    // <<< FIM DAS NOVAS FUNÇÕES >>>
+
 
     private fun getDefaultProjectDirName(): String {
         return "EUIA_Default_Project"

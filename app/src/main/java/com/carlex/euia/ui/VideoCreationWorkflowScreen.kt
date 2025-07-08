@@ -3,20 +3,19 @@ package com.carlex.euia.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import com.carlex.euia.ui.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.dp // <<< IMPORT ADICIONADO AQUI
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.carlex.euia.AppDestinations
 import com.carlex.euia.R
-import com.carlex.euia.WorkflowStage
-import com.carlex.euia.utils.shareVideoFile
 import com.carlex.euia.viewmodel.*
-import kotlinx.coroutines.launch
+import com.carlex.euia.utils.shareVideoFile // Verifique se esta importação está correta
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,16 +29,14 @@ fun VideoCreationWorkflowScreen(
     refImageInfoViewModel: RefImageViewModel = viewModel(),
     videoProjectViewModel: VideoProjectViewModel = viewModel(),
     videoGeneratorViewModel: VideoGeneratorViewModel = viewModel(),
-    // O AuthViewModel é necessário para obter o token para o upload final
     authViewModel: AuthViewModel = viewModel(),
+    musicViewModel: MusicViewModel = viewModel(), // Parâmetro adicionado
     generatedVideoPath: String
 ) {
     val localContext = LocalContext.current
-    val scope = rememberCoroutineScope()
     val selectedStageIndex by videoWorkflowViewModel.selectedWorkflowTabIndex.collectAsState()
     val workflowStages = videoWorkflowViewModel.workflowStages
 
-    // Coleta estados de processamento dos ViewModels específicos de cada aba
     val isImageProcessing by videoInfoViewModel.isAnyImageProcessing.collectAsState()
     val isRefInfoAnalyzing by refImageInfoViewModel.isAnalyzing.collectAsState()
     val isAudioProcessing by audioViewModel.isAudioProcessing.collectAsState()
@@ -48,8 +45,7 @@ fun VideoCreationWorkflowScreen(
     val isGeneratingVideo by videoGeneratorViewModel.isGeneratingVideo.collectAsState()
     val generationVideoProgress by videoGeneratorViewModel.generationProgress.collectAsState()
 
-    // Este LaunchedEffect atualiza o VideoWorkflowViewModel com o estado e as ações
-    // da aba atualmente selecionada.
+    // O LaunchedEffect para gerenciar as ações da BottomBar permanece o mesmo
     LaunchedEffect(
         selectedStageIndex, isImageProcessing, isRefInfoAnalyzing, isAudioProcessing,
         isGeneratingGlobalScenes, isGeneratingVideo, generatedVideoPath,
@@ -57,7 +53,7 @@ fun VideoCreationWorkflowScreen(
     ) {
         val currentStageId = workflowStages.getOrNull(selectedStageIndex)?.identifier ?: return@LaunchedEffect
 
-        // Reseta todas as ações
+        // Reseta as ações
         videoWorkflowViewModel.setLaunchPickerAction(null)
         videoWorkflowViewModel.setAnalyzeAction(null)
         videoWorkflowViewModel.setCreateNarrativeAction(null)
@@ -106,6 +102,9 @@ fun VideoCreationWorkflowScreen(
                 currentTabIsProcessing = isGeneratingGlobalScenes
                 currentTabText = if (isGeneratingGlobalScenes) localContext.getString(R.string.status_generating_scenes) else ""
             }
+            // Ação vazia para a aba de música
+            AppDestinations.WORKFLOW_STAGE_MUSIC -> {}
+
             AppDestinations.WORKFLOW_STAGE_FINALIZE -> {
                 videoWorkflowViewModel.setRecordVideoAction(
                     if (!isGeneratingVideo) { { videoGeneratorViewModel.generateVideo() } } else null
@@ -173,8 +172,13 @@ fun VideoCreationWorkflowScreen(
                     projectViewModel = videoProjectViewModel
                 )
             }
+            AppDestinations.WORKFLOW_STAGE_MUSIC -> {
+                MusicSelectionContent(
+                    modifier = Modifier.fillMaxSize(),
+                    musicViewModel = musicViewModel
+                )
+            }
             AppDestinations.WORKFLOW_STAGE_FINALIZE -> {
-                // Passa todas as instâncias de ViewModel necessárias para a tela de finalização
                 VideoGeneratorContent(
                     modifier = Modifier.fillMaxSize(),
                     innerPadding = PaddingValues(0.dp),

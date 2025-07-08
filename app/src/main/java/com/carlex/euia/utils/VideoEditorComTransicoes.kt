@@ -46,6 +46,20 @@ object VideoEditorComTransicoes {
     private const val BATCH_SIZE = 5 // Número de cenas por lote
 
     
+    
+    data class Cena(
+        val cena: Int,
+        val data: CenaData
+    )
+    
+    data class CenaData(
+        var tempoInicio: Double = 0.0,
+        var tempoFim: Double = 0.0,
+        val imagem: String,
+        val audio: String,
+        var duracao: Double
+    )
+    
 
     // Função auxiliar para criar imagem preta
     private fun createTemporaryBlackImage(context: Context, width: Int, height: Int, projectDirName: String): String? {
@@ -130,11 +144,27 @@ object VideoEditorComTransicoes {
         
         require(sceneMediaInputs.isNotEmpty()) { "Nenhuma cena válida com mídia (imagem ou vídeo) e timing encontrada para gerar o vídeo." }
 
-        // --- INÍCIO DA LÓGICA PARA ADICIONAR CENA PRETA DE PREENCHIMENTO FINAL ---
+
         var finalMediaPaths = sceneMediaInputs.map { it.second }.toMutableList()
         var finalValidScenes = sceneMediaInputs.map { it.first }.toMutableList()
-        var duracaoCenas = finalValidScenes.map { it.tempoFim!! - it.tempoInicio!! }.toMutableList()
         var blackImagePathTemporary: String? = null // For cleanup later
+        var duracaoCenas = finalValidScenes.map { it.tempoFim!! - it.tempoInicio!! }.toMutableList()
+        val antecipacaoVisual = 0.25
+        val tempoExtraFinal = 0.25
+        val duracaoCenasCorrigida = mutableListOf<Double>()
+        var tempoIni = 0.0
+        var primeiraFoiAjustada = false
+        
+        finalValidScenes.forEachIndexed { index, cena ->
+            val isFirst = (index == 0)
+            val isLast = (index == finalValidScenes.lastIndex)
+            val tempoFim = if (isLast) cena.tempoFim!! + tempoExtraFinal else cena.tempoFim!! - antecipacaoVisual
+            val duracao = tempoFim - tempoIni
+            duracaoCenasCorrigida.add(duracao)
+            tempoIni = tempoFim
+        }
+
+
 
         val lastMediaPath = finalMediaPaths.lastOrNull()
         val isLastSceneVideo = lastMediaPath?.let { File(it).name.endsWith(".mp4", ignoreCase = true) } ?: false
@@ -171,7 +201,7 @@ object VideoEditorComTransicoes {
                 )
                 finalValidScenes.add(blackPaddingScene)
                 finalMediaPaths.add(blackImagePathTemporary)
-                duracaoCenas.add(DEFAULT_TRANSITION_DURATION) // Adiciona a duração da cena preta
+                duracaoCenasCorrigida.add(DEFAULT_TRANSITION_DURATION) // Adiciona a duração da cena preta
                 Log.i(TAG, "Cena preta adicionada. Novo total de mídias: ${finalMediaPaths.size}")
             } else {
                 logCallback("Falha ao criar imagem preta temporária. Vídeo será gerado sem preenchimento extra.")
@@ -245,12 +275,15 @@ object VideoEditorComTransicoes {
 
             val currentBatchScenes = finalValidScenes.subList(i, min(i + BATCH_SIZE, finalValidScenes.size))
             val currentBatchMediaPaths = finalMediaPaths.subList(i, min(i + BATCH_SIZE, finalMediaPaths.size))
-            val currentBatchDurations = duracaoCenas.subList(i, min(i + BATCH_SIZE, duracaoCenas.size))
+            val currentBatchDurations = duracaoCenasCorrigida.subList(i, min(i + BATCH_SIZE, duracaoCenasCorrigida.size))
 
             val batchOutputFilePath = createOutputFilePath(context, "batch_video_$batchNumber", projectDirName)
 
             // Calculate overall duration of this specific batch
             val batchTotalDuration = currentBatchDurations.sum() + (currentBatchScenes.size - 1) * tempoDeTransicaoEfetivo
+
+
+
 
             val tempBatchAssFile: File? = if (fullLegendaAssPath.isNotBlank()) {
                 val batchAssFilePath = getProjectSpecificDirectory(context, projectDirName, "temp_ffmpeg_assets")
@@ -322,7 +355,7 @@ object VideoEditorComTransicoes {
             videoFps = videoFpsPref,
             totalDuration = currentGlobalTimeOffset 
         )
-        _executeFFmpegCommand(ffmpegAudioSubsCommand, finalVideoWithAudioAndSubsPath, "Lote ${batchNumber+1} de ${totalBatches+1}, Duracao: $duracaoCenas", logCallback)
+        _executeFFmpegCommand(ffmpegAudioSubsCommand, finalVideoWithAudioAndSubsPath, "Lote ${batchNumber+1} de ${totalBatches+1}, Duracao: $duracaoCenasCorrigida", logCallback)
 
         // Limpeza dos arquivos temporários
         subVideoPaths.forEach { File(it).delete() }

@@ -17,7 +17,7 @@ data class SceneLinkData(
     val similaridade: Int? = null,
     val aprovado: Boolean = false,
     val exibirProduto: Boolean? = null,
-
+    
     // Campos específicos para geração de imagem
     val isGenerating: Boolean = false,
     val generationAttempt: Int = 0,
@@ -31,5 +31,6 @@ data class SceneLinkData(
     val promptVideo: String? = null,       // Prompt usado para gerar o vídeo
     var pathThumb: String? = null,         // Caminho do thumbnail GERADO para o vídeo da cena
     var audioPathSnippet: String? = null,  // Caminho do trecho de áudio específico desta cena
-    val isGeneratingVideo: Boolean = false // Estado de geração do VÍDEO para esta cena
+    val isGeneratingVideo: Boolean = false, // Estado de geração do VÍDEO para esta cena
+    val isClone: Boolean = false // Indica se esta cena é uma duplicata inserida para ajuste de tempo
 )

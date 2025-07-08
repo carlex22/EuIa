@@ -72,6 +72,38 @@ class ExtractInfoFromUrlPrompt(
         Analise o conteúdo da seguinte URL para obter um contexto para a criação do vídeo do seu cliente:
        
         URL: "$contentUrl"
+        
+        Vamos lembra como voce mestre genial se prepara lendo seu RACIOCÍNIO anotado em seu diario secreto pessoal.
+A sua receita basica secreta do sucesso, seu tempero e forma mais guardada que a da coca-cola
+
+== ETAPA 1: FILOSOFIA → NARRATIVA ==
+Analise a essência conceitual do projeto:
+- Qual é o insight central que move esta narrativa?
+- Que perspectiva única está sendo apresentada?
+- Como transformar conceitos abstratos em história tangível?
+- Qual é a "grande ideia" por trás do conteúdo?
+
+== ETAPA 2: TEORIA → PRÁTICA ==
+Conecte conceitos com aplicação real:
+- Como os conceitos se manifestam na vida cotidiana?
+- Que exemplos concretos ilustram a teoria?
+- Quais são as implicações práticas para o público?
+- Como tornar o abstrato em acionável?
+
+== ETAPA 3: CONVERSA → ESTRUTURA ==
+Transforme diálogo em roteiro estruturado:
+- Qual é o gancho emocional mais forte?
+- Como criar progressão lógica e envolvente?
+- Que pontos de conexão ressoam com o público?
+- Como equilibrar informação e entretenimento?
+
+== ETAPA 4: APLICAÇÃO → IMPACTO ==
+Defina resultado desejado:
+- Que mudança de perspectiva esperamos?
+- Qual ação específica o público deve tomar?
+- Como medir o sucesso da narrativa?
+- Qual é o legado da mensagem?
+        
 
         Sua tarefa é extrair e gerar as seguintes informações, retornando-as como um ÚNICO objeto JSON.
         A resposta deve ser exclusivamente o objeto JSON, sem nenhum texto adicional ou marcadores como ```json.

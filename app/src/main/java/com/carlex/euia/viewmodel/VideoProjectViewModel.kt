@@ -1,4 +1,4 @@
-// File: viewmodel/VideoProjectViewModel.kt
+// File: euia/viewmodel/VideoProjectViewModel.kt
 package com.carlex.euia.viewmodel
 
 import android.app.Application
@@ -41,6 +41,12 @@ import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_IMAGENS_REFERE
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_SOURCE_IMAGE_PATH_FOR_VIDEO
 import com.carlex.euia.worker.VideoProcessingWorker.Companion.KEY_VIDEO_GEN_PROMPT
 import com.carlex.euia.utils.*
+// Imports para busca na Pixabay
+import com.carlex.euia.api.PixabayApiClient
+import com.carlex.euia.api.PixabayVideo
+import com.carlex.euia.worker.VideoDownloadWorker
+// <<< IMPORT ADICIONADO AQUI >>>
+import com.carlex.euia.worker.PixabayVideoSearchWorker
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -94,12 +100,26 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     private val _pendingImageBatchCost = MutableStateFlow(0L)
     val pendingImageBatchCost: StateFlow<Long> = _pendingImageBatchCost.asStateFlow()
     
-    // <<<< CORREÇÃO: Variável movida para o escopo da classe >>>>
     private var _pendingSceneListForGeneration: List<SceneLinkData>? = null
 
 
     val sceneLinkDataList: StateFlow<List<SceneLinkData>> = projectDataStoreManager.sceneLinkDataList
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
+    // <<< INÍCIO: NOVOS ESTADOS PARA BUSCA NA PIXABAY >>>
+    private val _showPixabaySearchDialogForSceneId = MutableStateFlow<String?>(null)
+    val showPixabaySearchDialogForSceneId: StateFlow<String?> = _showPixabaySearchDialogForSceneId.asStateFlow()
+
+    private val _pixabaySearchQuery = MutableStateFlow("")
+    val pixabaySearchQuery: StateFlow<String> = _pixabaySearchQuery.asStateFlow()
+
+    private val _pixabaySearchResults = MutableStateFlow<List<PixabayVideo>>(emptyList())
+    val pixabaySearchResults: StateFlow<List<PixabayVideo>> = _pixabaySearchResults.asStateFlow()
+
+    private val _isSearchingPixabay = MutableStateFlow(false)
+    val isSearchingPixabay: StateFlow<Boolean> = _isSearchingPixabay.asStateFlow()
+    // <<< FIM: NOVOS ESTADOS PARA BUSCA NA PIXABAY >>>
+
 
     private val currentIsChatNarrative: StateFlow<Boolean> = audioDataStoreManager.isChatNarrative
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -146,7 +166,6 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     private val _sceneIdForReferenceChangeDialog = MutableStateFlow<String?>(null)
     val sceneIdForReferenceChangeDialog: StateFlow<String?> = _sceneIdForReferenceChangeDialog.asStateFlow()
     
-    
     var roteiroCenasFinal = JSONArray()
 
     
@@ -160,9 +179,9 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             val enqueuedCount = workInfos.count { it.state == WorkInfo.State.ENQUEUED }
             val totalActiveCount = runningCount + enqueuedCount
             val quantidadeDeRegistros = sceneLinkDataList.value.size
-            val quantidadeOk = sceneLinkDataList.value.count { it.imagemReferenciaPath == null }
-            
-            val progresso = ((quantidadeDeRegistros - totalActiveCount + quantidadeOk).toFloat() / (quantidadeDeRegistros.toFloat()+1)) * 100
+            val quantidadeOk = sceneLinkDataList.value.count { it.imagemGeradaPath != null }
+
+            val progresso = ((quantidadeOk.toFloat() / quantidadeDeRegistros.toFloat()) * 100).coerceIn(0f, 100f)
             OverlayManager.showOverlay(application, "$totalActiveCount/$quantidadeDeRegistros",  progresso.toInt())
         }
     }
@@ -173,6 +192,100 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         workManager.getWorkInfosByTagLiveData(WorkerTags.VIDEO_PROCESSING)
             .observeForever(workInfoObserver)
     }
+    
+    // <<< INÍCIO: NOVAS FUNÇÕES PARA BUSCA NA PIXABAY >>>
+    fun onShowPixabaySearchDialog(sceneId: String) {
+        viewModelScope.launch {
+            val scene = sceneLinkDataList.value.find { it.id == sceneId }
+            _pixabaySearchQuery.value = scene?.promptVideo ?: ""
+            _pixabaySearchResults.value = emptyList()
+            _isSearchingPixabay.value = false
+            _showPixabaySearchDialogForSceneId.value = sceneId
+            if (pixabaySearchQuery.value.isNotBlank()){
+                searchPixabayVideos()
+            }
+        }
+    }
+
+    fun onDismissPixabaySearchDialog() {
+        _showPixabaySearchDialogForSceneId.value = null
+    }
+
+    fun onPixabaySearchQueryChanged(query: String) {
+        _pixabaySearchQuery.value = query
+    }
+
+    fun searchPixabayVideos() {
+        if (_isSearchingPixabay.value) return
+        viewModelScope.launch {
+            _isSearchingPixabay.value = true
+            _pixabaySearchResults.value = emptyList()
+            val result = PixabayApiClient.searchVideos(_pixabaySearchQuery.value)
+            result.onSuccess { videos ->
+                _pixabaySearchResults.value = videos
+            }.onFailure { error ->
+                Toast.makeText(applicationContext, "Erro na busca: ${error.message}", Toast.LENGTH_LONG).show()
+                Log.e(TAG, "Erro ao buscar vídeos da Pixabay", error)
+            }
+            _isSearchingPixabay.value = false
+        }
+    }
+
+    fun onPixabayVideoSelected(sceneId: String, video: PixabayVideo) {
+        val videoUrl = video.videoFiles.small.url // Usando a URL do vídeo pequeno
+        if (videoUrl.isBlank()) {
+            Toast.makeText(applicationContext, "URL do vídeo selecionado é inválida.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        viewModelScope.launch {
+            internalUpdateSceneState(sceneId) { it.copy(isGeneratingVideo = true, generationErrorMessage = null) }
+
+            val projectDirName = videoPreferencesDataStoreManager.videoProjectDir.first()
+            val workRequest = OneTimeWorkRequestBuilder<VideoDownloadWorker>()
+                .setInputData(workDataOf(
+                    VideoDownloadWorker.KEY_SCENE_ID to sceneId,
+                    VideoDownloadWorker.KEY_VIDEO_URL to videoUrl,
+                    VideoDownloadWorker.KEY_PROJECT_DIR_NAME to projectDirName
+                ))
+                .addTag(WorkerTags.VIDEO_PROCESSING)
+                .addTag("video_download_${sceneId}")
+                .build()
+            
+            workManager.enqueue(workRequest)
+            onDismissPixabaySearchDialog()
+        }
+    }
+
+    fun findAndSetStockVideoForScene(sceneId: String) {
+        viewModelScope.launch {
+            val scene = sceneLinkDataList.value.find { it.id == sceneId }
+            if (scene == null) {
+                Toast.makeText(applicationContext, "Cena não encontrada.", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            if (scene.isGenerating || scene.isChangingClothes || scene.isGeneratingVideo) {
+                Toast.makeText(applicationContext, "A cena já está processando.", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            if (scene.promptVideo.isNullOrBlank()) {
+                Toast.makeText(applicationContext, "A cena não tem um prompt de busca definido.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            internalUpdateSceneState(sceneId) { it.copy(isGeneratingVideo = true, generationErrorMessage = null) }
+
+            val workRequest = OneTimeWorkRequestBuilder<PixabayVideoSearchWorker>()
+                .setInputData(workDataOf(PixabayVideoSearchWorker.KEY_SCENE_ID to sceneId))
+                .addTag(WorkerTags.VIDEO_PROCESSING)
+                .addTag("pixabay_search_${sceneId}")
+                .build()
+
+            workManager.enqueue(workRequest)
+            Toast.makeText(applicationContext, "Iniciando busca automática de vídeo...", Toast.LENGTH_SHORT).show()
+        }
+    }
+    // <<< FIM: NOVAS FUNÇÕES PARA BUSCA NA PIXABAY >>>
 
     fun clearGlobalSceneError() {
         _globalSceneError.value = null
@@ -521,7 +634,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                          pathThumb = thumbPathFromRef,
                          isGenerating = false,
                          aprovado = refIsVideo,
-                         promptVideo = null,
+                         promptVideo = cenaObj.optString("TAG_SEARCH_WEB", null),
                          audioPathSnippet = null,
                          isGeneratingVideo = false
                      ))

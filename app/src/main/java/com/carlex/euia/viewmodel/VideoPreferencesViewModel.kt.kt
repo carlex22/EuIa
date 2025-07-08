@@ -77,6 +77,20 @@ class VideoPreferencesViewModel(application: Application) : AndroidViewModel(app
 
     val fpsOptions: List<String> = listOf("24", "30", "60")
 
+    // <<< INÍCIO DAS NOVAS PREFERÊNCIAS >>>
+    val defaultSceneType: StateFlow<String> = dataStoreManager.defaultSceneType
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), "Vídeo")
+    val defaultImageStyle: StateFlow<String> = dataStoreManager.defaultImageStyle
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), "Foto realista")
+    val preferredAiModel: StateFlow<String> = dataStoreManager.preferredAiModel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), "Gemini 2.5 Pro")
+
+    val sceneTypeOptions: List<String> = listOf("Vídeo", "Imagem")
+    val imageStyleOptions: List<String> = listOf("Foto realista", "Cinematográfico", "Cartoon", "Anime", "Arte Digital", "Aquarela", "Desenho a Lápis")
+    val aiModelOptions: List<String> = listOf("Gemini 2.5 Pro", "Gemini 2.0 Flash", "DALL-E 3", "Midjourney (via API)", "Claude 3 Opus")
+    // <<< FIM DAS NOVAS PREFERÊNCIAS >>>
+
+
     init {
         loadInitialVoices()
         viewModelScope.launch {
@@ -107,7 +121,6 @@ class VideoPreferencesViewModel(application: Application) : AndroidViewModel(app
             val result: kotlin.Result<List<Pair<String, String>>> = if (useGeminiVoices) {
                 GeminiAudio.getAvailableVoices(gender = genderForApi) // 'locale' tem valor padrão em GeminiAudio
             } else {
-                // --- INÍCIO DA CORREÇÃO ---
                 Audio.getAvailableVoices(idioma = "pt-BR", gender = genderForApi).let { stringListResult ->
                     if (stringListResult.isSuccess) {
                         kotlin.Result.success(
@@ -119,7 +132,6 @@ class VideoPreferencesViewModel(application: Application) : AndroidViewModel(app
                         kotlin.Result.failure(stringListResult.exceptionOrNull() ?: Exception("Unknown error from Audio.getAvailableVoices"))
                     }
                 }
-                // --- FIM DA CORREÇÃO ---
             }
 
             result.onSuccess { voicePairList ->
@@ -206,6 +218,21 @@ class VideoPreferencesViewModel(application: Application) : AndroidViewModel(app
             dataStoreManager.setDefaultSceneDurationSeconds(duration.coerceAtLeast(0.1f))
         }
     }
+    
+    // <<< INÍCIO DAS NOVAS FUNÇÕES DE ATUALIZAÇÃO >>>
+    fun setDefaultSceneType(type: String) {
+        viewModelScope.launch { dataStoreManager.setDefaultSceneType(type) }
+    }
+
+    fun setDefaultImageStyle(style: String) {
+        viewModelScope.launch { dataStoreManager.setDefaultImageStyle(style) }
+    }
+
+    fun setPreferredAiModel(model: String) {
+        viewModelScope.launch { dataStoreManager.setPreferredAiModel(model) }
+    }
+    // <<< FIM DAS NOVAS FUNÇÕES DE ATUALIZAÇÃO >>>
+
 
     fun clearVoiceLoadingError() {
         _voiceLoadingError.value = null

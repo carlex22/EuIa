@@ -13,9 +13,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -29,7 +35,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.carlex.euia.R
+import com.carlex.euia.api.PixabayVideo
 import com.carlex.euia.data.ImagemReferencia
 import com.carlex.euia.data.SceneLinkData
 import com.carlex.euia.viewmodel.VideoProjectViewModel
@@ -56,6 +65,92 @@ import androidx.compose.ui.viewinterop.AndroidView
 
 
 private const val TAG_CONTENT = "VideoProjectContent"
+
+@Composable
+private fun PixabaySearchDialog(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearchClick: () -> Unit,
+    onDismiss: () -> Unit,
+    onVideoSelected: (PixabayVideo) -> Unit,
+    searchResults: List<PixabayVideo>,
+    isSearching: Boolean
+) {
+    val focusManager = LocalFocusManager.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.pixabay_search_dialog_title)) },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 500.dp)) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    label = { Text(stringResource(R.string.pixabay_search_field_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        focusManager.clearFocus()
+                        onSearchClick()
+                    }),
+                    trailingIcon = {
+                        IconButton(onClick = onSearchClick, enabled = !isSearching) {
+                            Icon(Icons.Default.Search, stringResource(R.string.pixabay_search_action_desc))
+                        }
+                    }
+                )
+                Spacer(Modifier.height(16.dp))
+                if (isSearching) {
+                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (searchResults.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.pixabay_search_no_results), textAlign = TextAlign.Center)
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(searchResults, key = { it.id }) { video ->
+                            Card(
+                                modifier = Modifier
+                                    .aspectRatio(9f / 16f)
+                                    .clickable { onVideoSelected(video) },
+                                elevation = CardDefaults.cardElevation(2.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    AsyncImage(
+                                        model = video.videoFiles.small.thumbnail,
+                                        contentDescription = video.tags,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Icon(
+                                        Icons.Default.PlayCircleOutline,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_close))
+            }
+        }
+    )
+}
+
 
 @Composable
 private fun ReferenceImageSelectionDialog(
@@ -339,7 +434,6 @@ private fun SceneLinkItem(
                                 }
                             }
                             else -> {
-                                // <<< INÍCIO DA MODIFICAÇÃO >>>
                                 Column(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -347,7 +441,6 @@ private fun SceneLinkItem(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center
                                 ) {
-                                    // Se houver um erro, exibe o bloco de erro primeiro
                                     if (!sceneLinkData.generationErrorMessage.isNullOrBlank()) {
                                         Column(
                                             modifier = Modifier
@@ -379,7 +472,6 @@ private fun SceneLinkItem(
                                         Spacer(Modifier.height(16.dp))
                                     }
                                     
-                                    // Exibe as instruções de placeholder abaixo do erro ou sozinhas
                                     Text(
                                         text = stringResource(R.string.scene_placeholder_title),
                                         style = MaterialTheme.typography.titleSmall,
@@ -422,11 +514,9 @@ private fun SceneLinkItem(
                                         )
                                     }
                                 }
-                                // <<< FIM DA MODIFICAÇÃO >>>
                             }
                         }
 
-                        // Este bloco de erro é para quando a IMAGEM JÁ EXISTE e ocorre um erro (ex: troca de roupa)
                         if (!displayPath.isNullOrBlank() && !sceneLinkData.generationErrorMessage.isNullOrBlank() && !isGeneratingAnything) {
                             Text(
                                 text = stringResource(R.string.scene_item_error_prefix, sceneLinkData.generationErrorMessage!!),
@@ -607,6 +697,19 @@ private fun SceneLinkItem(
                             Icon(Icons.Filled.MovieCreation, contentDescription = stringResource(R.string.scene_item_action_generate_video_desc), modifier = Modifier.size(iconSize), tint = if (generateVideoEnabled) primaryActionIconTint else disabledIconTint)
                         }
                     }
+                    // <<< BOTÃO DE BUSCA AUTOMÁTICA >>>
+                    IconButton(
+                        onClick = { projectViewModel.findAndSetStockVideoForScene(sceneLinkData.id) },
+                        enabled = generalActionsEnabled && !sceneLinkData.promptVideo.isNullOrBlank(),
+                        modifier = Modifier.size(iconButtonSize)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TravelExplore, // Ícone de busca/exploração
+                            contentDescription = stringResource(R.string.scene_item_action_find_stock_video_desc),
+                            modifier = Modifier.size(iconSize),
+                            tint = if (generalActionsEnabled && !sceneLinkData.promptVideo.isNullOrBlank()) primaryActionIconTint else disabledIconTint
+                        )
+                    }
                 }
             }
             SprocketHolesRow()
@@ -687,12 +790,12 @@ private fun SceneLinkItem(
 @Composable
 private fun VideoPlayerInternal(
     videoPath: String,
-    isPlaying: Boolean,
-    onPlaybackStateChange: (Boolean) -> Unit,
+    isPlaying: Boolean, // Este estado agora é controlado pelo chamador
+    onPlaybackStateChange: (Boolean) -> Unit, // Callback para informar o chamador
     invalidPathErrorText: String
 ) {
     val context = LocalContext.current
-    val videoUri = remember(videoPath) {
+    val videoUri = remember(videoPath) { // Recalcula URI se videoPath mudar
         if (videoPath.isNotBlank()) {
             val file = File(videoPath)
             if (file.exists() && file.isFile) {
@@ -786,6 +889,23 @@ fun VideoProjectContent(
     val imageBatchCost by projectViewModel.pendingImageBatchCost.collectAsState()
     
     val globalSceneError by projectViewModel.globalSceneError.collectAsState()
+    
+    val sceneIdForPixabaySearch by projectViewModel.showPixabaySearchDialogForSceneId.collectAsState()
+    val searchQuery by projectViewModel.pixabaySearchQuery.collectAsState()
+    val searchResults by projectViewModel.pixabaySearchResults.collectAsState()
+    val isSearching by projectViewModel.isSearchingPixabay.collectAsState()
+
+    sceneIdForPixabaySearch?.let { sceneId ->
+        PixabaySearchDialog(
+            query = searchQuery,
+            onQueryChange = { projectViewModel.onPixabaySearchQueryChanged(it) },
+            onSearchClick = { projectViewModel.searchPixabayVideos() },
+            onDismiss = { projectViewModel.onDismissPixabaySearchDialog() },
+            onVideoSelected = { video -> projectViewModel.onPixabayVideoSelected(sceneId, video) },
+            searchResults = searchResults,
+            isSearching = isSearching
+        )
+    }
 
 
     if (sceneIdToRecreateImage != null && promptForRecreateImage != null) {

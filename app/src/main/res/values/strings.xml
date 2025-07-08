@@ -1,15 +1,52 @@
 =<?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-<!-- =================================================================== -->
-<!-- ================ STRINGS PARA O DIÁLOGO DE UPLOAD YOUTUBE ========= -->
-<!-- =================================================================== -->
+<string name="video_prefs_label_selected_option">Opção Selecionada</string>
+    <string name="video_prefs_toast_pitchm_saved">Tom da voz salvo.</string>
+    <string name="video_prefs_toast_raten_saved">Velocidade da voz salva.</string>
+    <string name="video_prefs_toast_pitchj_rate_saved">Ajustes de voz salvos.</string>
+    <string name="video_prefs_toast_durnation_saved">Duração da cena salva.</string>
+    <!-- Adicione as novas strings abaixo -->
 
-    <!-- Adicione estas strings ao seu arquivo -->
 
-    <!-- Cores existentes no seu tema (ex: Purple80, PurpleGrey80, etc.) -->
-    <!-- ... -->
 
+
+    <!-- ... suas outras strings ... -->
+
+    <string name="scene_item_action_find_stock_video_desc">Buscar e importar vídeo de banco de imagens para esta cena</string>
+    <string name="notification_title_pixabay_search">Buscando Vídeo de Estoque</string>
+    <string name="notification_content_pixabay_starting">Iniciando busca automática de vídeo...</string>
+    <string name="notification_content_pixabay_getting_prompt">Preparando busca para cena %1$s...</string>
+    <string name="notification_content_pixabay_searching">Buscando na Pixabay por: %1$s</string>
+    <string name="notification_content_pixabay_ai_selection">Pedindo para a IA escolher o melhor vídeo...</string>
+    <string name="notification_content_pixabay_queuing_download">Enfileirando download do vídeo selecionado...</string>
+    <string name="notification_content_pixabay_success">Busca e download iniciados com sucesso!</string>
+    <string name="notification_content_pixabay_failed">Falha na busca: %1$s</string>
+    
+
+
+
+    <!-- Strings para o diálogo de importação de vídeo da web -->
+    <string name="scene_item_dialog_import_video_title">Importar Vídeo da Web</string>
+    <string name="scene_item_dialog_import_video_label">URL do Vídeo</string>
+    <string name="scene_item_dialog_import_video_action">Importar</string>
+    <string name="scene_item_action_import_video_desc">Importar vídeo da web para esta cena</string>
+    <string name="error_invalid_url">URL inválida. Por favor, verifique o link e tente novamente.</string>
+
+    <!-- ... suas outras strings ... -->
+    
+    <!-- Strings para busca de vídeo na Pixabay -->
+    <string name="pixabay_search_dialog_title">Buscar Vídeo na Pixabay</string>
+    <string name="pixabay_search_field_label">Termos de busca (ex: natureza, cidade)</string>
+    <string name="pixabay_search_action_desc">Buscar vídeos</string>
+    <string name="pixabay_search_no_results">Nenhum vídeo encontrado para sua busca.</string>
+    <string name="pixabay_search_loading">Buscando vídeos...</string>
+
+
+<string name="video_prefs_section_generation_defaults">Padrões de Geração</string>
+    <string name="video_prefs_label_default_scene_type">Tipo de Cena Padrão</string>
+    <string name="video_prefs_label_default_image_style">Estilo de Imagem Padrão</string>
+    <string name="video_prefs_label_preferred_ai_model">Modelo de IA Preferido</string>
 <!-- app/src/main/res/values/strings.xml -->
 
     <!-- Outras strings existentes -->
@@ -29,6 +66,16 @@
     <string name="status_completed">Concluído!</string>
     <string name="status_failed">Falhou!</string>
 
+
+
+    <!-- ... suas strings existentes ... -->
+
+    <!-- Strings para a nova aba de Música -->
+    <string name="workflow_stage_title_music">Música</string>
+    <string name="music_select_local_file">Selecionar Música do Dispositivo</string>
+    <string name="music_current_selection">Seleção Atual: %1$s</string>
+    <string name="music_action_play">Tocar</string>
+    <string name="music_action_select">Selecionar</string>
 
 
 
@@ -1824,6 +1871,16 @@
 
     <!-- String para o erro de prompt vazio ao tentar gerar vídeo -->
     <string name="error_empty_prompt_for_video_gen">O prompt para geração do vídeo não pode estar vazio.</string>
+
+
+    <!-- ... suas strings existentes ... -->
+
+    <!-- Strings para o diálogo de busca de vídeo Pixabay -->
+    <string name="pixabay_video_dialog_title">Selecionar Vídeo Online</string>
+    <string name="pixabay_video_dialog_no_results">Nenhum vídeo encontrado. Tente um prompt diferente.</string>
+
+    <!-- Descrições de conteúdo para acessibilidade -->
+    <string name="scene_item_action_search_video_desc">Buscar vídeo online para esta cena</string>
 
 
 

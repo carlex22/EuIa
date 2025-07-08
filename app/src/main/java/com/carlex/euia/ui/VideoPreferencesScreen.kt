@@ -62,10 +62,13 @@ fun VideoPreferencesScreen(
     val videoFps by viewModel.videoFps.collectAsState()
     val videoHdMotion by viewModel.videoHdMotion.collectAsState()
 
-    // --- INÍCIO DA MODIFICAÇÃO ---
+    // Coleta dos novos estados
+    val defaultSceneType by viewModel.defaultSceneType.collectAsState()
+    val defaultImageStyle by viewModel.defaultImageStyle.collectAsState()
+    val preferredAiModel by viewModel.preferredAiModel.collectAsState()
+
     val availableMaleVoicesPairList by viewModel.availableMaleVoices.collectAsState()
     val availableFemaleVoicesPairList by viewModel.availableFemaleVoices.collectAsState()
-    // --- FIM DA MODIFICAÇÃO ---
 
     val isLoadingVoices by viewModel.isLoadingVoices.collectAsState()
     val voiceLoadingError by viewModel.voiceLoadingError.collectAsState()
@@ -102,32 +105,29 @@ fun VideoPreferencesScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             Text(stringResource(R.string.video_prefs_section_preferred_voices), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-            // --- INÍCIO DA MODIFICAÇÃO ---
             VoicePreferenceDropdown(
                 label = stringResource(R.string.video_prefs_label_male_voice_default),
-                selectedVoiceName = preferredMaleVoice, // Passa apenas o nome da voz selecionada
-                availableVoicePairs = availableMaleVoicesPairList, // Passa a lista de pares
+                selectedVoiceName = preferredMaleVoice,
+                availableVoicePairs = availableMaleVoicesPairList,
                 isLoading = isLoadingVoices,
-                onVoiceSelected = { voiceName -> viewModel.setPreferredMaleVoice(voiceName) }, // Salva apenas o nome
+                onVoiceSelected = { voiceName -> viewModel.setPreferredMaleVoice(voiceName) },
                 onRetryLoad = { viewModel.fetchAvailableVoices("Male") }
             )
             Spacer(modifier = Modifier.height(16.dp))
             VoicePreferenceDropdown(
                 label = stringResource(R.string.video_prefs_label_female_voice_default),
-                selectedVoiceName = preferredFemaleVoice, // Passa apenas o nome da voz selecionada
-                availableVoicePairs = availableFemaleVoicesPairList, // Passa a lista de pares
+                selectedVoiceName = preferredFemaleVoice,
+                availableVoicePairs = availableFemaleVoicesPairList,
                 isLoading = isLoadingVoices,
-                onVoiceSelected = { voiceName -> viewModel.setPreferredFemaleVoice(voiceName) }, // Salva apenas o nome
+                onVoiceSelected = { voiceName -> viewModel.setPreferredFemaleVoice(voiceName) },
                 onRetryLoad = { viewModel.fetchAvailableVoices("Female") }
             )
-            // --- FIM DA MODIFICAÇÃO ---
-
             Spacer(modifier = Modifier.height(16.dp))
             Text(stringResource(R.string.video_prefs_section_global_voice_settings), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = pitchInput,
-                    onValueChange = { pitchInput = it.replace(Regex("[^0-9.,]"), "") },
+                    onValueChange = { pitchInput = it.replace(Regex("[^0-9.,-]"), "") },
                     label = { Text(stringResource(R.string.video_prefs_label_pitch)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = {
@@ -140,7 +140,7 @@ fun VideoPreferencesScreen(
                 )
                 OutlinedTextField(
                     value = rateInput,
-                    onValueChange = { rateInput = it.replace(Regex("[^0-9.,]"), "") },
+                    onValueChange = { rateInput = it.replace(Regex("[^0-9.,-]"), "") },
                     label = { Text(stringResource(R.string.video_prefs_label_rate)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = {
@@ -165,6 +165,30 @@ fun VideoPreferencesScreen(
 
             Divider(modifier = Modifier.padding(vertical = 24.dp))
 
+            Text(stringResource(R.string.video_prefs_section_generation_defaults), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+            SettingExposedDropdown(
+                label = stringResource(R.string.video_prefs_label_default_scene_type),
+                options = viewModel.sceneTypeOptions,
+                selectedOption = defaultSceneType,
+                onOptionSelected = { viewModel.setDefaultSceneType(it) }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingExposedDropdown(
+                label = stringResource(R.string.video_prefs_label_default_image_style),
+                options = viewModel.imageStyleOptions,
+                selectedOption = defaultImageStyle,
+                onOptionSelected = { viewModel.setDefaultImageStyle(it) }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingExposedDropdown(
+                label = stringResource(R.string.video_prefs_label_preferred_ai_model),
+                options = viewModel.aiModelOptions,
+                selectedOption = preferredAiModel,
+                onOptionSelected = { viewModel.setPreferredAiModel(it) }
+            )
+
+            Divider(modifier = Modifier.padding(vertical = 24.dp))
+
             Text(stringResource(R.string.video_prefs_section_format_duration), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
             SettingExposedDropdown(
                 label = stringResource(R.string.video_prefs_label_aspect_ratio),
@@ -184,7 +208,7 @@ fun VideoPreferencesScreen(
             OutlinedTextField(
                 value = durationInput,
                 onValueChange = { newValue ->
-                    if (newValue.isEmpty() || newValue.matches(Regex("^\\d*[,.]?\\d*\$"))) {
+                    if (newValue.isEmpty() || newValue.matches(Regex("^\\d*[,.]?\\d*"))) {
                         durationInput = newValue
                     }
                 },
@@ -241,25 +265,14 @@ fun VideoPreferencesScreen(
     }
 }
 
-/**
- * Composable auxiliar para um dropdown de seleção de voz.
- * Mostra o estado de carregamento e permite tentar novamente carregar as vozes.
- *
- * @param label Texto do label para o dropdown.
- * @param selectedVoiceName O nome da voz atualmente selecionada.
- * @param availableVoicePairs Lista de pares (nome da voz, estilo) disponíveis para seleção.
- * @param isLoading Indica se as vozes estão sendo carregadas.
- * @param onVoiceSelected Callback quando uma voz é selecionada (passa apenas o nome da voz).
- * @param onRetryLoad Callback para tentar carregar as vozes novamente.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoicePreferenceDropdown(
     label: String,
-    selectedVoiceName: String, // Recebe apenas o nome da voz selecionada
-    availableVoicePairs: List<Pair<String, String>>, // Recebe a lista de pares
+    selectedVoiceName: String,
+    availableVoicePairs: List<Pair<String, String>>,
     isLoading: Boolean,
-    onVoiceSelected: (String) -> Unit, // Callback espera apenas o nome da voz
+    onVoiceSelected: (String) -> Unit,
     onRetryLoad: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -284,12 +297,11 @@ fun VoicePreferenceDropdown(
                 value = when {
                     isLoading -> stringResource(R.string.video_prefs_placeholder_loading_voices)
                     selectedVoiceName.isNotBlank() -> {
-                        // Tenta encontrar o par correspondente para exibir nome e estilo
                         val selectedPair = availableVoicePairs.find { it.first == selectedVoiceName }
                         if (selectedPair != null) {
                             "${selectedPair.first} (${selectedPair.second.take(25)}${if (selectedPair.second.length > 25) "..." else ""})"
                         } else {
-                            selectedVoiceName // Fallback se o par não for encontrado (deve ser raro)
+                            selectedVoiceName
                         }
                     }
                     else -> stringResource(R.string.video_prefs_placeholder_no_voice_selected)
@@ -316,11 +328,10 @@ fun VoicePreferenceDropdown(
                 availableVoicePairs.forEach { voicePair ->
                     DropdownMenuItem(
                         text = {
-                            // Exibe o nome e o estilo/emoção no item do menu
                             Text("${voicePair.first} (${voicePair.second.take(30)}${if (voicePair.second.length > 30) "..." else ""})")
                         },
                         onClick = {
-                            onVoiceSelected(voicePair.first) // Passa apenas o nome da voz
+                            onVoiceSelected(voicePair.first)
                             expanded = false
                         }
                     )
@@ -330,9 +341,6 @@ fun VoicePreferenceDropdown(
     }
 }
 
-/**
- * Composable auxiliar para um dropdown de seleção genérico.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingExposedDropdown(
@@ -352,10 +360,10 @@ fun SettingExposedDropdown(
             onExpandedChange = { expanded = !expanded }
         ) {
             OutlinedTextField(
-                value = selectedOption.ifBlank { stringResource(R.string.video_prefs_placeholder_aspect_ratio_default) } + displaySuffix,
+                value = selectedOption.ifBlank { options.firstOrNull() ?: "" } + displaySuffix,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text(stringResource(R.string.video_prefs_label_selected_aspect_ratio)) },
+                label = { Text(stringResource(R.string.video_prefs_label_selected_option)) }, // Usando uma string genérica
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .menuAnchor()
@@ -379,9 +387,6 @@ fun SettingExposedDropdown(
     }
 }
 
-/**
- * Composable auxiliar para um item de configuração com um Switch.
- */
 @Composable
 fun SettingSwitch(
     label: String,

@@ -29,6 +29,39 @@ class CreateAudioNarrative {
     Desenvolvimento da narrativa: : {VIDEO_OBJECTIVE_VIDEO}
     Desfecho do narrativa: {VIDEO_OBJECTIVE_OUTCOME}
 
+
+    ANTES DE INICIAR SUA TAREFA , Vamos relembrar o que voce aprendeu na faculdade e no seu dia a dia criando roteiros para videos.
+    Vamos lbrar como voce mestre genial se prepara seguindo seu RACIOCÍNIO anotado em seu diario secreto pessoal.
+    A sua receita basica secreta do sucesso, seu tempero e forma mais guardada que a da coca-cola
+    
+    == ETAPA 1: FILOSOFIA → NARRATIVA ==
+    Analise a essência conceitual do projeto:
+    - Qual é o insight central que move esta narrativa?
+    - Que perspectiva única está sendo apresentada?
+    - Como transformar conceitos abstratos em história tangível?
+    - Qual é a "grande ideia" por trás do conteúdo?
+    
+    == ETAPA 2: TEORIA → PRÁTICA ==
+    Conecte conceitos com aplicação real:
+    - Como os conceitos se manifestam na vida cotidiana?
+    - Que exemplos concretos ilustram a teoria?
+    - Quais são as implicações práticas para o público?
+    - Como tornar o abstrato em acionável?
+    
+    == ETAPA 3: CONVERSA → ESTRUTURA ==
+    Transforme diálogo em roteiro estruturado:
+    - Qual é o gancho emocional mais forte?
+    - Como criar progressão lógica e envolvente?
+    - Que pontos de conexão ressoam com o público?
+    - Como equilibrar informação e entretenimento?
+    
+    == ETAPA 4: APLICAÇÃO → IMPACTO ==
+    Defina resultado desejado:
+    - Que mudança de perspectiva esperamos?
+    - Qual ação específica o público deve tomar?
+    - Como medir o sucesso da narrativa?
+    - Qual é o legado da mensagem?
+
    
     ## **Estrutura da Narrativa (Seu Guia de Roteiro):**
     Construa o `promptAudio` seguindo esta estrutura em 7 passos para máximo impacto:
@@ -41,6 +74,22 @@ class CreateAudioNarrative {
     6.  **A Moral da História:** Sintetize a mensagem principal em uma única frase poderosa e memorável. É a grande lição que o espectador deve levar do vídeo.
     7.  **Chamada para Ação Final:** Use o objetivo de desfecho para guiar o espectador. Objetivo: "{VIDEO_OBJECTIVE_OUTCOME}".
     
+    DEFINA RESULTADO ESPECÍFICO:
+    1. Que mudança de perspectiva esperamos?
+    2. Qual ação concreta o público deve tomar?
+    3. Como medir sucesso da narrativa?
+    4. Qual é o legado da mensagem?
+    
+    MÉTRICAS DE SUCESSO:
+    - Engajamento: Curtidas, comentários, compartilhamentos, vendas, engajamento, colaboração, publicisade, jornalismo..
+    - Ação: Uso de ferramentas mencionadas
+    - Transformação: Mudança de linguagem sobre o tema
+    
+    TRANSFORME DIÁLOGO EM ROTEIRO:
+    1. Qual pergunta contraintuitiva abre a narrativa?
+    2. Como criar progressão que mantenha atenção?
+    3. Onde inserir momentos de conexão emocional?
+    4. MUITO IMPORTANTE... Como equilibrar informação, publicidade, propaganda em entretenimento e informação da mais alta qualidade?
     
     
     ## **Instruções Avançadas de Narração: Ritmo, Pausas e Sons Humanizados**
@@ -149,6 +198,6 @@ class CreateAudioNarrative {
             .replace("{VIDEO_OBJECTIVE_OUTCOME}", VIDEO_OBJECTIVE_OUTCOME.ifBlank { "Concluir e engajar." })
             .replace("{VIDEO_TIME_SECONDS}", VIDEO_TIME_SECONDS.ifBlank { "Não especificado" })
             .replace("{VOICE_GENERE}", VOICE_GENERE.ifBlank { "Não especificado" })
-            .replace("{VOICE_EMOTION}", VOICE_GENERE.ifBlank { "VOICE_EMOTION" })
+            .replace("{VOICE_EMOTION}", VOICE_EMOTION.ifBlank { "Não especificado" })
     }
 }

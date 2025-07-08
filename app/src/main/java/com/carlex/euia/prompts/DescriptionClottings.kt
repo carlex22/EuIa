@@ -10,6 +10,9 @@ localize e indentifique o seguinte objeto(s) nas fotos enviadas: $titulo
 processe e tambem extraia todas as informações para completar os dados da lista:
 Exclua da resposta final os pares com valores null ou n/a
 
+
+
+
 Sua resposta final **deve conter apenas uma lista JSON**, no seguinte formato:
 [
   {
