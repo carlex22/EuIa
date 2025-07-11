@@ -280,26 +280,26 @@ class ImageProcessingWorker(
             Log.d(TAG_WORKER, "Image saved successfully for URI: $uri. Path: ${savedPath.take(100)}...")
             val promptDescricao = CreateaDescriptionImagem().prompt
             Log.d(TAG_WORKER, "Calling analisarImagemComGemini for path: ${savedPath.take(100)}...")
-            val analysisResult = try {
+            val analysisResult = "" /*try {
                 analisarImagemComGemini(promptDescricao, savedPath)
             } catch (e: Exception) {
                 Log.e(TAG_WORKER, "Error calling analisarImagemComGemini for path: ${savedPath.take(100)}...", e)
                 GeminiImageAnalysisResult("", false)
-            }
+            }*/
 
             if (!coroutineContext.isActive) {
                 Log.w(TAG_WORKER, "Processamento de imagem cancelado após analisar para URI: $uri.")
                 return@withContext null
             }
 
-            Log.d(TAG_WORKER, "analisarImagemComGemini returned for path: ${savedPath.take(100)}. Desc: ${analysisResult.description.take(50)}, People: ${analysisResult.containsPeople}")
+            //Log.d(TAG_WORKER, "analisarImagemComGemini returned for path: ${savedPath.take(100)}. Desc: ${analysisResult.description.take(50)}, People: ${analysisResult.containsPeople}")
 
             val imagem = ImagemReferencia(
                 path = savedPath,
-                descricao = analysisResult.description,
+                descricao = "",
                 pathVideo = null,
                 videoDurationSeconds = null,
-                containsPeople = analysisResult.containsPeople
+                containsPeople = true
             )
             Log.d(TAG_WORKER, "--- Finished processAndCreateReferenceImage for URI: $uri with Success ---")
             return@withContext imagem
@@ -339,18 +339,18 @@ class ImageProcessingWorker(
                 Log.e(TAG_WORKER, "Failed to extract thumbnail from video: $uri")
                 return@withContext null
             }
-            Log.d(TAG_WORKER, "Thumbnail extracted. Size: ${thumbnailBitmap.width}x${thumbnailBitmap.height}")
+           // Log.d(TAG_WORKER, "Thumbnail extracted. Size: ${thumbnailBitmap.width}x${thumbnailBitmap.height}")*/
 
             // --- LÓGICA DE SALVAR AS DUAS VERSÕES DA THUMBNAIL ---
             val originalFileNameBase = getFileNameFromUri(appContext, uri)?.substringBeforeLast('.') ?: "video_${UUID.randomUUID().toString().substring(0,8)}"
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
-
+            //val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())*/
+            
             // 1. Salvar a imagem limpa (img_...)
             savedCleanThumbnailPath = saveSpecificVideoThumbnailToStorage(
                 context = appContext,
                 bitmapToSave = thumbnailBitmap, // Bitmap original extraído
                 projectDirName = projectDirName,
-                baseNameForFile = "img_${originalFileNameBase}_${timestamp}", // Prefixo img_
+                baseNameForFile = "img_${originalFileNameBase}", // Prefixo img_
                 larguraPreferida = larguraPreferida,
                 alturaPreferida = alturaPreferida,
                 drawPlayIcon = false // Não desenha o ícone
@@ -361,7 +361,7 @@ class ImageProcessingWorker(
                 return@withContext null
             }
             Log.d(TAG_WORKER, "Clean video thumbnail (img_...) saved: $savedCleanThumbnailPath")
-
+            
 
             // 2. Salvar a imagem com ícone (thumb_...)
             // Reutiliza o thumbnailBitmap original para adicionar o ícone
@@ -369,7 +369,7 @@ class ImageProcessingWorker(
                 context = appContext,
                 bitmapToSave = thumbnailBitmap, // Bitmap original extraído
                 projectDirName = projectDirName,
-                baseNameForFile = "thumb_${originalFileNameBase}_${timestamp}", // Prefixo thumb_
+                baseNameForFile = "thumb_${originalFileNameBase}", // Prefixo thumb_
                 larguraPreferida = larguraPreferida,
                 alturaPreferida = alturaPreferida,
                 drawPlayIcon = true // Desenha o ícone
@@ -386,7 +386,7 @@ class ImageProcessingWorker(
 
             // Salvar o arquivo de vídeo original, usando o nome base da thumbnail com ícone para manter relação
             val iconThumbnailFile = File(savedIconThumbnailPath)
-            savedVideoPath = saveVideoFileToStorage(appContext, uri, projectDirName, iconThumbnailFile.nameWithoutExtension)
+            var savedVideoPath = saveVideoFileToStorage(appContext, uri, projectDirName, originalFileNameBase)
 
 
             if (!coroutineContext.isActive || savedVideoPath == null) {
@@ -399,28 +399,28 @@ class ImageProcessingWorker(
             Log.d(TAG_WORKER, "Icon video thumbnail (thumb_...) saved: $savedIconThumbnailPath")
             Log.d(TAG_WORKER, "Original video file saved: $savedVideoPath")
 
-            val promptDescricao = CreateaDescriptionImagem().prompt
-            val analysisResult = try {
-                analisarImagemComGemini(promptDescricao, savedCleanThumbnailPath) // Analisa a imagem limpa
+            //val promptDescricao = CreateaDescriptionImagem().prompt
+            //val analysisResult = "" /*try {
+            /*     analisarImagemComGemini(promptDescricao, savedCleanThumbnailPath) // Analisa a imagem limpa
             } catch (e: Exception) {
                 Log.e(TAG_WORKER, "Error calling analisarImagemComGemini for video thumbnail: ${e.message}", e)
                 GeminiImageAnalysisResult("", false)
-            }
+            }*/
 
-            if (!coroutineContext.isActive) {
+            /*if (!coroutineContext.isActive) {
                 Log.w(TAG_WORKER, "Video processing cancelled after describing thumbnail for URI: $uri.")
                 return@withContext null
-            }
+            }*/
             
-            val finalDescription = "Vídeo (Duração: ${videoDurationSeconds}s). Análise do frame: ${analysisResult.description}".trim()
+            val finalDescription = ""//"Vídeo (Duração: ${videoDurationSeconds}s). Análise do frame: ${analysisResult.description}".trim()
 
-            Log.d(TAG_WORKER, "analisarImagemComGemini returned for video thumbnail. Desc: ${analysisResult.description.take(50)}, People: ${analysisResult.containsPeople}")
+           // Log.d(TAG_WORKER, "analisarImagemComGemini returned for video thumbnail. Desc: ${analysisResult.description.take(50)}, People: ${analysisResult.containsPeople}")
             val imagem = ImagemReferencia(
-                path = savedIconThumbnailPath, // O 'path' principal é a thumb com ícone
+                path = "$savedCleanThumbnailPath"!!, // O 'path' principal é a thumb com ícone
                 descricao = finalDescription,
-                pathVideo = savedVideoPath,
+                pathVideo = savedVideoPath!!,
                 videoDurationSeconds = videoDurationSeconds,
-                containsPeople = analysisResult.containsPeople
+                containsPeople = true
             )
             Log.d(TAG_WORKER, "--- Finished processVideoAndCreateReferenceImage for URI: $uri with Success ---")
             return@withContext imagem
@@ -430,7 +430,7 @@ class ImageProcessingWorker(
             return@withContext null
         } finally {
             retriever?.release()
-            BitmapUtils.safeRecycle(thumbnailBitmap, "processVideoAndCreateReferenceImage_originalThumbnail")
+            //BitmapUtils.safeRecycle(thumbnailBitmap, "processVideoAndCreateReferenceImage_originalThumbnail")
         }
     }
 

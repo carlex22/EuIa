@@ -1,4 +1,4 @@
-// File: viewmodel/VideoWorkflowViewModel.kt
+// File: euia/viewmodel/VideoWorkflowViewModel.kt
 package com.carlex.euia.viewmodel
 
 import android.app.Application
@@ -12,18 +12,19 @@ import com.carlex.euia.utils.ProjectPersistenceManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
 import android.util.Log
 
-/**
- * ViewModel compartilhado que gerencia o estado e a lógica do fluxo de trabalho (workflow)
- * de criação de vídeo.
- *
- * (O restante do KDoc permanece o mesmo)
- */
 class VideoWorkflowViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContext: Context = application.applicationContext
     private val TAG = "VideoWorkflowVM"
+
+    private val audioViewModel by lazy { AudioViewModel(application) }
+    private val refImageInfoViewModel by lazy { RefImageViewModel(application) }
+    private val videoProjectViewModel by lazy { VideoProjectViewModel(application) }
+    private val videoGeneratorViewModel by lazy { VideoGeneratorViewModel(application) }
+
 
     val workflowStages: List<WorkflowStage> = listOf(
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_context), AppDestinations.WORKFLOW_STAGE_CONTEXT),
@@ -31,12 +32,7 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_information), AppDestinations.WORKFLOW_STAGE_INFORMATION),
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_narrative), AppDestinations.WORKFLOW_STAGE_NARRATIVE),
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_scenes), AppDestinations.WORKFLOW_STAGE_SCENES),
-        
-        // <<< NOVO >>>
-        // Adiciona a etapa de Música antes de Finalizar.
-        // É necessário adicionar a string "workflow_stage_title_music" em res/values/strings.xml
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_music), AppDestinations.WORKFLOW_STAGE_MUSIC),
-
         WorkflowStage(appContext.getString(R.string.workflow_stage_title_finalize), AppDestinations.WORKFLOW_STAGE_FINALIZE)
     )
 
@@ -52,9 +48,10 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
     private val _currentStageNumericProgress = MutableStateFlow(0f)
     val currentStageNumericProgress: StateFlow<Float> = _currentStageNumericProgress.asStateFlow()
 
-    // Callbacks para ações dos botões das abas
     private val _currentStageLaunchPickerAction = MutableStateFlow<(() -> Unit)?>(null)
     val currentStageLaunchPickerAction: StateFlow<(() -> Unit)?> = _currentStageLaunchPickerAction.asStateFlow()
+
+    // REMOVIDO: _currentStageLaunchMusicAction e sua versão pública
 
     private val _currentStageAnalyzeAction = MutableStateFlow<(() -> Unit)?>(null)
     val currentStageAnalyzeAction: StateFlow<(() -> Unit)?> = _currentStageAnalyzeAction.asStateFlow()
@@ -74,7 +71,6 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
     private val _currentShareVideoAction = MutableStateFlow<(() -> Unit)?>(null)
     val currentShareVideoAction: StateFlow<(() -> Unit)?> = _currentShareVideoAction.asStateFlow()
 
-    // Para a aba de Contexto
     private val _actualSaveContextAction = MutableStateFlow<(() -> Unit)?>(null)
     val actualSaveContextAction: StateFlow<(() -> Unit)?> = _actualSaveContextAction.asStateFlow()
 
@@ -84,22 +80,43 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
     private val _isContextScreenDirty = MutableStateFlow(false)
     val isContextScreenDirty: StateFlow<Boolean> = _isContextScreenDirty.asStateFlow()
 
-    // Guarda a ação de navegação pendente se o diálogo de confirmação for exibido.
     private val _pendingNavigationAction = MutableStateFlow<(() -> Unit)?>(null)
-    val showConfirmExitContextDialog: StateFlow<(() -> Unit)?> = _pendingNavigationAction.asStateFlow() // Renomeado para clareza na UI
+    val showConfirmExitContextDialog: StateFlow<(() -> Unit)?> = _pendingNavigationAction.asStateFlow()
 
     init {
         Log.d(TAG, "VideoWorkflowViewModel Inicializado.")
+    }
+
+    fun cancelCurrentStageProcessing() {
+        val currentStageIdentifier = workflowStages.getOrNull(_selectedWorkflowTabIndex.value)?.identifier
+        Log.d(TAG, "Cancelamento solicitado para a aba: $currentStageIdentifier")
+
+        when (currentStageIdentifier) {
+            AppDestinations.WORKFLOW_STAGE_IMAGES -> {
+                Log.w(TAG, "A lógica de cancelamento para o processamento de imagens precisa ser implementada.")
+            }
+            AppDestinations.WORKFLOW_STAGE_INFORMATION -> {
+                refImageInfoViewModel.cancelAnalysis()
+            }
+            AppDestinations.WORKFLOW_STAGE_NARRATIVE, AppDestinations.WORKFLOW_STAGE_AUDIO -> {
+                audioViewModel.cancelAudioGeneration()
+            }
+            AppDestinations.WORKFLOW_STAGE_SCENES -> {
+                videoProjectViewModel.cancelSceneGenerationProcess()
+            }
+            AppDestinations.WORKFLOW_STAGE_FINALIZE -> {
+                videoGeneratorViewModel.cancelVideoGeneration()
+            }
+            else -> {
+                Log.d(TAG, "Nenhuma ação de cancelamento definida para a aba atual: $currentStageIdentifier")
+            }
+        }
     }
 
     fun updateSelectedTabIndex(newIndex: Int) {
         _selectedWorkflowTabIndex.value = newIndex
     }
 
-    /**
-     * Tenta mudar para a [targetIndex] da aba.
-     * (A lógica interna permanece a mesma)
-     */
     fun attemptToChangeTab(targetIndex: Int) {
         if (_isCurrentStageProcessing.value && targetIndex != _selectedWorkflowTabIndex.value) {
             Log.d(TAG, "Tentativa de mudar de aba enquanto processando foi bloqueada.")
@@ -117,55 +134,37 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    /**
-     * Chamado pela [ContextInfoContent] para fornecer a ação de salvamento e seu estado de habilitação.
-     */
     fun onContextSaveActionProvided(action: () -> Unit, isEnabled: Boolean) {
         _actualSaveContextAction.value = action
         _isSaveContextEnabled.value = isEnabled
     }
 
-    /**
-     * Chamado pela [ContextInfoContent] para atualizar o estado "dirty" (se há alterações não salvas).
-     */
     fun onContextDirtyStateChanged(isDirty: Boolean) {
         _isContextScreenDirty.value = isDirty
     }
 
-    /**
-     * Executa a ação de navegação pendente (que estava aguardando a resolução do diálogo)
-     * e limpa a ação pendente.
-     */
     fun confirmExitContextDialogAction() {
         _pendingNavigationAction.value?.invoke()
         _pendingNavigationAction.value = null
     }
 
-    /**
-     * Limpa a ação de navegação pendente sem executá-la (usuário cancelou o diálogo).
-     */
     fun dismissExitContextDialog() {
         _pendingNavigationAction.value = null
     }
 
-    /**
-     * Marca a tela de Contexto como não "dirty", geralmente após um salvamento.
-     */
     fun markContextAsSaved() {
         _isContextScreenDirty.value = false
     }
 
-    /**
-     * Define a ação de navegação pendente.
-     */
     fun setPendingNavigationAction(action: () -> Unit) {
         viewModelScope.launch {
             _pendingNavigationAction.value = action
         }
     }
 
-    // --- Funções para definir os callbacks das ações da BottomBar ---
     fun setLaunchPickerAction(action: (() -> Unit)?) { _currentStageLaunchPickerAction.value = action }
+    // REMOVIDO: setLaunchMusicAction
+
     fun setAnalyzeAction(action: (() -> Unit)?) { _currentStageAnalyzeAction.value = action }
     fun setCreateNarrativeAction(action: (() -> Unit)?) { _currentStageCreateNarrativeAction.value = action }
     fun setGenerateAudioAction(action: (() -> Unit)?) { _currentStageGenerateAudioAction.value = action }
@@ -173,24 +172,15 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
     fun setRecordVideoAction(action: (() -> Unit)?) { _currentStageRecordVideoAction.value = action }
     fun setShareVideoAction(action: (() -> Unit)?) { _currentShareVideoAction.value = action }
 
-    /**
-     * Atualiza o estado de processamento e progresso numérico da aba atual.
-     */
     fun updateProcessingState(isProcessing: Boolean, progress: Float) {
         _isCurrentStageProcessing.value = isProcessing
         _currentStageNumericProgress.value = progress
     }
 
-    /**
-     * Atualiza o texto de progresso da aba atual.
-     */
     fun updateProgressText(text: String) {
         _currentStageProgressText.value = text
     }
 
-    /**
-     * Aciona o salvamento do estado completo do projeto.
-     */
     fun triggerProjectSave() {
         viewModelScope.launch(Dispatchers.IO) {
             try {

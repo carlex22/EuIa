@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext // Adicionado para getString
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,7 @@ import com.carlex.euia.R
 import com.carlex.euia.viewmodel.JsonDetail
 import com.carlex.euia.viewmodel.RefImageViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.ManageSearch
 
 private const val TAG = "RefImageInfoContent" // Tag para logging específico desta tela
 
@@ -50,6 +52,9 @@ private fun ObjectDetailItem(
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
             .padding(16.dp)
     ) {
+    
+    
+    
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -167,28 +172,75 @@ fun RefImageInfoContent(
                 contentPadding = PaddingValues(vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(currentRefObjetoDetalhes, key = { _, detail -> detail.key }) { index, detail ->
-                    ObjectDetailItem(
-                        detail = detail,
-                        isAnalyzing = isAnalyzing,
-                        onValueChange = { newValue ->
-                            val updatedList = currentRefObjetoDetalhes.toMutableList()
-                            updatedList[index] = detail.copy(value = newValue)
-                            currentRefObjetoDetalhes = updatedList
-                            hasChanges = true
-                        },
-                        onRemoveClick = {
-                            val updatedList = currentRefObjetoDetalhes.toMutableList()
-                            updatedList.removeAt(index)
-                            currentRefObjetoDetalhes = updatedList
-                            hasChanges = true // Marcar como alterado
-                            // Salva imediatamente ao remover um item (mantendo comportamento original)
-                            scope.launch {
-                                refImageViewModel.saveRefObjetoDetalhes(currentRefObjetoDetalhes)
-                                snackbarHostState.showSnackbar(context.getString(R.string.ref_image_info_toast_detail_removed_and_saved), duration = SnackbarDuration.Short)
+            
+                if (!currentRefObjetoDetalhes.isEmpty() && !isAnalyzing) {
+                    itemsIndexed(currentRefObjetoDetalhes, key = { _, detail -> detail.key }) { index, detail ->
+                        ObjectDetailItem(
+                            detail = detail,
+                            isAnalyzing = isAnalyzing,
+                            onValueChange = { newValue ->
+                                val updatedList = currentRefObjetoDetalhes.toMutableList()
+                                updatedList[index] = detail.copy(value = newValue)
+                                currentRefObjetoDetalhes = updatedList
+                                hasChanges = true
+                            },
+                            onRemoveClick = {
+                                val updatedList = currentRefObjetoDetalhes.toMutableList()
+                                updatedList.removeAt(index)
+                                currentRefObjetoDetalhes = updatedList
+                                hasChanges = true // Marcar como alterado
+                                // Salva imediatamente ao remover um item (mantendo comportamento original)
+                                scope.launch {
+                                    refImageViewModel.saveRefObjetoDetalhes(currentRefObjetoDetalhes)
+                                    snackbarHostState.showSnackbar(context.getString(R.string.ref_image_info_toast_detail_removed_and_saved), duration = SnackbarDuration.Short)
+                                }
+                            }
+                        )
+                    }
+                } else {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight()
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                        ){
+                            Box(
+                                modifier = Modifier.fillParentMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ){
+                                    Icon(
+                                        imageVector = Icons.Default.ManageSearch,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.context_info_data_import_title),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.context_info_data_import_context),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.context_info_data_import_text_click),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
-                    )
+                    }
                 }
             }
 

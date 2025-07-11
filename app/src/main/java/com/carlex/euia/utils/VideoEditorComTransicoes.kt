@@ -24,81 +24,61 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.math.min
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.isActive // Importa isActive
-import kotlinx.coroutines.CancellationException // Importa CancellationException
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CancellationException
+import java.security.MessageDigest
 
-/**
- * Editor de vídeo focado em:
- * - Criar slideshow a partir de imagens ou usar clipes de vídeo (agora usando SceneLinkData).
- * - Adicionar transições (controlado por preferência).
- * - Adicionar efeito Ken Burns (zoompan) (controlado por preferência).
- * - Mixar áudio principal (voz) e música de fundo.
- * - Adicionar legendas (controlado por preferência).
- * - Usar dimensões de vídeo das preferências.
- * - Salvar vídeo final no diretório de preferências do projeto.
- */
 object VideoEditorComTransicoes {
 
     private const val TAG = "VideoEditorComTransicoes"
     private const val DEFAULT_VIDEO_WIDTH = 720
     private const val DEFAULT_VIDEO_HEIGHT = 1280
-    private const val DEFAULT_TRANSITION_DURATION = 0.5 // Duração padrão da transição em segundos
-    private const val BATCH_SIZE = 5 // Número de cenas por lote
+    private const val DEFAULT_TRANSITION_DURATION = 0.5
+    private const val BATCH_SIZE = 5
 
-    
-    
-    data class Cena(
-        val cena: Int,
-        val data: CenaData
-    )
-    
-    data class CenaData(
-        var tempoInicio: Double = 0.0,
-        var tempoFim: Double = 0.0,
-        val imagem: String,
-        val audio: String,
-        var duracao: Double
-    )
-    
+    private fun generateBatchHash(
+        mediaPaths: List<String>, durations: List<Double>, enableZoomPan: Boolean, enableTransitions: Boolean,
+        videoWidth: Int, videoHeight: Int, videoFps: Int
+    ): String {
+        val inputString = buildString {
+            append(mediaPaths.joinToString(","))
+            append(durations.joinToString(","))
+            append(enableZoomPan)
+            append(enableTransitions)
+            append(videoWidth)
+            append(videoHeight)
+            append(videoFps)
+        }
+        val bytes = inputString.toByteArray()
+        val md = MessageDigest.getInstance("MD5")
+        val digest = md.digest(bytes)
+        return digest.fold("") { str, it -> str + "%02x".format(it) }
+    }
 
-    // Função auxiliar para criar imagem preta
-    private fun createTemporaryBlackImage(context: Context, width: Int, height: Int, projectDirName: String): String? {
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.BLACK)
-
-        val tempDir = getProjectSpecificDirectory(context, projectDirName, "temp_ffmpeg_assets")
-        
-        tempDir?.mkdirs()
-
-        val file = File(tempDir, "black_padding_end_${System.currentTimeMillis()}.png")
-        return try {
-            FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+    private fun cleanupOldCacheFiles(cacheDir: File, usedCacheFiles: Set<String>) {
+        try {
+            val allCacheFiles = cacheDir.listFiles() ?: return
+            for (file in allCacheFiles) {
+                if (file.name !in usedCacheFiles) {
+                    if (file.delete()) {
+                        Log.i(TAG, "Arquivo de cache antigo removido: ${file.name}")
+                    } else {
+                        Log.w(TAG, "Falha ao remover arquivo de cache antigo: ${file.name}")
+                    }
+                }
             }
-            bitmap.recycle()
-            Log.d(TAG, "Imagem preta temporária criada em: ${file.absolutePath}")
-            return file.absolutePath
-        } catch (e: IOException) {
-            Log.e(TAG, "Erro ao criar imagem preta temporária: ${e.message}", e)
-            bitmap.recycle()
-            return null
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar arquivos de cache antigos.", e)
         }
     }
 
-
     suspend fun gerarVideoComTransicoes(
-        context: Context, // `context` is passed from ViewModel or Worker
-        scenes: List<SceneLinkData>,
-        audioPath: String,
-        musicaPath: String,
-        legendaPath: String, // Este é o caminho do arquivo SRT gerado
-        logCallback: (String) -> Unit
-    ): String = coroutineScope { // Uses coroutineScope to inherit context and be cancellable
-        Log.d(TAG, "🎬 Iniciando gerarVideo com ${scenes.size} cenas SceneLinkData")
+        context: Context, scenes: List<SceneLinkData>, audioPath: String, musicaPath: String,
+        legendaPath: String, logCallback: (String) -> Unit
+    ): String = coroutineScope {
         require(scenes.isNotEmpty()) { "A lista de cenas não pode estar vazia" }
 
-        val videoPreferencesManager = VideoPreferencesDataStoreManager(context) // Local instance for scope
+        val videoPreferencesManager = VideoPreferencesDataStoreManager(context)
         val (projectDirName, larguraVideoPref, alturaVideoPref, enableSubtitlesPref, enableSceneTransitionsPref, enableZoomPanPref, videoFpsPref, videoHdMotionPref) = withContext(Dispatchers.IO) {
             val dirName = videoPreferencesManager.videoProjectDir.first()
             val largura = videoPreferencesManager.videoLargura.first()
@@ -108,201 +88,91 @@ object VideoEditorComTransicoes {
             val zoomPan = videoPreferencesManager.enableZoomPan.first()
             val fps = videoPreferencesManager.videoFps.first()
             val hdMotion = videoPreferencesManager.videoHdMotion.first()
-            Log.d(TAG, "Preferências lidas: Dir=$dirName, LxA=${largura ?: "N/D"}x${altura ?: "N/D"}, Legendas=$subtitles, Transições=$transitions, ZoomPan=$zoomPan, FPS=$fps, HDMotion=$hdMotion")
             Octuple(dirName, largura, altura, subtitles, transitions, zoomPan, fps, hdMotion)
         }
 
         val larguraFinalVideo = larguraVideoPref ?: DEFAULT_VIDEO_WIDTH
         val alturaFinalVideo = alturaVideoPref ?: DEFAULT_VIDEO_HEIGHT
-        val tempoDeTransicaoEfetivo = if (enableSceneTransitionsPref && scenes.size > 1) DEFAULT_TRANSITION_DURATION else 0.0
-
-        val sceneMediaInputs = mutableListOf<Pair<SceneLinkData, String>>()
-        for (scene in scenes) {
-            if (!isActive) throw CancellationException("Processo cancelado durante a preparação das cenas.")
-            if (scene.imagemGeradaPath != null && scene.tempoInicio != null && scene.tempoFim != null && scene.tempoFim > scene.tempoInicio) {
-                val mediaFile = File(scene.imagemGeradaPath)
-                if (!mediaFile.exists()) {
-                    Log.w(TAG, "Arquivo de mídia base (thumbnail/imagem) não encontrado: ${scene.imagemGeradaPath} para cena ${scene.cena}. Pulando cena.")
-                    continue
-                }
-                if (mediaFile.name.startsWith("Vid_")) {
-                    val videoFile = File(mediaFile.parentFile, mediaFile.nameWithoutExtension + ".mp4")
-                    if (videoFile.exists()) {
-                        sceneMediaInputs.add(Pair(scene, videoFile.absolutePath))
-                        Log.d(TAG, "Cena ${scene.cena} usará VÍDEO: ${videoFile.absolutePath}")
-                    } else {
-                        Log.w(TAG, "Arquivo de vídeo ${videoFile.absolutePath} não encontrado para thumbnail ${scene.imagemGeradaPath}. Pulando cena ${scene.cena}.")
-                    }
-                } else {
-                    sceneMediaInputs.add(Pair(scene, scene.imagemGeradaPath!!))
-                    Log.d(TAG, "Cena ${scene.cena} usará IMAGEM: ${scene.imagemGeradaPath}")
-                }
-            } else {
-                Log.w(TAG, "Cena ${scene.cena} inválida (sem mídia ou timing). Pulando.")
-            }
+        
+        val sceneMediaInputs = scenes.mapNotNull { scene ->
+            scene.imagemGeradaPath?.let { Pair(scene, it) }
         }
         
-        require(sceneMediaInputs.isNotEmpty()) { "Nenhuma cena válida com mídia (imagem ou vídeo) e timing encontrada para gerar o vídeo." }
+        require(sceneMediaInputs.isNotEmpty()) { "Nenhuma cena válida com mídia encontrada." }
 
+        val finalMediaPaths = sceneMediaInputs.map { it.second }
+        val duracaoCenas = sceneMediaInputs.map { it.first.tempoFim!! - it.first.tempoInicio!! }
 
-        var finalMediaPaths = sceneMediaInputs.map { it.second }.toMutableList()
-        var finalValidScenes = sceneMediaInputs.map { it.first }.toMutableList()
-        var blackImagePathTemporary: String? = null // For cleanup later
-        var duracaoCenas = finalValidScenes.map { it.tempoFim!! - it.tempoInicio!! }.toMutableList()
-        val antecipacaoVisual = 0.25
-        val tempoExtraFinal = 0.25
-        val duracaoCenasCorrigida = mutableListOf<Double>()
-        var tempoIni = 0.0
-        var primeiraFoiAjustada = false
-        
-        finalValidScenes.forEachIndexed { index, cena ->
-            val isFirst = (index == 0)
-            val isLast = (index == finalValidScenes.lastIndex)
-            val tempoFim = if (isLast) cena.tempoFim!! + tempoExtraFinal else cena.tempoFim!! - antecipacaoVisual
-            val duracao = tempoFim - tempoIni
-            duracaoCenasCorrigida.add(duracao)
-            tempoIni = tempoFim
-        }
-
-
-
-        val lastMediaPath = finalMediaPaths.lastOrNull()
-        val isLastSceneVideo = lastMediaPath?.let { File(it).name.endsWith(".mp4", ignoreCase = true) } ?: false
-
-        if (isLastSceneVideo) {
-            logCallback("Última cena é um vídeo. Adicionando cena preta de ${DEFAULT_TRANSITION_DURATION}s no final para transição.")
-            Log.i(TAG, "Última cena real é um vídeo. Tentando adicionar cena preta de preenchimento.")
-
-            blackImagePathTemporary = createTemporaryBlackImage(
-                context,
-                larguraFinalVideo,
-                alturaFinalVideo,
-                projectDirName
-            )
-
-            if (blackImagePathTemporary != null) {
-                val lastActualSceneEndTime = finalValidScenes.lastOrNull()?.tempoFim ?: 0.0 // Default to 0 if list is empty, though check above should prevent this
-                val blackPaddingScene = SceneLinkData(
-                    id = UUID.randomUUID().toString(),
-                    cena = "BLACK_PADDING_END",
-                    tempoInicio = lastActualSceneEndTime, // Informativo
-                    tempoFim = lastActualSceneEndTime + DEFAULT_TRANSITION_DURATION, // Informativo
-                    imagemReferenciaPath = blackImagePathTemporary,
-                    descricaoReferencia = "Preenchimento preto final",
-                    promptGeracao = null,
-                    imagemGeradaPath = blackImagePathTemporary, // Caminho para a imagem preta
-                    similaridade = null,
-                    aprovado = true,
-                    exibirProduto = false,
-                    isGenerating = false,
-                    isChangingClothes = false,
-                    generationAttempt = 0,
-                    clothesChangeAttempt = 0
-                )
-                finalValidScenes.add(blackPaddingScene)
-                finalMediaPaths.add(blackImagePathTemporary)
-                duracaoCenasCorrigida.add(DEFAULT_TRANSITION_DURATION) // Adiciona a duração da cena preta
-                Log.i(TAG, "Cena preta adicionada. Novo total de mídias: ${finalMediaPaths.size}")
-            } else {
-                logCallback("Falha ao criar imagem preta temporária. Vídeo será gerado sem preenchimento extra.")
-                Log.w(TAG, "Não foi possível criar a imagem preta temporária.")
-            }
-        }
-        // --- FIM DA LÓGICA PARA ADICIONAR CENA PRETA ---
-
-        // Converter SRT para ASS para a narrativa completa (uma vez só)
-        var fullLegendaAssPath: String = "" // Caminho para o arquivo ASS temporário completo
-        var tempFullAssFile: File? = null // Variável para rastrear o arquivo ASS temporário para limpeza
+        var fullLegendaAssPath: String = ""
+        var tempFullAssFile: File? = null
 
         if (enableSubtitlesPref && legendaPath.isNotBlank()) {
             val srtFile = File(legendaPath)
             if (srtFile.exists()) {
                 try {
                     val srtContent = srtFile.readText()
-
-                    val assConverter = SrtToAssConverter() // Usa valores padrão do construtor
-                    val assContent = assConverter.convertSrtToAss(
-                        srtContent = srtContent,
-                        videoWidth = larguraFinalVideo,
-                        videoHeight = alturaFinalVideo
-                    )
-
+                    val assConverter = SrtToAssConverter()
+                    val assContent = assConverter.convertSrtToAss(srtContent, larguraFinalVideo, alturaFinalVideo)
                     val tempAssDir = getProjectSpecificDirectory(context, projectDirName, "temp_ffmpeg_assets")
-                    if (tempAssDir == null) {
-                        logCallback("❌ Erro interno: não foi possível criar diretório para legendas ASS. Gerando sem legendas.")
-                        Log.e(TAG, "Falha ao criar diretório temporário para ASS. Gerando vídeo sem legendas.")
-                    } else {
-                        tempAssDir.mkdirs() // Garante que o diretório exista
+                    if (tempAssDir != null) {
+                        tempAssDir.mkdirs()
                         val uniqueAssFileName = "full_legenda_${UUID.randomUUID()}.ass"
                         tempFullAssFile = File(tempAssDir, uniqueAssFileName)
                         tempFullAssFile.writeText(assContent)
                         fullLegendaAssPath = tempFullAssFile.absolutePath
-                        Log.i(TAG, "Legenda SRT completa convertida para ASS e salva temporariamente em: $fullLegendaAssPath")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Erro ao converter SRT para ASS ou salvar arquivo temporário: ${e.message}", e)
-                    logCallback("❌ Erro ao preparar legendas. Gerando vídeo sem legendas. Detalhes: ${e.message}")
+                    logCallback("❌ Erro ao preparar legendas: ${e.message}")
                 }
             } else {
-                Log.w(TAG, "Arquivo de legenda SRT não encontrado em: $legendaPath. Não serão usadas legendas.")
-                logCallback("⚠️ Arquivo de legenda SRT não encontrado. Gerando vídeo sem legendas.")
+                logCallback("⚠️ Arquivo de legenda SRT não encontrado.")
             }
-        } else {
-            Log.d(TAG, "Legendas desabilitadas ou caminho da legenda vazio. Não serão usadas legendas.")
         }
 
         val fonteArialPath = try {
             copiarFonteParaCache(context, "Arial.ttf")
         } catch (e: Exception) {
-            Log.e(TAG, "Falha crítica ao preparar fonte: ${e.message}")
-            tempFullAssFile?.delete()
-            blackImagePathTemporary?.let { File(it).delete() } 
             throw RuntimeException("Não foi possível preparar a fonte necessária para legendas.", e)
         }
 
         val subVideoPaths = mutableListOf<String>()
-        val totalBatches = (finalValidScenes.size + BATCH_SIZE - 1) / BATCH_SIZE
-        var currentGlobalTimeOffset = 0.0
-        
-        var batchNumber = 0
+        val totalBatches = ((finalMediaPaths.size + BATCH_SIZE - 1) / BATCH_SIZE)+2
+        val batchCacheDir = getProjectSpecificDirectory(context, projectDirName, "batch_cache")
+            ?: throw IOException("Não foi possível criar o diretório de cache.")
 
-        // --- Processar em lotes ---
-        for (i in finalValidScenes.indices step BATCH_SIZE) {
+
+        var batchNumber = 0
+        
+        for (i in finalMediaPaths.indices step BATCH_SIZE) {
             if (!isActive) throw CancellationException("Processo cancelado durante o processamento de lotes.")
             batchNumber = (i / BATCH_SIZE) + 1
             logCallback("Processando lote $batchNumber de $totalBatches...")
-            Log.i(TAG, "Processando lote $batchNumber de $totalBatches (cenas $i a ${min(i + BATCH_SIZE - 1, finalValidScenes.lastIndex)})")
 
-            val currentBatchScenes = finalValidScenes.subList(i, min(i + BATCH_SIZE, finalValidScenes.size))
             val currentBatchMediaPaths = finalMediaPaths.subList(i, min(i + BATCH_SIZE, finalMediaPaths.size))
-            val currentBatchDurations = duracaoCenasCorrigida.subList(i, min(i + BATCH_SIZE, duracaoCenasCorrigida.size))
+            val currentBatchDurations = duracaoCenas.subList(i, min(i + BATCH_SIZE, duracaoCenas.size))
+            val batchHash = generateBatchHash(currentBatchMediaPaths, currentBatchDurations, enableZoomPanPref, enableSceneTransitionsPref, larguraFinalVideo, alturaFinalVideo, videoFpsPref)
+            val cachedFile = File(batchCacheDir, "batch_${batchNumber}_${batchHash}.mp4")
 
-            val batchOutputFilePath = createOutputFilePath(context, "batch_video_$batchNumber", projectDirName)
-
-            // Calculate overall duration of this specific batch
-            val batchTotalDuration = currentBatchDurations.sum() + (currentBatchScenes.size - 1) * tempoDeTransicaoEfetivo
-
-
-
-
-            val tempBatchAssFile: File? = if (fullLegendaAssPath.isNotBlank()) {
-                val batchAssFilePath = getProjectSpecificDirectory(context, projectDirName, "temp_ffmpeg_assets")
-                if (batchAssFilePath == null) {
-                    Log.e(TAG, "Falha ao criar diretório para legendas ASS de lote.")
-                    null 
-                } else {
-                    val batchAssContent = SrtToAssConverter().convertSrtToAss(
-                        srtContent = extractSrtForTimeRange(legendaPath, currentGlobalTimeOffset, currentGlobalTimeOffset + batchTotalDuration),
-                        videoWidth = larguraFinalVideo,
-                        videoHeight = alturaFinalVideo
-                    )
-                    val tempAssFile = File(batchAssFilePath, "batch_legenda_${batchNumber}_${UUID.randomUUID()}.ass")
-                    tempAssFile.writeText(batchAssContent)
-                    tempAssFile
-                }
-            } else null
-
-            // Build and execute command for this batch
+            if (cachedFile.exists() && cachedFile.length() > 100) {
+                logCallback("Lote $batchNumber encontrado no cache.")
+                subVideoPaths.add(cachedFile.absolutePath)
+                continue
+            }
+            
+            val batchOutputFilePath = cachedFile.absolutePath
+           /* val batchCommand = buildFFmpegCommandForBatch2(
+                context: Context, 
+                mediaPaths = currentBatchMediaPaths,
+                duracaoCenas = currentBatchDurations,
+                larguraVideo = larguraFinalVideo,
+                alturaVideo = alturaFinalVideo,
+                enableSceneTransitions = enableSceneTransitionsPref,
+                enableZoomPan = enableZoomPanPref,
+                videoFps = videoFpsPref,
+                videoHdMotion = videoHdMotionPref,
+                outputPath = batchOutputFilePath
+            )*/
+            
             val batchCommand = buildFFmpegCommandForBatch(
                 context = context, 
                 mediaPaths = currentBatchMediaPaths,
@@ -310,62 +180,39 @@ object VideoEditorComTransicoes {
                 batchIndex = batchNumber,
                 larguraVideo = larguraFinalVideo,
                 alturaVideo = alturaFinalVideo,
-                enableSubtitles = enableSubtitlesPref,
-                legendaPath = tempBatchAssFile?.absolutePath, 
+                enableSubtitles = false,
+                legendaPath = "", 
                 fonteArialPath = fonteArialPath,
                 enableSceneTransitions = enableSceneTransitionsPref,
                 enableZoomPan = enableZoomPanPref,
                 videoFps = videoFpsPref,
                 videoHdMotion = videoHdMotionPref,
                 outputPath = batchOutputFilePath,
-                globalOffsetSeconds = currentGlobalTimeOffset 
+                globalOffsetSeconds = currentBatchDurations.sum(),
+                addBlurBackground = true
             )
-
-            try {
-                _executeFFmpegCommand(batchCommand, batchOutputFilePath, "Lote $batchNumber de ${totalBatches+1}, Duracao: ${batchTotalDuration*1000}", logCallback)
-                subVideoPaths.add(batchOutputFilePath) // <<-- Linha 339 na sua contagem (antes da correção). É uma adição normal.
-            } finally {
-                tempBatchAssFile?.delete()
-                Log.d(TAG, "Arquivo ASS temporário do lote $batchNumber deletado: ${tempBatchAssFile?.absolutePath}")
-            }
-            currentGlobalTimeOffset += batchTotalDuration
-
-            if (!isActive) throw CancellationException("Processo cancelado após o lote $batchNumber.")
+            
+            _executeFFmpegCommand(batchCommand, batchOutputFilePath, "Lote $batchNumber de ${totalBatches}, Duracao: ${currentBatchDurations.sum()*1000}", logCallback)
+            subVideoPaths.add(batchOutputFilePath)
         }
-
-        // --- Concatenar os mini-vídeos ---
-        logCallback("Concatenando ${subVideoPaths.size} mini-vídeos...")
-        Log.i(TAG, "Concatenando ${subVideoPaths.size} mini-vídeos no final.")
-        val finalOutputPath = createOutputFilePath(context, "video_final_concatenado", projectDirName)
-        _concatenateSubVideos(context, videoPreferencesManager, subVideoPaths, finalOutputPath, logCallback)
-
-        // --- Mixar áudio e adicionar legendas ao vídeo final ---
-        logCallback("Mixando áudio e adicionando legendas ao vídeo final...")
-        Log.i(TAG, "Mixando áudio principal e música, e adicionando legendas ao vídeo concatenado.")
-        val finalVideoWithAudioAndSubsPath = createOutputFilePath(context, "video_final_com_audio_legendas", projectDirName)
-
-        val ffmpegAudioSubsCommand = buildAudioAndSubtitleMixingCommand(
-            videoPath = finalOutputPath,
-            audioPath = audioPath,
-            musicaPath = musicaPath,
-            legendaPath = fullLegendaAssPath, 
-            fonteArialPath = fonteArialPath,
-            usarLegendas = enableSubtitlesPref,
-            outputVideoPath = finalVideoWithAudioAndSubsPath,
-            videoFps = videoFpsPref,
-            totalDuration = currentGlobalTimeOffset 
-        )
-        _executeFFmpegCommand(ffmpegAudioSubsCommand, finalVideoWithAudioAndSubsPath, "Lote ${batchNumber+1} de ${totalBatches+1}, Duracao: $duracaoCenasCorrigida", logCallback)
-
-        // Limpeza dos arquivos temporários
-        subVideoPaths.forEach { File(it).delete() }
-        File(finalOutputPath).delete() 
-        tempFullAssFile?.delete()
-        blackImagePathTemporary?.let { File(it).delete() } 
+        batchNumber++
         
-        //Log.i(TAG, "Processo de geração de vídeo concluído com sucesso. Saída final: $finalVideoWithAudioAndSubsPath")
-        //return 
-        finalVideoWithAudioAndSubsPath
+        logCallback("Concatenando lotes...")
+        val finalOutputPathConcat = createOutputFilePath(context, "video_final_concatenado", projectDirName)
+        _concatenateSubVideos(context, videoPreferencesManager, subVideoPaths, finalOutputPathConcat, logCallback)
+
+        logCallback("Mixando áudio e legendas...")
+        val finalVideoWithAudioAndSubsPath = createOutputFilePath(context, "video_final_com_audio_legendas", projectDirName)
+        val ffmpegAudioSubsCommand = buildAudioAndSubtitleMixingCommand(
+            finalOutputPathConcat, audioPath, musicaPath, fullLegendaAssPath, fonteArialPath,
+            enableSubtitlesPref, finalVideoWithAudioAndSubsPath, videoFpsPref, duracaoCenas.sum()
+        )
+        
+        batchNumber++
+        _executeFFmpegCommand(ffmpegAudioSubsCommand, finalVideoWithAudioAndSubsPath, "Mixagem Final Lote $batchNumber de ${totalBatches}, Duracao: ${duracaoCenas.sum()*1000}", logCallback)
+
+        tempFullAssFile?.delete()
+        return@coroutineScope finalVideoWithAudioAndSubsPath
     }
 
     private suspend fun _executeFFmpegCommand(command: String, outputPath: String, taskName: String, logCallback: (String) -> Unit) {
@@ -381,26 +228,22 @@ object VideoEditorComTransicoes {
                 if (ReturnCode.isSuccess(returnCode)) {
                     val outFile = File(outputPath)
                     if (outFile.exists() && outFile.length() > 100) {
-                        Log.i(TAG, "FFmpeg '$taskName' concluído com SUCESSO em ${"%.2f".format(Locale.US, timeElapsed)}s. Saída: $outputPath")
                         cont.resume(Unit)
                     } else {
-                        val reason = if (!outFile.exists()) "não foi encontrado" else "está vazio ou muito pequeno (${outFile.length()} bytes)"
-                        val errMsg = "FFmpeg '$taskName' reportou sucesso, mas o arquivo de saída '$outputPath' $reason. Logs:\n$logs"
-                        Log.e(TAG, errMsg)
-                        logCallback("❌ $taskName falhou: Arquivo inválido.")
-                        outFile.delete() 
+                        val reason = if (!outFile.exists()) "não foi encontrado" else "está vazio (${outFile.length()} bytes)"
+                        val errMsg = "FFmpeg '$taskName' reportou sucesso, mas arquivo de saída $reason."
+                        Log.e(TAG, "$errMsg Logs:\n$logs")
+                        outFile.delete()
                         cont.resumeWithException(VideoGenerationException(errMsg))
                     }
                 } else {
-                    val errMsg = "FFmpeg '$taskName' FALHOU com código de retorno: $returnCode (Tempo: ${"%.2f".format(Locale.US, timeElapsed)}s). Logs:\n$logs"
-                    Log.e(TAG, errMsg)
-                    logCallback("❌ $taskName falhou com erro.")
-                    File(outputPath).delete() 
+                    val errMsg = "FFmpeg '$taskName' FALHOU com código: $returnCode."
+                    Log.e(TAG, "$errMsg Logs:\n$logs")
+                    File(outputPath).delete()
                     cont.resumeWithException(VideoGenerationException(errMsg))
                 }
             }, { log ->
-                Log.v(TAG, "FFmpegLog ($taskName): ${log.message}")
-                //logCallback(log.message)
+                logCallback(log.message)
             }, { stat ->
                 val statMessage = "$taskName, Concluido=${stat.time}"
                 Log.d(TAG, statMessage)
@@ -408,15 +251,30 @@ object VideoEditorComTransicoes {
             })
 
             cont.invokeOnCancellation {
-                Log.w(TAG, "🚫 Operação FFmpeg '$taskName' cancelada!")
-                logCallback("🚫 Operação '$taskName' cancelada!")
+                Log.w(TAG, "🚫 Operação FFmpeg '$taskName' (ID: ${session.sessionId}) foi cancelada!")
                 FFmpegKit.cancel(session.sessionId)
-                File(outputPath).delete() 
-                cont.resumeWithException(CancellationException("Operação FFmpeg '$taskName' cancelada."))
+                File(outputPath).delete()
             }
         }
     }
 
+    private suspend fun _concatenateSubVideos(appContext: Context, videoPreferencesDataStoreManager: VideoPreferencesDataStoreManager, subVideoPaths: List<String>, outputPath: String, logCallback: (String) -> Unit) {
+        val listFile = File(getProjectSpecificDirectory(appContext, videoPreferencesDataStoreManager.videoProjectDir.first(), "temp_ffmpeg_assets")!!, "concat_list_${UUID.randomUUID()}.txt")
+        try {
+            listFile.bufferedWriter().use { out ->
+                subVideoPaths.forEach { path ->
+                    out.write("file '$path'\n")
+                }
+            }
+
+            val command = "-y -f concat -safe 0 -i \"${listFile.absolutePath}\" -c copy \"$outputPath\""
+            _executeFFmpegCommand(command, outputPath, "Concatenar Lotes", logCallback)
+        } finally {
+            listFile.delete()
+        }
+    }
+    
+    
     private suspend fun buildFFmpegCommandForBatch(
         context: Context, 
         mediaPaths: List<String>,
@@ -432,51 +290,53 @@ object VideoEditorComTransicoes {
         videoFps: Int, 
         videoHdMotion: Boolean,
         outputPath: String,
-        globalOffsetSeconds: Double 
+        globalOffsetSeconds: Double,
+        addBlurBackground: Boolean
     ): String {
         val cmd = StringBuilder("-y -hide_banner ")
         val filterComplex = StringBuilder()
         val tempoDeTransicaoEfetivo = if (enableSceneTransitions && mediaPaths.size > 1) DEFAULT_TRANSITION_DURATION else 0.0
-
+    
+        
+        // --- SEÇÃO 1: LEITURA DOS INPUTS (CORRIGIDA) ---
         var inputIndex = 0
         mediaPaths.forEachIndexed { index, path ->
             val isVideoInput = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
             val duracaoDestaCena = duracaoCenas[index]
-            val isLast = (index == mediaPaths.lastIndex)
-            val inputDurationParaComando =
-                if (isVideoInput) duracaoDestaCena
-                else duracaoDestaCena + if (!isLast) tempoDeTransicaoEfetivo else 0.0
+            val isLastInBatch = (index == mediaPaths.lastIndex)
+            
             if (isVideoInput) {
-                cmd.append(String.format(Locale.US, "-stream_loop -1 -t %.4f -i \"%s\" -an ", duracaoDestaCena, path))
+                val duracaoLeituraVideo = duracaoDestaCena + tempoDeTransicaoEfetivo
+                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" -an ", duracaoLeituraVideo, path))
             } else {
-                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, inputDurationParaComando, path))
+                val duracaoInputImagem = duracaoDestaCena + tempoDeTransicaoEfetivo
+                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoInputImagem, path))
             }
             inputIndex++
         }
-
+    
+        // --- SEÇÃO 2: PROCESSAMENTO DE CADA MÍDIA ---
         val processedMediaPads = mutableListOf<String>()
         mediaPaths.forEachIndexed { i, path ->
             val outputPad = "[processed_m$i]"
             processedMediaPads.add(outputPad)
-
+    
             val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
             val durBase = duracaoCenas[i]
             val isLast = (i == mediaPaths.lastIndex)
             val trimDuration = durBase + (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
-
+    
             val frames = (trimDuration * videoFps).toInt().coerceAtLeast(1)
             val durationExata = frames.toDouble() / videoFps
             val w = larguraVideo
             val h = alturaVideo
             val input = "[${i}:v]" 
-
-            filterComplex.append("  ${input}split=2[main${i}][bg${i}];\n")
-            filterComplex.append("  [bg${i}]scale='max(iw,${w}*2)':'max(ih,${h}*2)',crop=${w}:${h},boxblur=40:2,setsar=1[bg_final${i}];\n")
-
+    
+            
             var squareDix = w
             var squareDiy = h
             var ss = "${w}x${h}"
-
+    
             if (w > h) {
                 squareDix = (squareDiy * 1.2).toInt()
                 ss = "${squareDix}x${squareDiy}"
@@ -484,9 +344,21 @@ object VideoEditorComTransicoes {
                 squareDiy = (squareDix * 1.2).toInt()
                 ss = "${squareDix}y${squareDiy}"
             }
-
-            if (isVideo) {
-                filterComplex.append("[main${i}]scale=$squareDix:$squareDiy:force_original_aspect_ratio=decrease[fg_scaled${i}];\n")
+            
+            // Processamento condicional do background
+            if (addBlurBackground) {
+                // Usar split quando precisar do background blur
+                filterComplex.append("  ${input}split=2[main${i}][bg${i}];\n")
+                filterComplex.append("  [bg${i}]scale='max(iw,${w}*2)':'max(ih,${h}*2)',crop=${w}:${h},boxblur=40:2,setsar=1[bg_final${i}];\n")
+            } else {
+                // Usar diretamente o input quando não precisar do background blur
+                filterComplex.append("  ${input}copy[main${i}];\n")
+            }
+            
+            
+            // Processamento do foreground
+            if (isVideo || !enableZoomPan) {
+                filterComplex.append("[main${i}]scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h[fg_scaled${i}];\n")
             } else {
                 val fgChain = mutableListOf<String>()
                 if (enableZoomPan) {
@@ -502,40 +374,47 @@ object VideoEditorComTransicoes {
                 }
                 filterComplex.append("  [main${i}]${fgChain.joinToString(",")}[fg_scaled${i}];\n")
             }
-
+            
             filterComplex.append("  [fg_scaled${i}]pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0[fg_padded${i}];\n")
-            filterComplex.append("  [bg_final${i}][fg_padded${i}]overlay=0:0[composite${i}];\n")
-
+            
+            // Overlay condicional
+            if (addBlurBackground) {
+                filterComplex.append("  [bg_final${i}][fg_padded${i}]overlay=0:0[composite${i}];\n")
+            } else {
+                filterComplex.append("  [fg_padded${i}]copy[composite${i}];\n")
+            }
+            
             val finalEffects = mutableListOf<String>()
             finalEffects.add("format=pix_fmts=rgba")
             finalEffects.add("fps=$videoFps")
             finalEffects.add("trim=duration=$durationExata")
             finalEffects.add("setpts=PTS-STARTPTS")
-
             filterComplex.append("  [composite${i}]${finalEffects.joinToString(separator = ",")}$outputPad;\n")
         }
-
+    
+        // --- SEÇÃO 3: TRANSIÇÕES E CONCATENAÇÃO ---
         val tiposDeTransicao = listOf(
             "fade", "slidedown", "circleopen", "circleclose",
             "rectcrop", "distance", "fadeblack", "fadewhite"
         )
         val random = java.util.Random()
-
+    
         val videoStreamFinal: String = when {
             enableSceneTransitions && processedMediaPads.size > 1 -> {
+                // Transições com xfade
                 processedMediaPads.forEachIndexed { index, padName ->
                     filterComplex.append("  $padName setpts=PTS-STARTPTS[sc_trans$index];\n")
                 }
                 var currentStream = "[sc_trans0]"
-                var durationOfCurrentStream = duracaoCenas[0]
+                var durationOfCurrentStream = duracaoCenas[0] + tempoDeTransicaoEfetivo
                 for (i in 0 until processedMediaPads.size - 1) {
                     val nextSceneStream = "[sc_trans${i + 1}]"
-                    val nextSceneOriginalDuration = duracaoCenas[i+1]
+                    val nextSceneOriginalDuration = duracaoCenas[i+1] 
                     val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
-                    val xfadeOffset = max(0.0, durationOfCurrentStream)
-
+                    val xfadeOffset = max(0.0, durationOfCurrentStream) - tempoDeTransicaoEfetivo
+    
                     val tipoTransicao = tiposDeTransicao[random.nextInt(tiposDeTransicao.size)]
-
+    
                     filterComplex.append(
                         "  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=${tempoDeTransicaoEfetivo}:offset=$xfadeOffset$xfadeOutputStreamName;\n"
                     )
@@ -545,7 +424,9 @@ object VideoEditorComTransicoes {
                 }
                 currentStream
             }
+            
             processedMediaPads.isNotEmpty() && processedMediaPads.size > 1 -> {
+                // Concatenação simples sem transições
                 processedMediaPads.forEachIndexed { index, pad ->
                     filterComplex.append("  $pad setpts=PTS-STARTPTS[s_concat$index];\n")
                 }
@@ -554,111 +435,169 @@ object VideoEditorComTransicoes {
                 "[vc_final_batch]"
             }
             processedMediaPads.isNotEmpty() -> {
+                // Vídeo único
                 filterComplex.append("  ${processedMediaPads[0]} copy[vc_final_batch];\n")
                 "[vc_final_batch]"
             }
             else -> {
+                // Fallback para vídeo preto
                 val totalDurationFallback = duracaoCenas.sum().takeIf { it > 0.0 } ?: 0.1
                 filterComplex.append("color=c=black:s=${larguraVideo}x${alturaVideo}:d=${max(0.1, totalDurationFallback)}[vc_final_batch];\n")
                 "[vc_final_batch]"
             }
         }
-
+    
+        // --- SEÇÃO 4: COMANDO FINAL DE OUTPUT (CORRIGIDO) ---
         cmd.append("-filter_complex \"${filterComplex}\" ")
         cmd.append("-map \"$videoStreamFinal\" ")
-        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ") 
+        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
         cmd.append("-movflags +faststart ")
-        val batchDuration = duracaoCenas.sum() + (mediaPaths.size - 1) * tempoDeTransicaoEfetivo
-        cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, batchDuration)))
+        
+        // A duração total do lote é a soma das durações das cenas
+        val batchDuration = duracaoCenas.sum()
+        cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, batchDuration + tempoDeTransicaoEfetivo)))
         cmd.append("\"$outputPath\"")
+        
         return cmd.toString()
     }
-
-    private suspend fun _concatenateSubVideos(appContext: Context, videoPreferencesDataStoreManager: VideoPreferencesDataStoreManager, subVideoPaths: List<String>, outputPath: String, logCallback: (String) -> Unit) {
-        //if (!isActive) throw CancellationException("Concatenation canceled.")
-
-        val listFile = File(getProjectSpecificDirectory(appContext, videoPreferencesDataStoreManager.videoProjectDir.first(), "temp_ffmpeg_assets")!!, "concat_list_${UUID.randomUUID()}.txt")
-        try {
-            listFile.bufferedWriter().use { out ->
-                subVideoPaths.forEach { path ->
-                    out.write("file '$path'\n")
-                }
-            }
-
-            val command = "-y -f concat -safe 0 -i \"${listFile.absolutePath}\" -c copy \"$outputPath\""
-            _executeFFmpegCommand(command, outputPath, "Concatenar Lotes", logCallback)
-        } finally {
-            listFile.delete()
-        }
-    }
-
-    private suspend fun buildAudioAndSubtitleMixingCommand(
-        videoPath: String,
-        audioPath: String,
-        musicaPath: String,
-        legendaPath: String?, 
-        fonteArialPath: String,
-        usarLegendas: Boolean,
-        outputVideoPath: String,
-        videoFps: Int, // <<-- Passado como parâmetro para ser usado na string
-        totalDuration: Double
+    
+    
+    
+    
+    private fun buildFFmpegCommandForBatch1(
+        mediaPaths: List<String>, duracaoCenas: List<Double>, larguraVideo: Int, alturaVideo: Int,
+        enableSceneTransitions: Boolean, enableZoomPan: Boolean, videoFps: Int, videoHdMotion: Boolean, outputPath: String
     ): String {
         val cmd = StringBuilder("-y -hide_banner ")
         val filterComplex = StringBuilder()
+        val tempoDeTransicaoEfetivo = if (enableSceneTransitions && mediaPaths.size > 1) DEFAULT_TRANSITION_DURATION else 0.0
 
-        cmd.append("-i \"$videoPath\" ") 
-        cmd.append("-i \"$audioPath\" ") 
+        mediaPaths.forEachIndexed { index, path ->
+            val isVideoInput = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
+            val duracaoLeitura = duracaoCenas[index] + if (index < mediaPaths.lastIndex) tempoDeTransicaoEfetivo else 0.0
+            if (isVideoInput) {
+                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" -an ", duracaoLeitura, path))
+            } else {
+                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoLeitura, path))
+            }
+        }
 
+        val processedMediaPads = mutableListOf<String>()
+        mediaPaths.forEachIndexed { i, path ->
+            val outputPad = "[processed_m$i]"
+            processedMediaPads.add(outputPad)
+
+            val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
+            val durBase = duracaoCenas[i]
+            val isLast = (i == mediaPaths.lastIndex)
+            val trimDuration = durBase + (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
+            val frames = (trimDuration * videoFps).toInt().coerceAtLeast(1)
+            val durationExata = frames.toDouble() / videoFps
+            val w = larguraVideo
+            val h = alturaVideo
+            val input = "[${i}:v]"
+
+            filterComplex.append("  ${input}split=2[main${i}][bg${i}];\n")
+            filterComplex.append("  [bg${i}]scale='max(iw,${w}*2)':'max(ih,${h}*2)',crop=${w}:${h},boxblur=40:2,setsar=1[bg_final${i}];\n")
+
+            if (isVideo || !enableZoomPan) {
+                filterComplex.append("[main${i}]scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h[fg_scaled${i}];\n")
+            } else {
+                val fgChain = mutableListOf<String>()
+                val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, w, h, frames, i)
+                fgChain.add("scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,zoompan=z=$zoomExpr:s=${w}x${h}:d=$frames:x=$xExpr:y=$yExpr:fps=$videoFps")
+                fgChain.add("crop=$w:$h")
+                if (videoHdMotion) {
+                    fgChain.add("minterpolate=fps=$videoFps:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
+                }
+                filterComplex.append("  [main${i}]${fgChain.joinToString(",")}[fg_scaled${i}];\n")
+            }
+
+            filterComplex.append("  [fg_scaled${i}]pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0[fg_padded${i}];\n")
+            filterComplex.append("  [bg_final${i}][fg_padded${i}]overlay=0:0[composite${i}];\n")
+            filterComplex.append("  [composite${i}]format=pix_fmts=rgba,fps=$videoFps,trim=duration=$durationExata,setpts=PTS-STARTPTS$outputPad;\n")
+        }
+
+        val videoStreamFinal: String
+        if (enableSceneTransitions && processedMediaPads.size > 1) {
+            processedMediaPads.forEachIndexed { index, padName ->
+                filterComplex.append("  $padName setpts=PTS-STARTPTS[sc_trans$index];\n")
+            }
+            var currentStream = "[sc_trans0]"
+            var durationOfCurrentStream = duracaoCenas[0] + tempoDeTransicaoEfetivo
+            for (i in 0 until processedMediaPads.size - 1) {
+                val nextSceneStream = "[sc_trans${i + 1}]"
+                val nextSceneOriginalDuration = duracaoCenas[i + 1]
+                val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
+                val xfadeOffset = max(0.0, durationOfCurrentStream) - tempoDeTransicaoEfetivo
+                val tipoTransicao = listOf("fade", "slidedown", "circleopen", "circleclose", "rectcrop", "distance", "fadeblack", "fadewhite").random()
+                filterComplex.append("  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=${tempoDeTransicaoEfetivo}:offset=$xfadeOffset$xfadeOutputStreamName;\n")
+                currentStream = xfadeOutputStreamName
+                durationOfCurrentStream = max(0.1, durationOfCurrentStream + nextSceneOriginalDuration)
+            }
+            videoStreamFinal = currentStream
+        } else if (processedMediaPads.size > 1) {
+            processedMediaPads.forEachIndexed { index, pad -> filterComplex.append("  $pad setpts=PTS-STARTPTS[s_concat$index];\n") }
+            val concatInputs = processedMediaPads.indices.joinToString("") { "[s_concat$it]" }
+            filterComplex.append("  $concatInputs concat=n=${processedMediaPads.size}:v=1:a=0[vc_final_batch];\n")
+            videoStreamFinal = "[vc_final_batch]"
+        } else {
+            filterComplex.append("  ${processedMediaPads.firstOrNull() ?: ""} copy[vc_final_batch];\n")
+            videoStreamFinal = "[vc_final_batch]"
+        }
+
+        cmd.append("-filter_complex \"${filterComplex}\" ")
+        cmd.append("-map \"$videoStreamFinal\" ")
+        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps -movflags +faststart \"$outputPath\"")
+
+        return cmd.toString()
+    }
+    
+    private fun buildAudioAndSubtitleMixingCommand(
+        videoPath: String, audioPath: String, musicaPath: String, legendaPath: String?, fonteArialPath: String,
+        usarLegendas: Boolean, outputVideoPath: String, videoFps: Int, totalDuration: Double
+    ): String {
+        val cmd = StringBuilder("-y -hide_banner ")
+        val filterComplex = StringBuilder()
+        cmd.append("-i \"$videoPath\" ")
+        cmd.append("-i \"$audioPath\" ")
         if (musicaPath.isNotBlank()) {
-            cmd.append("-i \"$musicaPath\" ") 
+            cmd.append("-i \"$musicaPath\" ")
             filterComplex.append("  [2:a]volume=0.18,adelay=500|500[bgm];\n")
             filterComplex.append("  [1:a][bgm]amix=inputs=2:duration=first:dropout_transition=3[a_out_mixed];\n")
         } else {
             filterComplex.append("  [1:a]acopy[a_out_mixed];\n")
         }
-
-        var finalVideoStreamPad = "[0:v]" 
-
-        if (usarLegendas) {
-            val escapedLegendaPath = legendaPath// "${legendaPath.replace("'", "'\\''").replace("\\", "/").replace(":", "\\\\:")}"
-
+        var finalVideoStreamPad = "[0:v]"
+        if (usarLegendas && !legendaPath.isNullOrBlank()) {
+            val escapedLegendaPath = legendaPath.replace("'", "'\\''").replace("\\", "/").replace(":", "\\\\:")
             val fonteDir = File(fonteArialPath).parent?.replace("\\", "/")?.replace(":", "\\\\:") ?: "."
-
-            filterComplex.append("  $finalVideoStreamPad subtitles=filename='$escapedLegendaPath'")
-            filterComplex.append(":fontsdir='$fonteDir'")
-            filterComplex.append(":force_style='Alignment=2'") 
-            filterComplex.append("[v_out_with_subs];\n")
+            filterComplex.append("  $finalVideoStreamPad subtitles=filename='$escapedLegendaPath':fontsdir='$fonteDir':force_style='Alignment=2'[v_out_with_subs];\n")
             finalVideoStreamPad = "[v_out_with_subs]"
         } else {
             filterComplex.append("  $finalVideoStreamPad copy[v_out_copy];\n")
             finalVideoStreamPad = "[v_out_copy]"
         }
-
         cmd.append("-filter_complex \"${filterComplex}\" ")
         cmd.append("-map \"$finalVideoStreamPad\" -map \"[a_out_mixed]\" ")
-        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ") // <<-- Usando $videoFps aqui
+        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
         cmd.append("-movflags +faststart ")
         cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, totalDuration)))
         cmd.append("\"$outputVideoPath\"")
-
         return cmd.toString()
     }
 
-
-    fun Double.format(digits: Int): String = String.format("%.${digits}f", this)
-
-
-    fun obterDimensoesImagem(path: String): Pair<Int, Int>? {
+    private fun obterDimensoesImagem(path: String): Pair<Int, Int>? {
         return try {
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(path, options)
-            Pair(options.outWidth, options.outHeight)
+            if (options.outWidth > 0 && options.outHeight > 0) Pair(options.outWidth, options.outHeight) else null
         } catch (e: Exception) {
             null
         }
     }
-
-
+    
+    
     fun gerarZoompanExpressao(
         imgCaminho: String,
         larguraVideo: Int,
@@ -692,138 +631,61 @@ object VideoEditorComTransicoes {
         }
 
         val zoomExpr = "'$zoom + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/1000)'"
-
-        Log.i(TAG, "Cena $cenaIdx - Img: ${larguraImg}x${alturaImg} | Video: ${larguraVideo}x${alturaVideo}")
-        Log.i(TAG, "Cena $cenaIdx - escalaX: $escalaX | escalaY: $escalaY | zoomAjuste: $zoomAjuste")
-        Log.i(TAG, "Cena $cenaIdx - larguraAjuste: $larguraAjuste | alturaAjuste: $alturaAjuste")
-        Log.i(TAG, "Cena $cenaIdx - escalaX1: $escalaX1 | escalaY1: $escalaY1 | zoomFixo: $zoomFixo")
-        Log.i(TAG, "Cena $cenaIdx - xExpr: $xExpr | yExpr: $yExpr | zoom: $zoom")
-
         return Triple(zoomExpr, xExpr, yExpr)
     }
 
+    private fun gerarZoompanExpressao2(
+        imgCaminho: String, larguraVideo: Int, alturaVideo: Int, frames: Int, cenaIdx: Int
+    ): Triple<String, String, String> {
+        val (larguraImg, alturaImg) = obterDimensoesImagem(imgCaminho) ?: (larguraVideo to alturaVideo)
+        val escalaX = larguraVideo.toDouble() / larguraImg
+        val escalaY = alturaVideo.toDouble() / alturaImg
+        val zoomAjuste = min(escalaX, escalaY)
+        val larguraAjuste = larguraImg * zoomAjuste
+        val alturaAjuste = alturaImg * zoomAjuste
+        val escalaX1 = larguraVideo / larguraAjuste
+        val escalaY1 = alturaVideo / alturaAjuste
+        val zoomFixo = max(escalaX1, escalaY1)
+        val padX = ((larguraAjuste * zoomFixo) - larguraAjuste) / 2
+        val padY = ((alturaAjuste * zoomFixo) - alturaAjuste) / 2
+        var xExpr = "'$padX'"
+        var yExpr = "'$padY'"
+        if (escalaY1 == zoomFixo) xExpr = "'($padX-(($padX/$frames)*on))'"
+        else if (escalaX1 == zoomFixo) yExpr = "'($padY-(($padY/$frames)*on))'"
+        val zoomExpr = "'$zoomFixo + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/1000)'"
+        return Triple(zoomExpr, xExpr, yExpr)
+    }
 
     private fun copiarFonteParaCache(context: Context, nomeFonte: String): String {
-        val assetPath = "fonts/$nomeFonte"
         val outFile = File(context.cacheDir, nomeFonte)
         if (!outFile.exists() || outFile.length() == 0L) {
-            Log.d(TAG, "Copiando fonte '$nomeFonte' para o cache: ${outFile.absolutePath}")
             try {
                 context.cacheDir.mkdirs()
-                context.assets.open(assetPath).use { inputStream ->
-                    outFile.outputStream().use { outputStream ->
-                        inputStream.copyTo(outputStream)
-                    }
+                context.assets.open("fonts/$nomeFonte").use { input ->
+                    outFile.outputStream().use { output -> input.copyTo(output) }
                 }
-                if (!outFile.exists() || outFile.length() == 0L) {
-                    throw RuntimeException("Arquivo da fonte não foi criado ou está vazio após a cópia.")
-                }
-                Log.i(TAG, "Fonte '$nomeFonte' copiada com sucesso para ${outFile.absolutePath}")
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao copiar fonte '$nomeFonte' do asset '$assetPath' para '${outFile.absolutePath}': ${e.message}", e)
-                throw RuntimeException("Falha ao copiar fonte necessária '$nomeFonte': ${e.message}", e)
+                throw RuntimeException("Falha ao copiar fonte: ${e.message}", e)
             }
-        } else {
-            Log.d(TAG, "Fonte '$nomeFonte' já existe no cache: ${outFile.absolutePath}")
         }
         return outFile.absolutePath
     }
 
     private fun getProjectSpecificDirectory(context: Context, projectDirName: String, subDir: String): File? {
-        val baseAppDir: File?
-        if (projectDirName.isNotBlank()) {
-            baseAppDir = context.getExternalFilesDir(null)
-            if (baseAppDir != null) {
-                val projectPath = File(baseAppDir, projectDirName)
-                val finalDir = File(projectPath, subDir)
-                if (!finalDir.exists() && !finalDir.mkdirs()) {
-                    Log.e(TAG, "Falha ao criar diretório do projeto (externo): ${finalDir.absolutePath}")
-                    return null 
-                }
-                return finalDir
-            } else {
-                Log.w(TAG, "Armazenamento externo para vídeos não disponível. Usando fallback para armazenamento interno para o projeto '$projectDirName'.")
-                val internalProjectPath = File(context.filesDir, projectDirName)
-                val finalInternalDir = File(internalProjectPath, subDir)
-                if (!finalInternalDir.exists() && !finalInternalDir.mkdirs()) {
-                    Log.e(TAG, "Falha ao criar diretório interno do projeto (fallback A): ${finalInternalDir.absolutePath}")
-                    return null 
-                }
-                return finalInternalDir
-            }
+        val baseAppDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val projectPath = File(baseAppDir, projectDirName.takeIf { it.isNotBlank() } ?: "DefaultProject")
+        val finalDir = File(projectPath, subDir)
+        if (!finalDir.exists() && !finalDir.mkdirs()) {
+            return null
         }
-        val defaultParentDirName = "video_editor_default"
-        Log.w(TAG, "Nome do diretório do projeto para vídeos está em branco. Usando diretório de fallback interno: '$defaultParentDirName/$subDir'")
-        val fallbackDir = File(File(context.filesDir, defaultParentDirName), subDir)
-        if (!fallbackDir.exists() && !fallbackDir.mkdirs()) {
-            Log.e(TAG, "Falha ao criar diretório de fallback interno: ${fallbackDir.absolutePath}")
-            return null 
-        }
-        return fallbackDir
+        return finalDir
     }
-
 
     private fun createOutputFilePath(context: Context, prefix: String, projectDirName: String): String {
-        val subDiretorioVideos = "edited_videos"
-        val outputDir = getProjectSpecificDirectory(context, projectDirName, subDiretorioVideos)
-            ?: File(context.cacheDir, "edited_videos_fallback") 
-        if (!outputDir.exists()) outputDir.mkdirs() 
-        
-        val timestamp = System.currentTimeMillis()
-        val filename = "${prefix}_${timestamp}.mp4"
-        val outputFile = File(outputDir, filename)
-        return outputFile.absolutePath.also {
-            Log.d(TAG, "📄 Caminho do arquivo de saída definido para vídeo: $it")
-        }
+        val outputDir = getProjectSpecificDirectory(context, projectDirName, "edited_videos")
+            ?: File(context.cacheDir, "edited_videos_fallback").apply { mkdirs() }
+        return File(outputDir, "${prefix}_${System.currentTimeMillis()}.mp4").absolutePath
     }
-    
-    private fun extractSrtForTimeRange(fullSrtPath: String, startTimeSeconds: Double, endTimeSeconds: Double): String {
-        val srtFile = File(fullSrtPath)
-        if (!srtFile.exists()) return ""
-
-        val srtContent = srtFile.readText()
-        val srtBlocks = srtContent.split("\n\n").filter { it.isNotBlank() }
-        val extractedBlocks = mutableListOf<String>()
-
-        for (block in srtBlocks) {
-            val lines = block.split("\n").filter { it.isNotBlank() }
-            if (lines.size < 2) continue
-
-            val timingLine = lines[1]
-            val times = timingLine.split(" --> ")
-            if (times.size != 2) continue
-
-            val srtStartTime = convertSrtTimeToSeconds(times[0].trim())
-            val srtEndTime = convertSrtTimeToSeconds(times[1].trim())
-
-            if (srtStartTime < endTimeSeconds && srtEndTime > startTimeSeconds) {
-                val adjustedSrtStartTime = srtStartTime - startTimeSeconds
-                val adjustedSrtEndTime = srtEndTime - startTimeSeconds
-
-                val newTimingLine = "${formatSecondsToSrtTime(adjustedSrtStartTime)} --> ${formatSecondsToSrtTime(adjustedSrtEndTime)}"
-                extractedBlocks.add("${lines[0]}\n$newTimingLine\n${lines.drop(2).joinToString("\n")}")
-            }
-        }
-        return extractedBlocks.joinToString("\n\n")
-    }
-
-    private fun convertSrtTimeToSeconds(srtTime: String): Double {
-        val parts = srtTime.split(":", ",")
-        val hours = parts[0].toInt()
-        val minutes = parts[1].toInt()
-        val seconds = parts[2].toInt()
-        val milliseconds = parts[3].toInt()
-        return (hours * 3600 + minutes * 60 + seconds).toDouble() + milliseconds / 1000.0
-    }
-
-    private fun formatSecondsToSrtTime(totalSeconds: Double): String {
-        val hours = (totalSeconds / 3600).toInt()
-        val minutes = ((totalSeconds % 3600) / 60).toInt()
-        val seconds = (totalSeconds % 60).toInt()
-        val milliseconds = ((totalSeconds - seconds.toDouble() - minutes * 60 - hours * 3600) * 1000).toInt()
-        return String.format(Locale.US, "%02d:%02d:%02d,%03d", hours, minutes, seconds, milliseconds)
-    }
-
 
     class VideoGenerationException(message: String) : Exception(message)
     private data class Octuple<A, B, C, D, E, F, G, H>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F, val seventh: G, val eighth: H)

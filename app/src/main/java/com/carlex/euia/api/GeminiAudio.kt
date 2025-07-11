@@ -270,7 +270,7 @@ object GeminiAudio {
                 return Result.failure(IOException("Corpo da resposta de áudio Gemini TTS está vazio."))
             }
 
-            Log.d(TAG, "Resposta JSON recebida (primeiros 300 chars): ${responseBodyString.take(300)}")
+           // Log.d(TAG, "Resposta JSON recebida (primeiros 300 chars): ${responseBodyString.take(300)}")
 
             var audioDataBase64: String? = null
             var mimeType: String? = null

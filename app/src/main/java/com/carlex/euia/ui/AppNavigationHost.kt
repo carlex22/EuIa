@@ -27,14 +27,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
-// CORREÇÃO: Removido import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.carlex.euia.*
 import com.carlex.euia.R
 import com.carlex.euia.viewmodel.*
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.HelpOutline
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,16 +43,15 @@ fun AppNavigationHostComposable(
     navController: NavHostController,
     mainActivityContext: Context
 ) {
-    // CORREÇÃO: Estado para controlar quando o NavController está pronto
     var isNavControllerReady by remember { mutableStateOf(false) }
-    
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val application = LocalContext.current.applicationContext as Application
 
-    // ViewModels (permanecem iguais)
+    // ViewModels
     val authViewModel: AuthViewModel = viewModel()
     val billingViewModel: BillingViewModel = viewModel()
     val videoWorkflowViewModel: VideoWorkflowViewModel = viewModel()
@@ -60,8 +60,9 @@ fun AppNavigationHostComposable(
     val refImageInfoViewModel: RefImageViewModel = viewModel()
     val videoProjectViewModel: VideoProjectViewModel = viewModel()
     val videoGeneratorViewModel: VideoGeneratorViewModel = viewModel()
+    val musicViewModel: MusicViewModel = viewModel()
 
-    // Estados coletados (permanecem iguais)
+    // Estados coletados
     val currentUser by authViewModel.currentUser.collectAsState()
     val userProfile by authViewModel.userProfile.collectAsState()
     val selectedWorkflowTabIndex by videoWorkflowViewModel.selectedWorkflowTabIndex.collectAsState()
@@ -83,6 +84,39 @@ fun AppNavigationHostComposable(
     val isContextScreenDirty by videoWorkflowViewModel.isContextScreenDirty.collectAsState()
     val pendingNavigationAction by videoWorkflowViewModel.showConfirmExitContextDialog.collectAsState()
 
+    var showHelpDialog by remember { mutableStateOf(false) }
+    val helpTextResId = remember(currentRoute, selectedWorkflowTabIndex) {
+        when (currentRoute) {
+            AppDestinations.PROJECT_MANAGEMENT_ROUTE -> R.string.help_text_project_management
+            AppDestinations.VIDEO_CREATION_WORKFLOW -> when (workflowStages.getOrNull(selectedWorkflowTabIndex)?.identifier) {
+                AppDestinations.WORKFLOW_STAGE_CONTEXT -> R.string.help_text_workflow_context
+                AppDestinations.WORKFLOW_STAGE_IMAGES -> R.string.help_text_workflow_images
+                AppDestinations.WORKFLOW_STAGE_INFORMATION -> R.string.help_text_workflow_information
+                AppDestinations.WORKFLOW_STAGE_NARRATIVE -> R.string.help_text_workflow_narrative
+                AppDestinations.WORKFLOW_STAGE_SCENES -> R.string.help_text_workflow_scenes
+                AppDestinations.WORKFLOW_STAGE_MUSIC -> R.string.help_text_workflow_music
+                AppDestinations.WORKFLOW_STAGE_FINALIZE -> R.string.help_text_workflow_finalize
+                else -> null
+            }
+            AppDestinations.SETTINGS_ROUTE -> R.string.help_text_settings
+            else -> null
+        }
+    }
+
+    if (showHelpDialog && helpTextResId != null) {
+        HelpInfoDialog(
+            onDismissRequest = { showHelpDialog = false },
+            helpText = stringResource(id = helpTextResId)
+        )
+    }
+
+    if (isCurrentStageProcessing) {
+        ProcessingDialog(
+            progressText = currentStageProgressText,
+            onCancel = { videoWorkflowViewModel.cancelCurrentStageProcessing() }
+        )
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri>? ->
@@ -98,20 +132,33 @@ fun AppNavigationHostComposable(
         videoInfoViewModel.processImages(uris)
     }
 
+    val musicPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            musicViewModel.saveLocalMusicPath(uri)
+        } else {
+            scope.launch {
+                globalSnackbarHostState.showSnackbar(
+                    message = mainActivityContext.getString(R.string.toast_no_music_selected),
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
+
     LaunchedEffect(imagePickerLauncher, videoWorkflowViewModel) {
         videoWorkflowViewModel.setLaunchPickerAction { imagePickerLauncher.launch("image/*") }
     }
 
-    // CORREÇÃO: Aguarda NavController estar pronto
+
     LaunchedEffect(navController) {
         kotlinx.coroutines.delay(200)
         isNavControllerReady = true
     }
 
-    // CORREÇÃO: Função de navegação segura sem usar graph
     fun safeNavigate(route: String) {
         if (!isNavControllerReady) return
-        
         try {
             navController.navigate(route) {
                 launchSingleTop = true
@@ -122,12 +169,9 @@ fun AppNavigationHostComposable(
         }
     }
 
-    // CORREÇÃO: Lógica de redirecionamento segura
     LaunchedEffect(currentUser, isNavControllerReady) {
         if (!isNavControllerReady) return@LaunchedEffect
-        
         val isAuthScreen = currentRoute == AppDestinations.LOGIN_ROUTE || currentRoute == AppDestinations.REGISTER_ROUTE
-        
         if (currentUser == null) {
             if (!isAuthScreen) {
                 safeNavigate(AppDestinations.LOGIN_ROUTE)
@@ -139,7 +183,6 @@ fun AppNavigationHostComposable(
         }
     }
 
-    // Lógica do botão Voltar (permanece igual)
     val backPressedDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val backCallback = remember {
         object : OnBackPressedCallback(true) {
@@ -171,7 +214,6 @@ fun AppNavigationHostComposable(
         }
     }
 
-    // LaunchedEffect para back button (permanece igual)
     LaunchedEffect(
         isWorkflowScreen, selectedWorkflowTabIndex, isCurrentStageProcessing,
         drawerState.isOpen, navBackStackEntry, isContextScreenDirty, pendingNavigationAction,
@@ -193,7 +235,6 @@ fun AppNavigationHostComposable(
         onDispose { backCallback.remove() }
     }
 
-    // Dialog permanece igual
     if (pendingNavigationAction != null) {
         AlertDialog(
             onDismissRequest = { videoWorkflowViewModel.dismissExitContextDialog() },
@@ -271,7 +312,6 @@ fun AppNavigationHostComposable(
                                         if (currentRoute == AppDestinations.VIDEO_CREATION_WORKFLOW && item.route != AppDestinations.VIDEO_CREATION_WORKFLOW) {
                                             videoWorkflowViewModel.triggerProjectSave()
                                         }
-                                        // CORREÇÃO: Usa navegação segura sem graph
                                         safeNavigate(item.route)
                                     }
                                 }
@@ -321,8 +361,16 @@ fun AppNavigationHostComposable(
                             actions = {
                                 userProfile?.let { profile ->
                                     if (!profile.isPremium) {
-                                        var cred = authViewModel.xorDecrypt("${profile.creditos}", "${profile.chaveValidacaoFirebase}")
+                                        val cred = authViewModel.xorDecrypt("${profile.creditos}", "${profile.chaveValidacaoFirebase}")
                                         CreditCounter("$cred")
+                                    }
+                                }
+                                if (helpTextResId != null) {
+                                    IconButton(onClick = { showHelpDialog = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.HelpOutline,
+                                            contentDescription = stringResource(R.string.content_desc_help_button),
+                                        )
                                     }
                                 }
                             }
@@ -356,7 +404,7 @@ fun AppNavigationHostComposable(
                             videoWorkflowViewModel.markContextAsSaved()
                         },
                         onLaunchPickerClick = { currentStageLaunchPickerAction?.invoke() },
-                        onAnalyzeClick = { currentStageAnalyzeAction?.invoke() },
+                        onAnalyzeAction = { currentStageAnalyzeAction?.invoke() },
                         onCreateNarrativeClick = { currentStageCreateNarrativeAction?.invoke() },
                         onGenerateAudioClick = { currentStageGenerateAudioAction?.invoke() },
                         onGenerateScenesClick = { currentStageGenerateScenesAction?.invoke() },
@@ -371,14 +419,14 @@ fun AppNavigationHostComposable(
                             if (selectedWorkflowTabIndex < workflowStages.size - 1 && !isCurrentStageProcessing) {
                                 videoWorkflowViewModel.attemptToChangeTab(selectedWorkflowTabIndex + 1)
                             }
-                        }
+                        },
+                        onLaunchMusicClick = { musicPickerLauncher.launch("audio/*") }
                     )
                 }
             },
             snackbarHost = { SnackbarHost(globalSnackbarHostState) }
         ) { scaffoldInnerPadding ->
-            
-            // CORREÇÃO: NavHost só é criado quando o NavController está pronto
+
             if (isNavControllerReady) {
                 NavHost(
                     navController = navController,
@@ -393,7 +441,6 @@ fun AppNavigationHostComposable(
                             AddGeminiApiKeyScreen(viewModel())
                         } else {
                             LaunchedEffect(Unit) {
-                                //Log.w("NavHost", "Acesso não autorizado à rota de admin negado. Voltando...")
                                 navController.popBackStack()
                             }
                             Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Acesso Negado.") }
@@ -402,19 +449,20 @@ fun AppNavigationHostComposable(
                     composable(AppDestinations.VIDEO_CREATION_WORKFLOW) {
                         VideoCreationWorkflowScreen(
                             navController = navController,
-                            snackbarHostState = remember { SnackbarHostState() }, // Pode usar um global se preferir
-                            innerPadding = PaddingValues(0.dp), // O padding principal já foi aplicado
+                            snackbarHostState = remember { SnackbarHostState() },
+                            innerPadding = PaddingValues(0.dp),
                             videoWorkflowViewModel = videoWorkflowViewModel,
                             audioViewModel = audioViewModel,
                             videoInfoViewModel = videoInfoViewModel,
-                            refImageInfoViewModel = refImageInfoViewModel,
+                            refImageInfoViewModel = viewModel(),
                             videoProjectViewModel = videoProjectViewModel,
                             videoGeneratorViewModel = videoGeneratorViewModel,
-                            authViewModel = authViewModel, // Passando o AuthViewModel
+                            authViewModel = authViewModel,
+                            musicViewModel = musicViewModel,
                             generatedVideoPath = videoGeneratorViewModel.generatedVideoPath.collectAsState().value
                         )
                     }
-                    
+
                     composable(AppDestinations.PROJECT_MANAGEMENT_ROUTE) {
                         val factory = ProjectManagementViewModelFactory(application)
                         val projectManagementViewModelInstance: ProjectManagementViewModel = viewModel(factory = factory)
@@ -427,7 +475,6 @@ fun AppNavigationHostComposable(
                     composable(AppDestinations.CHAT_ROUTE) { Text(stringResource(R.string.placeholder_chat_screen)) }
                 }
             } else {
-                // Tela de loading
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -439,7 +486,66 @@ fun AppNavigationHostComposable(
     }
 }
 
-// WorkflowBottomBar permanece igual, mas adicione WORKFLOW_STAGE_AUDIO caso falte
+@Composable
+fun HelpInfoDialog(
+    onDismissRequest: () -> Unit,
+    helpText: String
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.HelpOutline, contentDescription = null) },
+        /*title = {
+            Text(text = stringResource(id = R.string.help_dialog_title))
+        },*/
+        text = {
+            Text(
+                text = helpText,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismissRequest
+            ) {
+                Text(stringResource(id = R.string.action_ok))
+            }
+        }
+    )
+}
+
+@Composable
+fun ProcessingDialog(
+    progressText: String,
+    onCancel: () -> Unit
+) {
+    Dialog(onDismissRequest = { /* Não permite fechar clicando fora */ }) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = progressText.ifBlank { stringResource(id = R.string.status_processing_default) },
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                TextButton(onClick = onCancel) {
+                    Text(stringResource(id = R.string.action_cancel))
+                }
+            }
+        }
+    }
+}
+
+
 @Composable
 private fun WorkflowBottomBar(
     workflowStages: List<WorkflowStage>,
@@ -450,14 +556,15 @@ private fun WorkflowBottomBar(
     isSaveContextEnabled: Boolean,
     onSaveContextClick: () -> Unit,
     onLaunchPickerClick: () -> Unit,
-    onAnalyzeClick: () -> Unit,
+    onAnalyzeAction: () -> Unit,
     onCreateNarrativeClick: () -> Unit,
     onGenerateAudioClick: () -> Unit,
     onGenerateScenesClick: () -> Unit,
     onRecordVideoClick: () -> Unit,
     onShareVideoClick: (() -> Unit)?,
     onBackClick: () -> Unit,
-    onNextClick: () -> Unit
+    onNextClick: () -> Unit,
+    onLaunchMusicClick: () -> Unit
 ) {
     Column {
         if (isCurrentStageProcessing) {
@@ -471,7 +578,9 @@ private fun WorkflowBottomBar(
         }
 
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             Arrangement.SpaceBetween, Alignment.CenterVertically
         ) {
             Button(onClick = onBackClick, enabled = selectedTabIndex > 0 && !isCurrentStageProcessing) {
@@ -479,56 +588,91 @@ private fun WorkflowBottomBar(
             }
             Spacer(Modifier.width(8.dp))
             Box(Modifier.weight(2f)) {
-                val currentStageId = workflowStages.getOrNull(selectedTabIndex)?.identifier
-                if (isCurrentStageProcessing) {
-                    Text(currentStageProgressText, Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                } else {
-                    Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally), Alignment.CenterVertically) {
+                    val currentStageId = workflowStages.getOrNull(selectedTabIndex)?.identifier
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                        Alignment.CenterVertically
+                    ) {
                         when (currentStageId) {
-                            AppDestinations.WORKFLOW_STAGE_CONTEXT -> Button(onSaveContextClick, enabled = isSaveContextEnabled) {
+                            AppDestinations.WORKFLOW_STAGE_CONTEXT -> Button(
+                                onSaveContextClick,
+                                enabled = isSaveContextEnabled
+                            ) {
                                 Icon(Icons.Filled.Save, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                 Text(stringResource(R.string.action_save))
                             }
-                            AppDestinations.WORKFLOW_STAGE_IMAGES -> Button(onLaunchPickerClick) {
+                            AppDestinations.WORKFLOW_STAGE_IMAGES -> Button(
+                                onLaunchPickerClick,
+                                enabled = !isCurrentStageProcessing
+                            ) {
                                 Icon(Icons.Filled.AddPhotoAlternate, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                 Text(stringResource(R.string.bottom_bar_action_add_image))
                             }
-                            AppDestinations.WORKFLOW_STAGE_INFORMATION -> Button(onAnalyzeClick) {
+                            AppDestinations.WORKFLOW_STAGE_INFORMATION -> Button(
+                                onAnalyzeAction,
+                                enabled = !isCurrentStageProcessing
+                            ) {
                                 Icon(Icons.Filled.AutoAwesome, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                 Text(stringResource(R.string.bottom_bar_action_analyze))
                             }
-                            AppDestinations.WORKFLOW_STAGE_NARRATIVE -> Button(onCreateNarrativeClick) {
+                            AppDestinations.WORKFLOW_STAGE_NARRATIVE -> Button(
+                                onCreateNarrativeClick,
+                                enabled = !isCurrentStageProcessing
+                            ) {
                                 Icon(Icons.Filled.AutoStories, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                 Text(stringResource(R.string.bottom_bar_action_narrate))
                             }
-                            AppDestinations.WORKFLOW_STAGE_AUDIO -> Button(onGenerateAudioClick) {
+                            AppDestinations.WORKFLOW_STAGE_AUDIO -> Button(
+                                onGenerateAudioClick,
+                                enabled = !isCurrentStageProcessing
+                            ) {
                                 Icon(Icons.Filled.GraphicEq, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                 Text(stringResource(R.string.bottom_bar_action_generate_audio))
                             }
-                            AppDestinations.WORKFLOW_STAGE_SCENES -> Button(onGenerateScenesClick) {
+                            AppDestinations.WORKFLOW_STAGE_SCENES -> Button(
+                                onGenerateScenesClick,
+                                enabled = !isCurrentStageProcessing
+                            ) {
                                 Icon(Icons.Filled.MovieCreation, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                 Text(stringResource(R.string.bottom_bar_action_generate_scenes))
                             }
-                            AppDestinations.WORKFLOW_STAGE_FINALIZE -> Button(onRecordVideoClick) {
+                            AppDestinations.WORKFLOW_STAGE_MUSIC -> Button(
+                                onClick = onLaunchMusicClick,
+                                enabled = !isCurrentStageProcessing
+                            ) {
+                                Icon(Icons.Filled.MusicNote, null)
+                                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                Text("Importar Música")
+                            }
+                            AppDestinations.WORKFLOW_STAGE_FINALIZE -> Button(
+                                onRecordVideoClick,
+                                enabled = !isCurrentStageProcessing
+                            ) {
                                 Icon(Icons.Filled.Videocam, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                                 Text(stringResource(R.string.bottom_bar_action_record_video))
                             }
                             else -> Spacer(Modifier.fillMaxWidth())
                         }
-                    }
                 }
             }
             Spacer(Modifier.width(8.dp))
             if (selectedTabIndex == workflowStages.size - 1) {
-                IconButton(onClick = { onShareVideoClick?.invoke() }, enabled = !isCurrentStageProcessing && onShareVideoClick != null) {
-                    Icon(Icons.Filled.Share, stringResource(R.string.bottom_bar_action_share_video))
+                IconButton(
+                    onClick = { onShareVideoClick?.invoke() },
+                    enabled = !isCurrentStageProcessing && onShareVideoClick != null
+                ) {
+                    Icon(
+                        Icons.Filled.Share,
+                        stringResource(R.string.bottom_bar_action_share_video)
+                    )
                 }
             } else {
                 Button(onClick = onNextClick, enabled = !isCurrentStageProcessing) {
@@ -543,7 +687,7 @@ private fun WorkflowBottomBar(
 private fun CreditCounter(credits: String?) {
     Row(
         modifier = Modifier
-            .padding(end = 8.dp)
+            .padding(end = 1.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primaryContainer)
             .padding(horizontal = 8.dp, vertical = 4.dp),

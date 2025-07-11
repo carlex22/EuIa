@@ -88,6 +88,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val googleWebClientId: String get() = AppConfigManager.getString("google_WEB_CLIENT_ID") ?: ""
     private val youtubeUploadScope: String get() = AppConfigManager.getString("youtube_UPLOAD_SCOPE") ?: ""
 
+    private val googleWebClientIds =  BuildConfig.GOOGLE_WEB_CLIENT_IDS
+
 
     
 
@@ -110,6 +112,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+         //   Log.i(TAG, "googleWebClientIds $googleWebClientIds")
             _error.value = "Aguardando configuração do servidor..."
             AppConfigManager.isLoaded.collect { isLoaded ->
                 if(isLoaded) {
@@ -128,7 +131,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun initializeGsoAndListener() {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(googleWebClientId)
+            .requestIdToken(googleWebClientIds)
             .requestEmail()
             .requestScopes(Scope(youtubeUploadScope))
             .build()

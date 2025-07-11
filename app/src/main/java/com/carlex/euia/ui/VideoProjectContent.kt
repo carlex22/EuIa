@@ -1,4 +1,4 @@
-// File: ui/VideoProjectContent.kt
+// File: euia/ui/VideoProjectContent.kt
 package com.carlex.euia.ui
 
 import android.content.Intent
@@ -421,17 +421,17 @@ private fun SceneLinkItem(
                                     contentDescription = stringResource(if (!sceneLinkData.pathThumb.isNullOrBlank()) R.string.content_desc_video_thumbnail else R.string.content_desc_generated_image),
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop,
-                                    alpha = if (!sceneLinkData.pathThumb.isNullOrBlank() && isVideoPlayingThisScene) 0.2f else 1.0f
+                                    alpha = if (!sceneLinkData.pathThumb.isNullOrBlank() && isVideoPlayingThisScene) 0.0f else 1.0f
                                 )
 
-                                if (!sceneLinkData.pathThumb.isNullOrBlank()) {
+                               /* if (!sceneLinkData.pathThumb.isNullOrBlank()) {
                                     Icon(
                                         if (isVideoPlayingThisScene) Icons.Filled.PauseCircleOutline else Icons.Filled.PlayCircleOutline,
                                         contentDescription = stringResource(if (isVideoPlayingThisScene) R.string.content_desc_pause_video_overlay else R.string.content_desc_play_video_overlay),
                                         modifier = Modifier.align(Alignment.Center).size(60.dp),
                                         tint = Color.White.copy(alpha = 0.9f)
                                     )
-                                }
+                                }*/
                             }
                             else -> {
                                 Column(
@@ -592,7 +592,6 @@ private fun SceneLinkItem(
                                                sceneLinkData.pathThumb.isNullOrBlank() &&
                                                !sceneLinkData.imagemGeradaPath.isNullOrBlank()
 
-
                     IconButton(
                         onClick = {
                             if (isCurrentlyPlayingThisSceneAudio) onStopAudioSnippet()
@@ -697,14 +696,13 @@ private fun SceneLinkItem(
                             Icon(Icons.Filled.MovieCreation, contentDescription = stringResource(R.string.scene_item_action_generate_video_desc), modifier = Modifier.size(iconSize), tint = if (generateVideoEnabled) primaryActionIconTint else disabledIconTint)
                         }
                     }
-                    // <<< BOTÃO DE BUSCA AUTOMÁTICA >>>
                     IconButton(
                         onClick = { projectViewModel.findAndSetStockVideoForScene(sceneLinkData.id) },
                         enabled = generalActionsEnabled && !sceneLinkData.promptVideo.isNullOrBlank(),
                         modifier = Modifier.size(iconButtonSize)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.TravelExplore, // Ícone de busca/exploração
+                            imageVector = Icons.Default.TravelExplore,
                             contentDescription = stringResource(R.string.scene_item_action_find_stock_video_desc),
                             modifier = Modifier.size(iconSize),
                             tint = if (generalActionsEnabled && !sceneLinkData.promptVideo.isNullOrBlank()) primaryActionIconTint else disabledIconTint
@@ -790,12 +788,12 @@ private fun SceneLinkItem(
 @Composable
 private fun VideoPlayerInternal(
     videoPath: String,
-    isPlaying: Boolean, // Este estado agora é controlado pelo chamador
-    onPlaybackStateChange: (Boolean) -> Unit, // Callback para informar o chamador
+    isPlaying: Boolean,
+    onPlaybackStateChange: (Boolean) -> Unit,
     invalidPathErrorText: String
 ) {
     val context = LocalContext.current
-    val videoUri = remember(videoPath) { // Recalcula URI se videoPath mudar
+    val videoUri = remember(videoPath) {
         if (videoPath.isNotBlank()) {
             val file = File(videoPath)
             if (file.exists() && file.isFile) {
@@ -877,7 +875,7 @@ fun VideoProjectContent(
     val isUiReady by projectViewModel.isUiReady.collectAsState()
     val sceneLinkDataList by projectViewModel.sceneLinkDataList.collectAsState()
     val showConfirmationDialog by projectViewModel.showSceneGenerationConfirmationDialog.collectAsState()
-    val isProcessingGlobalScenes by projectViewModel.isProcessingGlobalScenes.collectAsState()
+    val isProcessingGlobalScenes by projectViewModel.isGeneratingScene.collectAsState()
     val allProjectReferenceImages by projectViewModel.currentImagensReferenciaStateFlow.collectAsState()
     val currentlyPlayingSceneId by projectViewModel.currentlyPlayingSceneId.collectAsState()
     val isAudioLoadingForScene by projectViewModel.isAudioLoadingForScene.collectAsState()
@@ -887,6 +885,7 @@ fun VideoProjectContent(
     
     val showImageBatchCostDialog by projectViewModel.showImageBatchCostConfirmationDialog.collectAsState()
     val imageBatchCost by projectViewModel.pendingImageBatchCost.collectAsState()
+    val imageBatchCount by projectViewModel.pendingImageBatchCount.collectAsState()
     
     val globalSceneError by projectViewModel.globalSceneError.collectAsState()
     
@@ -907,6 +906,31 @@ fun VideoProjectContent(
         )
     }
 
+    if (showImageBatchCostDialog) {
+        AlertDialog(
+            onDismissRequest = { projectViewModel.cancelImageBatchGeneration() },
+            title = { Text(text = stringResource(R.string.dialog_title_confirm_generation)) },
+            text = { Text(text = stringResource(R.string.dialog_message_image_batch_cost, imageBatchCount, imageBatchCost)) },
+            confirmButton = {
+                Button(onClick = { projectViewModel.confirmImageBatchGeneration() }) {
+                    Text(stringResource(R.string.action_continue))
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { projectViewModel.triggerBatchPixabayVideoSearch() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text(stringResource(R.string.dialog_action_search_free_videos))
+                    }
+                    TextButton(onClick = { projectViewModel.cancelImageBatchGeneration() }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            }
+        )
+    }
 
     if (sceneIdToRecreateImage != null && promptForRecreateImage != null) {
          AlertDialog(
@@ -952,28 +976,10 @@ fun VideoProjectContent(
         )
     }
 
-    if (showImageBatchCostDialog) {
-        AlertDialog(
-            onDismissRequest = { projectViewModel.cancelImageBatchGeneration() },
-            title = { Text(text = stringResource(R.string.dialog_title_confirm_generation)) },
-            text = { Text(text = stringResource(R.string.dialog_message_image_batch_cost, imageBatchCost)) },
-            confirmButton = {
-                Button(onClick = { projectViewModel.confirmImageBatchGeneration() }) {
-                    Text(stringResource(R.string.action_continue))
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { projectViewModel.cancelImageBatchGeneration() }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            }
-        )
-    }
-
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally // Centraliza o conteúdo da Column
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (!isUiReady) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1011,7 +1017,7 @@ fun VideoProjectContent(
                             .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
                             .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
                             .padding(16.dp)
-                            .clickable { projectViewModel.clearGlobalSceneError() }, // Ação de clique para limpar
+                            .clickable { projectViewModel.clearGlobalSceneError() },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {

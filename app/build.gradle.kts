@@ -44,10 +44,10 @@ android {
 
     defaultConfig {
         applicationId = "com.carlex.euia"
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.1.14"
+        minSdk = 28
+        targetSdk = 35
+        versionCode = 5
+        versionName = "1.1.17"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -191,8 +191,11 @@ android {
         release {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_IDS", "\"229195560996-g6jpabo0f0j278bshscnl7l0gpekp7mj.apps.googleusercontent.com\"")
+            //applicationIdSuffix = ".test" 
         }
         debug {
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_IDS", "\"229195560996-g6jpabo0f0j278bshscnl7l0gpekp7mj.apps.googleusercontent.com\"")
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -269,6 +272,8 @@ dependencies {
     implementation(libs.squareup.retrofit)
     implementation(libs.squareup.retrofit.converterGson)
     implementation(libs.jakewharton.retrofit.kotlinxSerializationConverter)
+
+implementation("com.google.android.play:integrity:1.4.0")
 
     // org.json
     implementation(libs.json.org)

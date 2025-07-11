@@ -69,7 +69,7 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         // <<<< Lógica de atualização do DataStore movida para o worker ou para o ponto de enfileiramento/conclusão
-        if (!isProcessing && isAnyImageProcessing.value) {
+        if (!isProcessing) {
             viewModelScope.launch {
                 dataStoreManager.setIsProcessingImages(false)
             }
@@ -125,6 +125,12 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
             Log.d(TAG, "Tarefa do WorkManager enfileirada com ID: ${imageProcessingRequest.id} e tag: ${WorkerTags.IMAGE_PROCESSING_WORK}")
             _toastMessage.emit("Processamento de imagens iniciado em segundo plano.")
         }
+        
+        
+        viewModelScope.launch {
+            dataStoreManager.setIsProcessingImages(false)
+        }
+        
     }
 
      @OptIn(ExperimentalSerializationApi::class)

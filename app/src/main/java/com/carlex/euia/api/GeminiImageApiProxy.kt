@@ -75,7 +75,7 @@ object GeminiImageApiProxy {
         val loggingInterceptor = HttpLoggingInterceptor { message ->
             Log.v(TAG, "[ProxyHttp] $message")
         }.apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.NONE
         }
 
         val okHttpClient = OkHttpClient.Builder()

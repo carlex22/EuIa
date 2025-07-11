@@ -1,82 +1,52 @@
 {
   "allFiles": [
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/VideoPreferencesScreen.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 19219,
-          "line": 409
-        },
-        "start": {
-          "column": 1,
-          "index": 19219,
-          "line": 409
-        }
-      }
-    },
-    {
       "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml",
       "selection": {
         "end": {
-          "column": 0,
-          "index": 510,
-          "line": 12
+          "column": 48,
+          "index": 96574,
+          "line": 1428
         },
         "start": {
-          "column": 0,
-          "index": 510,
-          "line": 12
+          "column": 18,
+          "index": 96544,
+          "line": 1428
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/prompts/CreateScenes.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/VideoInfoScreen.kt",
       "selection": {
         "end": {
-          "column": 160,
-          "index": 11104,
-          "line": 186
-        },
-        "start": {
-          "column": 146,
-          "index": 11090,
-          "line": 186
-        }
-      }
-    },
-    {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/prompts/ChoiceVideoScene.kt",
-      "selection": {
-        "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        },
-        "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        }
-      }
-    },
-    {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/VideoProcessingWorker.kt",
-      "selection": {
-        "end": {
-          "column": 20,
-          "index": 7101,
-          "line": 161
+          "column": 15,
+          "index": 8506,
+          "line": 190
         },
         "start": {
           "column": 8,
-          "index": 7089,
-          "line": 161
+          "index": 8499,
+          "line": 190
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/data/VideoProjectDataStoreManager.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/RefImageInfoContent.kt",
+      "selection": {
+        "end": {
+          "column": 21,
+          "index": 7750,
+          "line": 175
+        },
+        "start": {
+          "column": 21,
+          "index": 7750,
+          "line": 175
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/RefImageAnalysisWorker.kt",
       "selection": {
         "end": {
           "column": 0,
@@ -91,47 +61,32 @@
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/data/SceneLinkData.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/ImageProcessingWorker.kt",
       "selection": {
         "end": {
-          "column": 19,
-          "index": 1167,
-          "line": 30
+          "column": 48,
+          "index": 21048,
+          "line": 418
         },
         "start": {
-          "column": 8,
-          "index": 1156,
-          "line": 30
+          "column": 48,
+          "index": 21048,
+          "line": 418
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/PixabayVideoSearchWorker.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoViewModel.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 7584,
-          "line": 142
+          "column": 0,
+          "index": 6995,
+          "line": 144
         },
         "start": {
-          "column": 1,
-          "index": 7584,
-          "line": 142
-        }
-      }
-    },
-    {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoProjectViewModel.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 59237,
-          "line": 1173
-        },
-        "start": {
-          "column": 1,
-          "index": 59237,
-          "line": 1173
+          "column": 0,
+          "index": 6995,
+          "line": 144
         }
       }
     },
@@ -139,32 +94,17 @@
       "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/VideoProjectContent.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 67019,
-          "line": 1048
+          "column": 33,
+          "index": 22429,
+          "line": 424
         },
         "start": {
-          "column": 1,
-          "index": 67019,
-          "line": 1048
-        }
-      }
-    },
-    {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/api/PixabayApiService.kt",
-      "selection": {
-        "end": {
-          "column": 48,
-          "index": 3602,
-          "line": 101
-        },
-        "start": {
-          "column": 48,
-          "index": 3602,
-          "line": 101
+          "column": 32,
+          "index": 21708,
+          "line": 418
         }
       }
     }
   ],
-  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/api/PixabayApiService.kt"
+  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/ImageProcessingWorker.kt"
 }

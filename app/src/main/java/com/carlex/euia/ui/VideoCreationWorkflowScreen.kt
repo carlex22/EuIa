@@ -9,13 +9,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp // <<< IMPORT ADICIONADO AQUI
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.carlex.euia.AppDestinations
 import com.carlex.euia.R
 import com.carlex.euia.viewmodel.*
-import com.carlex.euia.utils.shareVideoFile // Verifique se esta importação está correta
+import com.carlex.euia.utils.shareVideoFile
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,7 +30,7 @@ fun VideoCreationWorkflowScreen(
     videoProjectViewModel: VideoProjectViewModel = viewModel(),
     videoGeneratorViewModel: VideoGeneratorViewModel = viewModel(),
     authViewModel: AuthViewModel = viewModel(),
-    musicViewModel: MusicViewModel = viewModel(), // Parâmetro adicionado
+    musicViewModel: MusicViewModel = viewModel(),
     generatedVideoPath: String
 ) {
     val localContext = LocalContext.current
@@ -41,11 +41,10 @@ fun VideoCreationWorkflowScreen(
     val isRefInfoAnalyzing by refImageInfoViewModel.isAnalyzing.collectAsState()
     val isAudioProcessing by audioViewModel.isAudioProcessing.collectAsState()
     val audioGenerationProgressText by audioViewModel.generationProgressText.collectAsState()
-    val isGeneratingGlobalScenes by videoProjectViewModel.isProcessingGlobalScenes.collectAsState()
+    val isGeneratingGlobalScenes by videoProjectViewModel.isGeneratingScene.collectAsState()
     val isGeneratingVideo by videoGeneratorViewModel.isGeneratingVideo.collectAsState()
     val generationVideoProgress by videoGeneratorViewModel.generationProgress.collectAsState()
 
-    // O LaunchedEffect para gerenciar as ações da BottomBar permanece o mesmo
     LaunchedEffect(
         selectedStageIndex, isImageProcessing, isRefInfoAnalyzing, isAudioProcessing,
         isGeneratingGlobalScenes, isGeneratingVideo, generatedVideoPath,
@@ -53,7 +52,6 @@ fun VideoCreationWorkflowScreen(
     ) {
         val currentStageId = workflowStages.getOrNull(selectedStageIndex)?.identifier ?: return@LaunchedEffect
 
-        // Reseta as ações
         videoWorkflowViewModel.setLaunchPickerAction(null)
         videoWorkflowViewModel.setAnalyzeAction(null)
         videoWorkflowViewModel.setCreateNarrativeAction(null)
@@ -61,15 +59,14 @@ fun VideoCreationWorkflowScreen(
         videoWorkflowViewModel.setGenerateScenesAction(null)
         videoWorkflowViewModel.setRecordVideoAction(null)
         videoWorkflowViewModel.setShareVideoAction(null)
+        // REMOVIDO: videoWorkflowViewModel.setLaunchMusicAction(null)
 
         var currentTabIsProcessing = false
         var currentTabProgressFloat = 0f
         var currentTabText = ""
 
         when (currentStageId) {
-            AppDestinations.WORKFLOW_STAGE_CONTEXT -> {
-                // Ação de salvar é tratada de forma especial pela `ContextInfoContent`
-            }
+            AppDestinations.WORKFLOW_STAGE_CONTEXT -> {}
             AppDestinations.WORKFLOW_STAGE_IMAGES -> {
                 currentTabIsProcessing = isImageProcessing
                 currentTabText = if (isImageProcessing) localContext.getString(R.string.status_processing_images_general) else ""
@@ -102,9 +99,7 @@ fun VideoCreationWorkflowScreen(
                 currentTabIsProcessing = isGeneratingGlobalScenes
                 currentTabText = if (isGeneratingGlobalScenes) localContext.getString(R.string.status_generating_scenes) else ""
             }
-            // Ação vazia para a aba de música
             AppDestinations.WORKFLOW_STAGE_MUSIC -> {}
-
             AppDestinations.WORKFLOW_STAGE_FINALIZE -> {
                 videoWorkflowViewModel.setRecordVideoAction(
                     if (!isGeneratingVideo) { { videoGeneratorViewModel.generateVideo() } } else null
@@ -127,7 +122,9 @@ fun VideoCreationWorkflowScreen(
         videoWorkflowViewModel.updateProgressText(currentTabText)
     }
 
-    Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .padding(innerPadding)) {
         when (workflowStages.getOrNull(selectedStageIndex)?.identifier) {
             AppDestinations.WORKFLOW_STAGE_CONTEXT -> {
                 ContextInfoContent(
@@ -152,6 +149,7 @@ fun VideoCreationWorkflowScreen(
                     }
                 )
             }
+            
             AppDestinations.WORKFLOW_STAGE_INFORMATION -> {
                 RefImageInfoContent(
                     modifier = Modifier.fillMaxSize(),
@@ -164,6 +162,12 @@ fun VideoCreationWorkflowScreen(
                     modifier = Modifier.fillMaxSize(),
                     innerPadding = PaddingValues(0.dp),
                     audioViewModel = audioViewModel
+                )
+            }
+            AppDestinations.WORKFLOW_STAGE_SCENES -> {
+                VideoProjectContent(
+                    innerPadding = PaddingValues(0.dp),
+                    projectViewModel = videoProjectViewModel
                 )
             }
             AppDestinations.WORKFLOW_STAGE_SCENES -> {

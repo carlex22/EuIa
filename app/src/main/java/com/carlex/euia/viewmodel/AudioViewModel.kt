@@ -785,6 +785,16 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
             null
         }
     }
+    
+    // --- CÓDIGO NOVO: Função de cancelamento ---
+    fun cancelAudioGeneration() {
+        Log.d(TAG, "Cancelamento da geração de áudio solicitado. Cancelando trabalho com a tag: ${WorkerTags.AUDIO_NARRATIVE}")
+        workManager.cancelAllWorkByTag(WorkerTags.AUDIO_NARRATIVE)
+        viewModelScope.launch {
+            audioDataStoreManager.setIsAudioProcessing(false)
+            audioDataStoreManager.setGenerationProgressText(appContext.getString(R.string.status_cancelled_by_user))
+        }
+    }
 
 
     override fun onCleared() {
@@ -802,3 +812,6 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
             .removeObserver(urlImportWorkObserver)
     }
 }
+
+
+

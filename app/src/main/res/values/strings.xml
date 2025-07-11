@@ -9,6 +9,16 @@
     <!-- Adicione as novas strings abaixo -->
 
 
+    <!-- ... outras strings que você já tenha ... -->
+
+    <!-- Strings para a tela de seleção de música -->
+    <string name="music_import_new_file">Importar Novo Arquivo de Música</string>
+    <string name="music_no_files_found">Nenhuma música na sua biblioteca compartilhada.\nImporte um arquivo para começar.</string>
+    <string name="music_action_jplay">Tocar</string>
+    <string name="music_action_pause">Pausar</string>
+    <string name="music_action_delete">Deletar</string>
+    <string name="music_current_shelection">Seleção Atual: %1$s</string>
+
 
 
     <!-- ... suas outras strings ... -->
@@ -23,6 +33,18 @@
     <string name="notification_content_pixabay_success">Busca e download iniciados com sucesso!</string>
     <string name="notification_content_pixabay_failed">Falha na busca: %1$s</string>
     
+
+    <!-- ... -->
+    <string name="video_render_cancelled">Renderização de vídeo cancelada.</string>
+    <string name="video_render_unknown_error">Erro desconhecido na renderização.</string>
+
+    <!-- ... -->
+    <!-- String MODIFICADA para o diálogo de confirmação -->
+    <string name="dialog_message_image_batch_cost">Gerar %1$d imagens terá um custo de %2$d créditos. \n\nComo alternativa, você pode tentar preencher todas as cenas com vídeos de estoque gratuitos, sem custo.</string>
+
+    <!-- String NOVA para o botão de busca de vídeos -->
+    <string name="dialog_action_search_free_videos">Buscar Vídeos Grátis</string>
+    <string name="toast_batch_video_search_started">Iniciando busca de vídeos para todas as cenas...</string>
 
 
 
@@ -500,8 +522,7 @@
 
 <string name="error_rate_limit_stopping_retries">Limite de taxa atingido. Parando as tentativas para esta tarefa.</string>
 <string name="dialog_title_confirm_generation">Confirmar Geração</string>
-    <string name="dialog_message_image_batch_cost">A geração das imagens para estas cenas custará %1$d créditos. Deseja continuar?</string>
-    <string name="action_continue">Continuar</string>
+        <string name="action_continue">Continuar</string>
 
     <!-- String para o erro de créditos insuficientes no ViewModel -->
     <string name="error_insufficient_credits_for_batch">Créditos insuficientes para gerar imagens. Necessários: %1$d, Disponíveis: %2$d.</string>
@@ -1082,7 +1103,7 @@
 
     <string name="bottom_bar_action_back">Voltar</string>
     <string name="bottom_bar_action_save_context">Salvar Contexto</string>
-    <string name="bottom_bar_action_add_image">Imagem</string>
+    <string name="bottom_bar_action_add_image">Imagem\\Video</string>
     <string name="bottom_bar_action_analyze">Analisar</string>
     <string name="bottom_bar_action_narrate">Narrar</string>
     <string name="bottom_bar_action_generate_audio">Áudio</string>
@@ -1279,8 +1300,8 @@
     <!-- ... (strings existentes) ... -->
 
     <!-- Para ContextInfoContent -->
-    <string name="context_info_import_data_title">Importar dados</string>
-    <string name="context_info_import_data_button_desc">Importar dados da URL</string>
+    <string name="context_info_import_data_title">Gerar ou Importar dados web</string>
+    <string name="context_info_import_data_button_desc">Gerar ou Importar dados para o Video</string>
 
     <string name="context_info_section_title_video">Título do Vídeo</string>
     <string name="context_info_label_title">Título</string>
@@ -1302,11 +1323,11 @@
     <string name="context_info_dropdown_time_unit_seconds">%1$s segundos</string> <!-- Para formatar "30 segundos" -->
 
     <string name="context_info_dialog_import_url_title">Importar Dados da URL</string>
-    <string name="context_info_dialog_import_url_label">URL do produto/página</string>
+    <string name="context_info_dialog_import_url_label">Titulo / Contexto / URL de Pagina ou Video</string>
     <string name="context_info_dialog_import_url_warning">Atenção: Ao clicar em \'IMPORTAR\', todos os dados do projeto atual (arquivos, narrações, configurações de áudio, detalhes de imagens, etc.) serão limpos para a nova importação.</string>
-    <string name="context_info_dialog_action_import">IMPORTAR</string>
+    <string name="context_info_dialog_action_import">GERAR/IMPORTAR</string>
     <string name="context_info_dialog_action_cancel">CANCELAR</string> <!-- Pode reutilizar R.string.action_cancel se já existir -->
-    <string name="context_info_snackbar_please_enter_url">Por favor, insira uma URL.</string>
+    <string name="context_info_snackbar_please_enter_url">Por favor, insira uma URL OU TITULO.</string>
     <string name="context_info_snackbar_context_saved">Contexto da narrativa salvo.</string>
 
     <!-- ... (strings existentes) ... -->
@@ -1378,8 +1399,8 @@
     <string name="scene_item_label_scene_number">Cena: %1$s</string>
     <string name="scene_item_label_product_display_yes">Exibir Produto: Sim</string>
     <string name="scene_item_label_product_display_no">Exibir Produto: Não</string>
-    <string name="scene_item_label_time_start">Início: %1$.2fs</string>
-    <string name="scene_item_label_time_end">Fim: %1$.2fs</string>
+    <string name="scene_item_label_time_start">Início: %1$.4fs</string>
+    <string name="scene_item_label_time_end">Fim: %1$.4fs</string>
 
     <!-- R.string.scene_item_label_reference_image já existe -->
     <!-- R.string.content_desc_reference_image já existe -->
@@ -1395,7 +1416,21 @@
 
     <string name="scene_item_label_image_generation_prompt">Prompt para Geração da Imagem</string>
     <string name="scene_item_toast_prompt_updated">Prompt atualizado para cena %1$s</string>
+    
     <string name="scene_item_action_save_prompt_desc">Salvar Prompt</string>
+
+
+
+    <string name="context_info_imagem_import_title">Construa seu Universo Visual</string>
+    <string name="context_info_imagem_import_context">Importe as imagens e vídeos que servirão de base e inspiração para a IA criar as cenas. Podem ser fotos de produtos, pessoas, estilos de arte ou locais.</string>
+    <string name="context_info_imagem_import_text_click">Clique em "Imagem\\Video" abaixo para começar.</string>
+ 
+
+    <string name="context_info_data_import_title">Desbloqueie o Poder dos Detalhes</string>
+    <string name="context_info_data_import_context">Nesta etapa, a inteligência artificial analisa suas imagens de referência para extrair características, cores e informações importantes. Estes detalhes são o segredo para uma narrativa e cenas que realmente se conectam com seu público.</string>
+    <string name="context_info_data_import_text_click">Clique em \"Analisar\" para iniciar a extração automática ou adicione os detalhes manualmente para guiar a criação.</string>
+
+
 
     <string name="scene_item_label_generating_button">Gerando</string>
     <!-- R.string.scene_item_action_generate já existe (Gerar Imagem) -->
@@ -1908,6 +1943,63 @@
     <string name="status_enqueuing">Entrando na fila...</string>
     <string name="status_generating">Gerando...</string>
     <string name="status_in_queue_position">Aguardando na fila (Posição: %1$d)</string>
+
+<!-- No seu arquivo res/values/strings.xml -->
+
+    <!-- ... suas outras strings ... -->
+
+    <!-- String MODIFICADA para o diálogo de confirmação -->
+    <string name="dialog_messgggage_image_batch_cost">"Gerar %1$d imagens terá um custo de %2$d créditos. \n\nComo alternativa, você pode tentar preencher todas as cenas com vídeos de estoque gratuitos da internet, sem custo."</string>
+
+    <!-- String NOVA para o botão de busca de vídeos -->
+    <string name="dialog_actiogggn_search_free_videos">Buscar Vídeos Grátis</string>
+
+    <string name="toast_batch_tyyvideo_search_started">Iniciando busca de vídeos para todas as cenas...</string>
+<string name="video_gen_vm_toast_generation_cancelled">Renderização de vídeo cancelada.</string>
+    <!-- ... Suas outras strings existentes ... -->
+
+    <!-- ==================================================== -->
+    <!--          STRINGS PARA O DIÁLOGO DE AJUDA             -->
+    <!-- ==================================================== -->
+
+    <!-- Textos Genéricos do Diálogo de Ajuda -->
+    <string name="content_desc_help_button">Ajuda</string>
+    <string name="help_dialog_title">Ajuda Rápida</string>
+       <!-- String de status padrão para o diálogo de processamento -->
+    <string name="status_processing_default">Processando, por favor aguarde...</string>
+    <string name="status_cancelled_by_user">Cancelando, por favor aguarde...</string>
+
+    <!-- Tela: Gerenciamento de Projetos -->
+    <string name="help_text_project_management">Esta é a sua central de projetos. Cada card representa um vídeo que você começou a criar.\n\nToque em um projeto para continuar de onde parou, ou use o botão de <b>\'+\'</b> para iniciar uma nova criação do zero.</string>
+
+    <!-- Tela: Preferências -->
+    <string name="help_text_settings">Configure suas preferências padrão aqui.\n\nAs opções definidas nesta tela, como as vozes preferidas e a proporção do vídeo, serão usadas como padrão para todos os <b>novos projetos</b> que você criar. Isso economiza tempo e mantém a consistência entre seus vídeos.</string>
+
+    <!-- ==================================================== -->
+    <!--      TEXTOS DE AJUDA PARA O FLUXO DE TRABALHO        -->
+    <!-- ==================================================== -->
+
+    <!-- Aba: Contexto -->
+    <string name="help_text_workflow_context">Esta é a base do seu vídeo. O objetivo aqui é dar à IA a "grande ideia" do que você quer criar.\n\nVocê pode preencher os campos manualmente para descrever seu produto ou tema.\n\n<b>Dica:</b> Use o botão de <b>importação (nuvem)</b> e cole uma URL de um produto ou vídeo do YouTube para que a IA preencha tudo para você!</string>
+
+    <!-- Aba: Imagens -->
+    <string name="help_text_workflow_images">Nesta etapa, você fornece o material visual para a IA.\n\nAdicione imagens do produto, vídeos curtos de demonstração ou qualquer outra mídia que sirva de referência.\n\nA IA usará essas referências para criar as cenas do seu vídeo ou entender melhor o estilo que você deseja.</string>
+
+    <!-- Aba: Informações -->
+    <string name="help_text_workflow_information">Depois de adicionar as imagens, a IA as analisa para extrair informações importantes, como cores, texturas e objetos principais.\n\nEsses detalhes ajudarão a IA a gerar imagens mais consistentes e relevantes depois. Você pode revisar, editar ou adicionar detalhes manualmente para ter ainda mais controle.</string>
+
+    <!-- Aba: Narrativa -->
+    <string name="help_text_workflow_narrative">Esta é a alma falada do seu vídeo.\n\nUse o campo de texto para escrever a narração. Se estiver sem ideias, clique em <b>\'Criar Narrativa\'</b> (na barra inferior) para que a IA gere um roteiro completo para você, baseado no contexto que você definiu.\n\nApós ter o texto, clique em <b>\'Gerar Áudio\'</b> para criar a voz.</string>
+
+    <!-- Aba: Cenas -->
+    <string name="help_text_workflow_scenes">Aqui a mágica visual acontece.\n\nCom base no áudio gerado, clique em <b>\'Gerar Cenas\'</b> para que a IA divida a narrativa em clipes visuais.\n\nPara cada cena, você pode:\n  • Editar o prompt da imagem\n  • Gerar uma nova imagem com a IA (ícone de <b>varinha mágica</b>)\n  • Gerar um clipe de vídeo curto (ícone de <b>claquete</b>)</string>
+
+    <!-- Aba: Música -->
+    <string name="help_text_workflow_music">Dê o toque final ao seu vídeo com uma trilha sonora.\n\nUse o botão para importar um arquivo de música (.mp3, .wav) do seu dispositivo. A música selecionada será mixada em um volume mais baixo, por baixo da sua narração principal, para criar um clima profissional.</string>
+
+    <!-- Aba: Finalizar -->
+    <string name="help_text_workflow_finalize">A etapa final! Revise todas as suas cenas e o áudio.\n\nQuando estiver tudo pronto, clique em <b>\'Gravar Vídeo\'</b>. O EUIA irá juntar todas as cenas, o áudio, a música e as legendas em um único arquivo de vídeo. Este processo pode levar alguns minutos.\n\nQuando terminar, você poderá assistir e compartilhar.</string>
+
 
     <string name="notification_content_enqueuing">Cena %1$s: Entrando na fila...</string>
     <string name="notification_in_queue">Cena %1$s: %2$s</string>

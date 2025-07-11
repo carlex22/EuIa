@@ -32,6 +32,7 @@ internal object VideoProjectStateKeys { // Tornar internal para uso apenas dentr
     val AUDIO_INFO_PROGRESS = intPreferencesKey("project_audio_info_progress")
     val MUSIC_PATH = stringPreferencesKey("project_music_path")
     val SCENE_LINK_DATA_JSON = stringPreferencesKey("project_scene_link_data_json")
+    val IS_CURRENTLY_GENERATING_SCENE = booleanPreferencesKey("is_currently_generating_scene")
 }
 
 /**
@@ -45,6 +46,7 @@ class VideoProjectDataStoreManager(context: Context) {
 
     private val appContext = context.applicationContext
     private val dataStore: DataStore<Preferences> = appContext.videoProjectStateDataStore
+    private val DEFAULT_IS_GENERATING = false
 
     @OptIn(ExperimentalSerializationApi::class) // Necessário para ListSerializer
     private val json = Json {
@@ -57,6 +59,11 @@ class VideoProjectDataStoreManager(context: Context) {
     init {
         Log.d(TAG_DSM, "VideoProjectDataStoreManager inicializado.")
     }
+    
+    val isCurrentlyGeneratingScene: Flow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { preferences -> preferences[VideoProjectStateKeys.IS_CURRENTLY_GENERATING_SCENE] ?: DEFAULT_IS_GENERATING }
+
 
     /**
      * Flow que emite o progresso da etapa de informações do usuário (0-100).
@@ -224,4 +231,12 @@ class VideoProjectDataStoreManager(context: Context) {
             throw exception
         }
     }
+    
+    
+    suspend fun setCurrentlyGenerating(isGenerating: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[VideoProjectStateKeys.IS_CURRENTLY_GENERATING_SCENE] = isGenerating
+        }
+    }
+    
 }

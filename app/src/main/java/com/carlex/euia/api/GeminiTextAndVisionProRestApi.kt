@@ -127,7 +127,7 @@ object GeminiTextAndVisionProRestApi {
 
     private val retrofitService: GeminiProRestApiService by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
+            level = HttpLoggingInterceptor.Level.NONE
         }
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
@@ -273,7 +273,7 @@ object GeminiTextAndVisionProRestApi {
                 }
                 
                 parts.add(RestPart(inlineData = RestInlineData(mimeType, encodedImage)))
-                Log.d(TAG, "Imagem '${file.name}' (${mimeType}) codificada para Base64 (tamanho Base64: ${encodedImage.length}).")
+                //Log.d(TAG, "Imagem '${file.name}' (${mimeType}) codificada para Base64 (tamanho Base64: ${encodedImage.length}).")
 
             } catch (e: IOException) {
                 Log.e(TAG, "Erro de I/O ao ler arquivo de imagem para Base64: $imagePath", e)
@@ -307,7 +307,7 @@ object GeminiTextAndVisionProRestApi {
         }
         
         val rawJsonStreamString = fullJsonResponse.toString()
-        Log.d(TAG, "String bruta completa recebida do stream: ${rawJsonStreamString.take(500)}...")
+        //Log.d(TAG, "String bruta completa recebida do stream: ${rawJsonStreamString.take(500)}...")
 
         val finalConcatenatedText = StringBuilder()
         try {
@@ -322,7 +322,7 @@ object GeminiTextAndVisionProRestApi {
                                 .replace("```json", "")
                                 .replace("```", "")
                             
-                            Log.d(TAG, "CHUNK (REST): --> $cleanedChunk")
+                            //Log.d(TAG, "CHUNK (REST): --> $cleanedChunk")
                             finalConcatenatedText.append(cleanedChunk)
                         }
                     }

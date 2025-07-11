@@ -84,7 +84,7 @@ object QueueApiClient {
         val loggingInterceptor = HttpLoggingInterceptor { message ->
             Log.v(TAG_QUEUE_API_CLIENT, message)
         }.apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.NONE
         }
         OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)

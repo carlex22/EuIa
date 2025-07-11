@@ -99,7 +99,7 @@ interface PixabayApiService {
 object PixabayApiClient {
     private const val BASE_URL = "https://pixabay.com/"
     private const val TAG = "PixabayApiClient"
-    private val PIXABAY_API_KEY = "51209698-xxxx" // Mantenha a mesma chave
+    private val PIXABAY_API_KEY = "51209698-c37d8d8204bfd1fec1447c2a0" // Mantenha a mesma chave
 
     private val httpClient: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor { message -> Log.v(TAG, message) }

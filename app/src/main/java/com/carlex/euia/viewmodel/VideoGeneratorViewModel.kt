@@ -44,7 +44,7 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
     private val jsonParser = Json { ignoreUnknownKeys = true; isLenient = true }
 
     // --- Estados para Geração de Vídeo ---
-    val isGeneratingVideo: StateFlow<Boolean> = videoGeneratorDataStoreManager.isCurrentlyGeneratingVideo
+    var isGeneratingVideo: StateFlow<Boolean> = videoGeneratorDataStoreManager.isCurrentlyGeneratingVideo
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val generatedVideoPath: StateFlow<String> = videoGeneratorDataStoreManager.finalVideoPath
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
@@ -247,4 +247,19 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
             Toast.makeText(appContext, R.string.video_gen_vm_toast_generation_started_background, Toast.LENGTH_LONG).show()
         }
     }
+    
+    
+    // <<< CÓDIGO NOVO >>>
+    /**
+     * Cancela a tarefa de renderização de vídeo que está em andamento no WorkManager.
+     */
+    fun cancelVideoGeneration() {
+        viewModelScope.launch {
+            videoGeneratorDataStoreManager.setCurrentlyGenerating(isGenerating=false)
+        }
+        Log.i(TAG, "Solicitando cancelamento para a tarefa de renderização de vídeo com a tag: ${VideoRenderWorker.TAG_VIDEO_RENDER}")
+        workManager.cancelAllWorkByTag(VideoRenderWorker.TAG_VIDEO_RENDER)
+        Toast.makeText(appContext, R.string.video_gen_vm_toast_generation_cancelled, Toast.LENGTH_SHORT).show()
+    }
+    
 }

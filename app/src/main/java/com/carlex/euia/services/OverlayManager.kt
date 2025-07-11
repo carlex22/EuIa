@@ -19,7 +19,7 @@ object OverlayManager {
     private var isOverlayActive = false
 
     fun showOverlay(context: Context, message: String, progresso: Int) {
-        Log.w(TAG, "showOverlay message: $message, progresso: $progresso")
+       // Log.w(TAG, "showOverlay message: $message, progresso: $progresso")
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
             Log.w(TAG, "Permissão DRAW_OVER_OTHER_APPS não concedida. Solicitando.")
@@ -31,11 +31,11 @@ object OverlayManager {
         
         // **CORRIGIDO: Usar flag local para decidir ação**
         if (!isOverlayActive) {
-            Log.d(TAG, "Criando novo overlay")
+            //Log.d(TAG, "Criando novo overlay")
             intent.action = OverlayService.ACTION_SHOW_OVERLAY
             isOverlayActive = true
         } else {
-            Log.d(TAG, "Atualizando overlay existente")
+            //Log.d(TAG, "Atualizando overlay existente")
             intent.action = OverlayService.ACTION_UPDATE_MESSAGE
         }
         
@@ -43,11 +43,11 @@ object OverlayManager {
         intent.putExtra(OverlayService.EXTRA_OVERLAY_PROGRESSO, progresso.toString())
         
         context.startService(intent)
-        Log.i(TAG, "Comando para overlay enviado: ${intent.action}")
+        //Log.i(TAG, "Comando para overlay enviado: ${intent.action}")
     }
 
     fun hideOverlay(context: Context) {
-        Log.d(TAG, "Escondendo overlay")
+        //Log.d(TAG, "Escondendo overlay")
         
         val intent = Intent(context, OverlayService::class.java).apply {
             action = OverlayService.ACTION_HIDE_OVERLAY
@@ -55,7 +55,7 @@ object OverlayManager {
 
         context.startService(intent)
         isOverlayActive = false // **CORRIGIDO: Resetar flag**
-        Log.i(TAG, "Comando para esconder overlay enviado.")
+        //Log.i(TAG, "Comando para esconder overlay enviado.")
     }
 
     private fun requestOverlayPermission(context: Context) {

@@ -4,20 +4,21 @@ package com.carlex.euia.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,19 +26,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.carlex.euia.R
 import com.carlex.euia.viewmodel.MusicTrack
 import com.carlex.euia.viewmodel.MusicViewModel
+import java.io.File // <<< IMPORT CRUCIAL QUE FALTAVA
 
 @Composable
 fun MusicSelectionContent(
     modifier: Modifier = Modifier,
     musicViewModel: MusicViewModel = viewModel()
 ) {
-    val suggestion by musicViewModel.musicSuggestion.collectAsState()
     val tracks by musicViewModel.musicTracks.collectAsState()
     val isLoading by musicViewModel.isLoading.collectAsState()
     val selectedPath by musicViewModel.selectedMusicPath.collectAsState()
-    val context = LocalContext.current
+    val isPlayingId by musicViewModel.isPlayingId.collectAsState()
 
-    // Launcher para o seletor de arquivos de áudio locais
     val localFilePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -50,29 +50,13 @@ fun MusicSelectionContent(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Exibe a sugestão de estilo de música
-        Text(
-            text = suggestion,
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            fontStyle = FontStyle.Italic,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+        // O BOTÃO DE IMPORTAR FOI REMOVIDO DAQUI
 
-        // Botão para selecionar um arquivo de música local
-        OutlinedButton(
-            onClick = { localFilePickerLauncher.launch("audio/*") },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Audiotrack, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-            Text(stringResource(R.string.music_select_local_file)) // Necessário adicionar string
-        }
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Exibe o caminho do arquivo selecionado
         if (selectedPath.isNotEmpty()) {
             Text(
-                text = stringResource(R.string.music_current_selection, selectedPath.substringAfterLast('/')), // Necessário adicionar string
+                text = stringResource(R.string.music_current_selection, File(selectedPath).name),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 8.dp),
@@ -81,18 +65,33 @@ fun MusicSelectionContent(
             )
         }
 
-        Divider(modifier = Modifier.padding(vertical = 24.dp))
+        Divider(modifier = Modifier.padding(vertical = 16.dp))
 
-        // Exibe a lista de músicas da API ou um indicador de carregamento
         if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.padding(top = 32.dp))
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (tracks.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.music_no_files_found),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(top = 8.dp)
+            ) {
                 items(tracks, key = { it.id }) { track ->
                     MusicTrackItem(
                         track = track,
-                        onPlayClick = { musicViewModel.playTrack(context, it.url) },
-                        onSelectClick = { musicViewModel.selectTrackForDownload(context, it) }
+                        isSelected = track.path == selectedPath,
+                        isPlaying = track.id == isPlayingId,
+                        onPlayPauseClick = { musicViewModel.playOrPauseTrack(track) },
+                        onSelectClick = { musicViewModel.selectMusicForProject(track) },
+                        onDeleteClick = { musicViewModel.deleteMusicFile(track) }
                     )
                 }
             }
@@ -104,27 +103,61 @@ fun MusicSelectionContent(
 @Composable
 private fun MusicTrackItem(
     track: MusicTrack,
-    onPlayClick: (MusicTrack) -> Unit,
-    onSelectClick: (MusicTrack) -> Unit
+    isSelected: Boolean,
+    isPlaying: Boolean,
+    onPlayPauseClick: () -> Unit,
+    onSelectClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val backgroundColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 1.dp)
+    ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .clickable(onClick = onSelectClick)
+                .padding(horizontal = 8.dp, vertical = 12.dp)
                 .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(track.title, style = MaterialTheme.typography.titleMedium)
-                Text("${track.artist} - ${track.duration}", style = MaterialTheme.typography.bodySmall)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+            ) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = track.duration,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Row {
-                IconButton(onClick = { onPlayClick(track) }) {
-                    Icon(Icons.Default.PlayArrow, stringResource(R.string.music_action_play)) // Necessário adicionar string
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onPlayPauseClick) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = stringResource(if (isPlaying) R.string.music_action_pause else R.string.music_action_play)
+                    )
                 }
-                IconButton(onClick = { onSelectClick(track) }) {
-                    Icon(Icons.Default.Check, stringResource(R.string.music_action_select)) // Necessário adicionar string
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.music_action_delete),
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }

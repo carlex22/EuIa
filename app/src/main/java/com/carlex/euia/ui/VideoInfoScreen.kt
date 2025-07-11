@@ -101,6 +101,7 @@ fun VideoInfoContent(
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
+    
         LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -108,6 +109,7 @@ fun VideoInfoContent(
                 contentPadding = PaddingValues(vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+            
             if (imagensReferenciaList.isNotEmpty()) {
                 items(imagensReferenciaList, key = { it.path }) { imageRef -> // path é único (thumb ou imagem)
                     ImageReferenceItem(
@@ -126,15 +128,46 @@ fun VideoInfoContent(
                 }
             } else {
                 item {
-                    Box(
-                        modifier = Modifier.fillParentMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.video_info_label_no_ref_images),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight()
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    ){
+                        Box(
+                            modifier = Modifier.fillParentMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ){
+                                Icon(
+                                    imageVector = Icons.Default.Collections,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = stringResource(R.string.context_info_imagem_import_title),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = stringResource(R.string.context_info_imagem_import_context),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = stringResource(R.string.context_info_imagem_import_text_click),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }

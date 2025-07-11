@@ -347,7 +347,7 @@ fun AudioInfoContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp) // Altura fixa para a caixa de prompt
+                        .fillMaxHeight() // Altura fixa para a caixa de prompt
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                         .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                 ) {
@@ -425,7 +425,7 @@ fun AudioInfoContent(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            /*Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -448,8 +448,8 @@ fun AudioInfoContent(
                 IconButton(onClick = { musicPickerLauncher.launch("audio/*") }, enabled = isUiEnabled, modifier = Modifier.padding(horizontal = 2.dp)) {
                     Icon(Icons.Filled.MusicNote, stringResource(R.string.audio_info_action_select_music))
                 }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+            }"/"*/
+            Spacer(modifier = Modifier.height(16.dp))*/
         }
 
         SnackbarHost(

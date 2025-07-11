@@ -108,7 +108,7 @@ object YouTubeUploadService {
             .readTimeout(300, TimeUnit.SECONDS)
             .writeTimeout(300, TimeUnit.SECONDS)
             .addInterceptor(HttpLoggingInterceptor().apply {
-                level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
+                level = HttpLoggingInterceptor.Level.NONE
             })
             .build()
     }

@@ -101,7 +101,7 @@ object VertexVideoApi {
 
     private val backendService: VertexVideoApiService by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
+            level = HttpLoggingInterceptor.Level.NONE
         }
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)

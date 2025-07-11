@@ -7,7 +7,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.carlex.euia.R
-import com.carlex.euia.api.GeminiTextAndVisionProRestApi
+import com.carlex.euia.api.GeminiTextAndVisionStandardApi
 import com.carlex.euia.api.PixabayApiClient
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.carlex.euia.data.VideoProjectDataStoreManager
@@ -79,7 +79,7 @@ class PixabayVideoSearchWorker(
             """.trimIndent()
 
             // 4. Chamar a Gemini para escolher
-            val geminiResult = GeminiTextAndVisionProRestApi.perguntarAoGemini(geminiPrompt, emptyList())
+            val geminiResult = GeminiTextAndVisionStandardApi.perguntarAoGemini(geminiPrompt, emptyList())
             if (geminiResult.isFailure) {
                 throw geminiResult.exceptionOrNull() ?: IllegalStateException("A IA falhou em escolher um vídeo.")
             }

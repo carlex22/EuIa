@@ -3,6 +3,29 @@
 <string name="error_loading_ref_images_for_scenes">Erro ao carregar imagens de referência para gerar cenas.</string>
 <string name="voice_style_default"></string>
    
+    <!-- ... outras strings ... -->
+
+    <!-- ... outras strings que você já tenha ... -->
+
+    <!-- Strings para a tela de seleção de música -->
+    <string name="music_import_new_file">Importar Novo Arquivo de Música</string>
+    <string name="music_no_files_found">Nenhuma música na sua biblioteca compartilhada.\nImporte um arquivo para começar.</string>
+    <string name="music_action_play">Tocar</string>
+    <string name="music_action_pause">Pausar</string>
+    <string name="music_action_delete">Deletar</string>
+    <string name="music_current_selection">Seleção Atual: %1$s</string>
+
+
+    <!-- Strings para a tela de seleção de música -->
+    <string name="music_import_new_file">Importar Novo Arquivo de Música</string>
+    <string name="music_no_files_found">Nenhuma música na sua biblioteca compartilhada.\nImporte um arquivo para começar.</string>
+    <string name="music_action_play">Tocar</string>
+    <string name="music_action_pause">Pausar</string>
+    <string name="music_action_select">Selecionar</string>
+    <string name="music_action_delete">Deletar</string>
+    <string name="music_current_selection">Seleção Atual: %1$s</string>
+
+
    <string name="overlay_permission_granted">Permissão de sobreposição concedida!</string>
     <string name="overlay_permission_denied">Permissão de sobreposição negada. O ícone de progresso não será exibido.</string>
    
@@ -647,6 +670,51 @@
     <string name="project_management_toast_project_name_invalid">Nome de projeto inválido ou reservado.</string>
     <string name="project_management_toast_project_created">Novo projeto \'%1$s\' iniciado.</string>
     <string name="project_management_toast_project_create_error">Erro ao criar projeto: %1$s</string>
+
+
+
+
+    <!-- ... Suas outras strings existentes ... -->
+
+    <!-- ==================================================== -->
+    <!--          STRINGS PARA O DIÁLOGO DE AJUDA             -->
+    <!-- ==================================================== -->
+
+    <!-- Textos Genéricos do Diálogo de Ajuda -->
+    <string name="content_desc_help_button">Ajuda</string>
+    <string name="help_dialog_title">Ajuda Rápida</string>
+    <string name="action_ok">Entendi</string>
+
+    <!-- Tela: Gerenciamento de Projetos -->
+    <string name="help_text_project_management">Esta é a sua central de projetos. Cada card representa um vídeo que você começou a criar.\n\nToque em um projeto para continuar de onde parou, ou use o botão de <b>\'+\'</b> para iniciar uma nova criação do zero.</string>
+
+    <!-- Tela: Preferências -->
+    <string name="help_text_settings">Configure suas preferências padrão aqui.\n\nAs opções definidas nesta tela, como as vozes preferidas e a proporção do vídeo, serão usadas como padrão para todos os <b>novos projetos</b> que você criar. Isso economiza tempo e mantém a consistência entre seus vídeos.</string>
+
+    <!-- ==================================================== -->
+    <!--      TEXTOS DE AJUDA PARA O FLUXO DE TRABALHO        -->
+    <!-- ==================================================== -->
+
+    <!-- Aba: Contexto -->
+    <string name="help_text_workflow_context">Esta é a base do seu vídeo. O objetivo aqui é dar à IA a "grande ideia" do que você quer criar.\n\nVocê pode preencher os campos manualmente para descrever seu produto ou tema.\n\n<b>Dica:</b> Use o botão de <b>importação (nuvem)</b> e cole uma URL de um produto ou vídeo do YouTube para que a IA preencha tudo para você!</string>
+
+    <!-- Aba: Imagens -->
+    <string name="help_text_workflow_images">Nesta etapa, você fornece o material visual para a IA.\n\nAdicione imagens do produto, vídeos curtos de demonstração ou qualquer outra mídia que sirva de referência.\n\nA IA usará essas referências para criar as cenas do seu vídeo ou entender melhor o estilo que você deseja.</string>
+
+    <!-- Aba: Informações -->
+    <string name="help_text_workflow_information">Depois de adicionar as imagens, a IA as analisa para extrair informações importantes, como cores, texturas e objetos principais.\n\nEsses detalhes ajudarão a IA a gerar imagens mais consistentes e relevantes depois. Você pode revisar, editar ou adicionar detalhes manualmente para ter ainda mais controle.</string>
+
+    <!-- Aba: Narrativa -->
+    <string name="help_text_workflow_narrative">Esta é a alma falada do seu vídeo.\n\nUse o campo de texto para escrever a narração. Se estiver sem ideias, clique em <b>\'Criar Narrativa\'</b> (na barra inferior) para que a IA gere um roteiro completo para você, baseado no contexto que você definiu.\n\nApós ter o texto, clique em <b>\'Gerar Áudio\'</b> para criar a voz.</string>
+
+    <!-- Aba: Cenas -->
+    <string name="help_text_workflow_scenes">Aqui a mágica visual acontece.\n\nCom base no áudio gerado, clique em <b>\'Gerar Cenas\'</b> para que a IA divida a narrativa em clipes visuais.\n\nPara cada cena, você pode:\n  • Editar o prompt da imagem\n  • Gerar uma nova imagem com a IA (ícone de <b>varinha mágica</b>)\n  • Gerar um clipe de vídeo curto (ícone de <b>claquete</b>)</string>
+
+    <!-- Aba: Música -->
+    <string name="help_text_workflow_music">Dê o toque final ao seu vídeo com uma trilha sonora.\n\nUse o botão para importar um arquivo de música (.mp3, .wav) do seu dispositivo. A música selecionada será mixada em um volume mais baixo, por baixo da sua narração principal, para criar um clima profissional.</string>
+
+    <!-- Aba: Finalizar -->
+    <string name="help_text_workflow_finalize">A etapa final! Revise todas as suas cenas e o áudio.\n\nQuando estiver tudo pronto, clique em <b>\'Gravar Vídeo\'</b>. O EUIA irá juntar todas as cenas, o áudio, a música e as legendas em um único arquivo de vídeo. Este processo pode levar alguns minutos.\n\nQuando terminar, você poderá assistir e compartilhar.</string>
 
 
 

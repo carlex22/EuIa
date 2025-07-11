@@ -155,7 +155,7 @@ class VideoProcessingWorker(
 
 
     override suspend fun doWork(): Result = coroutineScope {
-        Log.d(TAG, "doWork() Iniciado.")
+        //Log.d(TAG, "doWork() Iniciado.")
         
         OverlayManager.showOverlay(appContext, "🎬", -1)
 
@@ -229,11 +229,11 @@ class VideoProcessingWorker(
                 } else { 
                     if (taskResult.errorMessage?.contains("429") == true){
                         lastError = "Fila de trabalho no servidor cheia. Tente novamente mais tarde. (Erro 429)"
-                        Log.w(TAG, "Erro 429 recebido. Interrompendo tentativas.")
+                        //Log.w(TAG, "Erro 429 recebido. Interrompendo tentativas.")
                         break
                     }
                     lastError = taskResult.errorMessage ?: appContext.getString(R.string.error_unknown_task_failure)
-                    Log.w(TAG, "Worker para $sceneId ($taskType): Tarefa FALHOU (erro: $lastError) na tentativa $currentAttempt.")
+                    //Log.w(TAG, "Worker para $sceneId ($taskType): Tarefa FALHOU (erro: $lastError) na tentativa $currentAttempt.")
                     currentAttempt++
                     if (currentAttempt <= MAX_ATTEMPTS && coroutineContext.isActive) {
                         updateSceneStateGeneral(sceneId, taskType = taskType, attempt = currentAttempt, success = false, errorMessage = lastError)
@@ -267,7 +267,7 @@ class VideoProcessingWorker(
             updateNotificationProgress(appContext.getString(R.string.notification_task_failed, taskType, sceneId.take(8), finalErrorMessage.take(50)), true, isError = true)
             return@coroutineScope Result.failure(workDataOf("error" to finalErrorMessage))
         } finally {
-            Log.d(TAG, "Worker para $sceneId ($taskType): doWork() Finalizado.")
+            //Log.d(TAG, "Worker para $sceneId ($taskType): doWork() Finalizado.")
         }
     }
 
@@ -291,7 +291,7 @@ class VideoProcessingWorker(
         errorMessage: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "updateSceneStateGeneral: Scene $sceneId, Task: $taskType, Attempt: $attempt, Success API: $success, AssetPath: ${generatedAssetPath?.take(30)}, Thumb: ${generatedThumbPath?.take(30)}, Error: $errorMessage")
+            //Log.d(TAG, "updateSceneStateGeneral: Scene $sceneId, Task: $taskType, Attempt: $attempt, Success API: $success, AssetPath: ${generatedAssetPath?.take(30)}, Thumb: ${generatedThumbPath?.take(30)}, Error: $errorMessage")
 
             val currentList: List<SceneLinkData> = projectDataStoreManager.sceneLinkDataList.first()
             val newList = currentList.map { item ->
@@ -333,12 +333,12 @@ class VideoProcessingWorker(
             if (newList != currentList) {
                 val writeSuccess = projectDataStoreManager.setSceneLinkDataList(newList)
                 if (writeSuccess) {
-                    Log.d(TAG, "updateSceneStateGeneral: Estado para cena $sceneId (task: $taskType) ATUALIZADO no DataStore.")
+                    //Log.d(TAG, "updateSceneStateGeneral: Estado para cena $sceneId (task: $taskType) ATUALIZADO no DataStore.")
                 } else {
-                    Log.e(TAG, "updateSceneStateGeneral: FALHA ao escrever estado para cena $sceneId (task: $taskType) no DataStore.")
+                    //Log.e(TAG, "updateSceneStateGeneral: FALHA ao escrever estado para cena $sceneId (task: $taskType) no DataStore.")
                 }
             } else {
-                Log.d(TAG, "updateSceneStateGeneral: Nenhuma mudança detectada para cena $sceneId (task: $taskType), DataStore não atualizado.")
+                //Log.d(TAG, "updateSceneStateGeneral: Nenhuma mudança detectada para cena $sceneId (task: $taskType), DataStore não atualizado.")
             }
         } catch (e: Exception) {
             Log.e(TAG, "updateSceneStateGeneral: ERRO ao atualizar estado para cena $sceneId (task: $taskType) no DataStore", e)
