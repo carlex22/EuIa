@@ -348,7 +348,16 @@ class VideoProcessingWorker(
             val previewFile = File(previewsDir, "scene_${scene.cena}_$hash.mp4")
 
             
-            val sceneWithAsset = scene.copy(imagemGeradaPath = generatedAssetPath)
+            
+            val sceneWithAsset = scene.copy(
+                imagemGeradaPath = generatedAssetPath,
+                tempoFim = if (videoPreferencesDataStoreManager.enableSceneTransitions.first()) {
+                    scene.tempoFim!! + 0.5
+                } else {
+                    scene.tempoFim!!
+                }
+            )
+            
 
             val success = VideoEditorComTransicoes.gerarPreviaDeCenaUnica(
                 context = appContext,

@@ -254,7 +254,17 @@ class PixabayVideoSearchWorker(
             val previewsDir = File(baseProjectDir, "scene_previews")
             previewsDir.mkdirs()
 
-            val sceneWithAsset = scene.copy(imagemGeradaPath = downloadedAssetPath)
+            
+            val sceneWithAsset = scene.copy(
+                imagemGeradaPath = downloadedAssetPath,
+                tempoFim = if (videoPreferencesDataStore.enableSceneTransitions.first()) {
+                    scene.tempoFim!! + 0.5
+                } else {
+                    scene.tempoFim!!
+                }
+            )
+ 
+ 
             val hash = generateScenePreviewHash(sceneWithAsset, videoPreferencesDataStore)
             val previewFile = File(previewsDir, "scene_${scene.cena}_$hash.mp4")
 
@@ -262,6 +272,10 @@ class PixabayVideoSearchWorker(
                 Log.d(TAG, "Prévia já existe para a cena $sceneId, pulando a geração.")
                 return previewFile.absolutePath
             }
+            
+            
+            
+            
 
             val success = VideoEditorComTransicoes.gerarPreviaDeCenaUnica(
                 context = applicationContext,

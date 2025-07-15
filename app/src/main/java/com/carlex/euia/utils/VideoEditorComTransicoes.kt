@@ -143,6 +143,9 @@ object VideoEditorComTransicoes {
 
         var batchNumber = 0
         
+        val subDura= mutableListOf<Double>()
+        val subDura1= mutableListOf<Double>()
+        
         for (i in finalMediaPaths.indices step BATCH_SIZE) {
             if (!isActive) throw CancellationException("Processo cancelado durante o processamento de lotes.")
             batchNumber = (i / BATCH_SIZE) + 1
@@ -159,61 +162,194 @@ object VideoEditorComTransicoes {
                 continue
             }
             
-            val batchOutputFilePath = cachedFile.absolutePath
-           /* val batchCommand = buildFFmpegCommandForBatch2(
-                context: Context, 
-                mediaPaths = currentBatchMediaPaths,
-                duracaoCenas = currentBatchDurations,
-                larguraVideo = larguraFinalVideo,
-                alturaVideo = alturaFinalVideo,
-                enableSceneTransitions = enableSceneTransitionsPref,
-                enableZoomPan = enableZoomPanPref,
-                videoFps = videoFpsPref,
-                videoHdMotion = videoHdMotionPref,
-                outputPath = batchOutputFilePath
-            )*/
             
-            val batchCommand = buildFFmpegCommandForBatch(
-                context = context, 
-                mediaPaths = currentBatchMediaPaths,
-                duracaoCenas = currentBatchDurations,
-                batchIndex = batchNumber,
-                larguraVideo = larguraFinalVideo,
-                alturaVideo = alturaFinalVideo,
-                enableSubtitles = false,
-                legendaPath = "", 
-                fonteArialPath = fonteArialPath,
-                enableSceneTransitions = enableSceneTransitionsPref,
-                enableZoomPan = true,
-                videoFps = videoFpsPref,
-                videoHdMotion = videoHdMotionPref,
+                
+            val batchOutputFilePath = cachedFile.absolutePath
+            val (batchCommand, duration) =  stitchClipsWithTransitions(
+                context = context,
+                clipPaths = currentBatchMediaPaths,
                 outputPath = batchOutputFilePath,
-                globalOffsetSeconds = currentBatchDurations.sum(),
-                addBlurBackground = true
+                enableTransitions = enableSceneTransitionsPref, // Você pode tornar isso uma preferência do usuário
+                logCallback = logCallback,
+                subDura = subDura1
             )
             
-            _executeFFmpegCommand(batchCommand, batchOutputFilePath, "Lote $batchNumber de ${totalBatches}, Duracao: ${currentBatchDurations.sum()*1000}", logCallback)
+            subDura.add(duration + if (enableSceneTransitionsPref) DEFAULT_TRANSITION_DURATION else 0.0)
+            
+
+            _executeFFmpegCommand(batchCommand, batchOutputFilePath, "Lote $batchNumber de ${totalBatches}, Duracao: ${duration*1000}", logCallback)
             subVideoPaths.add(batchOutputFilePath)
         }
+        
         batchNumber++
+        
+        
+   
         
         logCallback("Concatenando lotes...")
         val finalOutputPathConcat = createOutputFilePath(context, "video_final_concatenado", projectDirName)
-        _concatenateSubVideos(context, videoPreferencesManager, subVideoPaths, finalOutputPathConcat, logCallback)
-
+    
+        val (batchCommandConcat, duration) =  stitchClipsWithTransitions(
+                context = context,
+                clipPaths = subVideoPaths,
+                outputPath = finalOutputPathConcat,
+                enableTransitions = enableSceneTransitionsPref, // Você pode tornar isso uma preferência do usuário
+                logCallback = logCallback,
+                subDura = subDura1
+            )
+       
+        
+        _executeFFmpegCommand(batchCommandConcat, finalOutputPathConcat, "Lote $batchNumber de ${totalBatches}, Duracao: ${subDura.sum()*1000}", logCallback)
+        
+        val durationFim =  getClipDuration(audioPath) ?: throw IOException("Não foi possível obter a duração do clipe: $audioPath")
+     
+        
         logCallback("Mixando áudio e legendas...")
         val finalVideoWithAudioAndSubsPath = createOutputFilePath(context, "video_final_com_audio_legendas", projectDirName)
         val ffmpegAudioSubsCommand = buildAudioAndSubtitleMixingCommand(
             finalOutputPathConcat, audioPath, musicaPath, fullLegendaAssPath, fonteArialPath,
-            enableSubtitlesPref, finalVideoWithAudioAndSubsPath, videoFpsPref, duracaoCenas.sum()+1
+            enableSubtitlesPref, finalVideoWithAudioAndSubsPath, videoFpsPref, durationFim
         )
         
         batchNumber++
-        _executeFFmpegCommand(ffmpegAudioSubsCommand, finalVideoWithAudioAndSubsPath, "Mixagem Final Lote $batchNumber de ${totalBatches}, Duracao: ${duracaoCenas.sum()*1000}", logCallback)
+        _executeFFmpegCommand(ffmpegAudioSubsCommand, finalVideoWithAudioAndSubsPath, "Mixagem Final Lote $batchNumber de ${totalBatches}, Duracao: ${durationFim*1000}", logCallback)
 
         tempFullAssFile?.delete()
         return@coroutineScope finalVideoWithAudioAndSubsPath
     }
+    
+    
+    
+    /**
+     * Obtém a duração de um arquivo de mídia em segundos usando ffprobe.
+     *
+     * @param filePath O caminho para o arquivo de vídeo ou áudio.
+     * @return A duração em segundos como um Double, ou null em caso de erro.
+     */
+    private suspend fun getClipDuration(filePath: String): Double? = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Obtendo duração para: $filePath")
+        val session = FFprobeKit.execute("-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$filePath\"")
+        if (ReturnCode.isSuccess(session.returnCode)) {
+            val durationString = session.output.trim()
+            val duration = durationString.toDoubleOrNull()
+            if (duration == null) {
+                Log.e(TAG, "Falha ao converter a duração '$durationString' para Double.")
+            }
+            return@withContext duration
+        } else {
+            Log.e(TAG, "ffprobe falhou ao obter a duração para $filePath. Logs: ${session.allLogsAsString}")
+            return@withContext null
+        }
+    }
+
+
+    /**
+     * Junta uma lista de clipes de vídeo MP4 com transições xfade entre eles.
+     * Esta função lê a duração de cada clipe automaticamente.
+     *
+     * @param context O contexto da aplicação.
+     * @param clipPaths A lista de caminhos absolutos para os arquivos MP4 de entrada.
+     * @param outputPath O caminho absoluto para o arquivo de vídeo final de saída.
+     * @param enableTransitions Se as transições devem ser aplicadas. Se false, usa uma concatenação simples.
+     * @param transitionDuration A duração de cada transição em segundos.
+     * @param videoFps A taxa de quadros (FPS) para o vídeo de saída.
+     * @param logCallback Callback para receber logs de progresso do FFmpeg.
+     * @return O caminho do arquivo de saída em caso de sucesso.
+     * @throws IOException se a lista de clipes estiver vazia ou se ocorrer um erro no FFmpeg.
+     */
+    suspend fun stitchClipsWithTransitions(
+        context: Context,
+        clipPaths: List<String>,
+        outputPath: String,
+        enableTransitions: Boolean = true,
+        transitionDuration: Double = DEFAULT_TRANSITION_DURATION,
+        videoFps: Int = 30,
+        logCallback: (String) -> Unit,
+        subDura: List<Double>
+    ): Pair<String, Double> {
+        if (clipPaths.isEmpty()) {
+            throw IOException("A lista de clipes para juntar não pode estar vazia.")
+        }
+        
+        
+        logCallback("Iniciando junção de ${clipPaths.size} clipes com transições.")
+        // 1. Obter a duração de todos os clipes de entrada.
+        var durations = clipPaths.map { path ->
+            getClipDuration(path) ?: throw IOException("Não foi possível obter a duração do clipe: $path")
+        }
+
+        // Se houver apenas um clipe, simplesmente copie-o para o destino para economizar processamento.
+        if (clipPaths.size == 1) {
+            logCallback("Apenas um clipe fornecido. Copiando para o destino...")
+            val command = "-y -i \"${clipPaths.first()}\" -c copy \"$outputPath\""
+            return Pair(outputPath, durations.sum())
+        }
+        
+        if (subDura.size >0)
+            durations = subDura
+
+        
+
+        
+
+        val cmd = StringBuilder("-y -hide_banner ")
+        val filterComplex = StringBuilder()
+        val tempoDeTransicaoEfetivo = if (enableTransitions) transitionDuration else 0.0
+
+        // 2. Definir todos os arquivos como inputs.
+        clipPaths.forEach { path ->
+            cmd.append("-i \"$path\" ")
+        }
+
+        val videoStreamFinal: String
+
+        if (enableTransitions) {
+            // Lógica de transição com XFADE
+            logCallback("Construindo filtro xfade...")
+
+            // Normaliza cada stream de entrada
+            clipPaths.forEachIndexed { index, _ ->
+                filterComplex.append("[$index:v]setpts=PTS-STARTPTS,format=yuv420p[sc$index];\n")
+            }
+
+            var currentStream = "[sc0]"
+            var accumulatedDuration = durations[0]
+
+            for (i in 0 until clipPaths.size - 1) {
+                val nextSceneStream = "[sc${i + 1}]"
+                val outputStreamName = if (i == clipPaths.size - 2) "[v_final]" else "[xfade${i}]"
+                val xfadeOffset = max(0.0, accumulatedDuration - tempoDeTransicaoEfetivo)
+                val transitionType = listOf("fade", "wipeleft", "slideright", "circleopen").random()
+
+                filterComplex.append(
+                    "$currentStream$nextSceneStream xfade=transition=$transitionType:duration=$tempoDeTransicaoEfetivo:offset=$xfadeOffset$outputStreamName;\n"
+                )
+                currentStream = outputStreamName
+                accumulatedDuration += durations[i + 1] - tempoDeTransicaoEfetivo
+            }
+            videoStreamFinal = "[v_final]"
+
+        } else {
+            // Lógica de concatenação simples (sem transições)
+            logCallback("Construindo filtro de concatenação simples...")
+            val concatInputs = clipPaths.indices.joinToString("") { "[$it:v:0]" }
+            filterComplex.append("$concatInputs concat=n=${clipPaths.size}:v=1:a=0[v_final];\n")
+            videoStreamFinal = "[v_final]"
+        }
+
+        // 3. Montar o comando final
+        cmd.append("-filter_complex \"${filterComplex}\" ")
+        cmd.append("-map \"$videoStreamFinal\" ")
+        cmd.append("-an ") // Ignora o áudio dos clipes de entrada
+        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
+        cmd.append("-movflags +faststart ")
+        cmd.append("\"$outputPath\"")
+
+        return Pair(cmd.toString(), durations.sum())
+    }
+
+    
+    
 
     private suspend fun _executeFFmpegCommand(command: String, outputPath: String, taskName: String, logCallback: (String) -> Unit) {
         val startTime = System.currentTimeMillis()
@@ -306,10 +442,10 @@ object VideoEditorComTransicoes {
             val isLastInBatch = (index == mediaPaths.lastIndex)
             
             if (isVideoInput) {
-                val duracaoLeituraVideo = duracaoDestaCena + tempoDeTransicaoEfetivo
+                val duracaoLeituraVideo = duracaoDestaCena - tempoDeTransicaoEfetivo
                 cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" -an ", duracaoLeituraVideo, path))
             } else {
-                val duracaoInputImagem = duracaoDestaCena + tempoDeTransicaoEfetivo
+                val duracaoInputImagem = duracaoDestaCena -  tempoDeTransicaoEfetivo
                 cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoInputImagem, path))
             }
             inputIndex++
@@ -324,7 +460,7 @@ object VideoEditorComTransicoes {
             val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
             val durBase = duracaoCenas[i]
             val isLast = (i == mediaPaths.lastIndex)
-            val trimDuration = durBase + (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
+            val trimDuration = durBase - (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
     
             val frames = (trimDuration * videoFps).toInt().coerceAtLeast(1)
             val durationExata = frames.toDouble() / videoFps
@@ -407,22 +543,21 @@ object VideoEditorComTransicoes {
                 processedMediaPads.forEachIndexed { index, padName ->
                     filterComplex.append("  $padName setpts=PTS-STARTPTS[sc_trans$index];\n")
                 }
+                
+                val offsets = calcularOffsetsMagicos(duracaoCenas, tempoDeTransicaoEfetivo)
                 var currentStream = "[sc_trans0]"
-                var durationOfCurrentStream = duracaoCenas[0] + tempoDeTransicaoEfetivo
+                
                 for (i in 0 until processedMediaPads.size - 1) {
                     val nextSceneStream = "[sc_trans${i + 1}]"
-                    val nextSceneOriginalDuration = duracaoCenas[i+1] 
-                    val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
-                    val xfadeOffset = max(0.0, durationOfCurrentStream) - tempoDeTransicaoEfetivo
-    
+                    val xfadeOffset = offsets[i]
                     val tipoTransicao = tiposDeTransicao[random.nextInt(tiposDeTransicao.size)]
-    
+                    val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
+                
                     filterComplex.append(
-                        "  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=${tempoDeTransicaoEfetivo}:offset=$xfadeOffset$xfadeOutputStreamName;\n"
+                        "  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=$tempoDeTransicaoEfetivo:offset=$xfadeOffset$xfadeOutputStreamName;\n"
                     )
+                
                     currentStream = xfadeOutputStreamName
-                    durationOfCurrentStream = durationOfCurrentStream + nextSceneOriginalDuration
-                    durationOfCurrentStream = max(0.1, durationOfCurrentStream)
                 }
                 currentStream
             }
@@ -456,14 +591,24 @@ object VideoEditorComTransicoes {
         cmd.append("-movflags +faststart ")
         
         // A duração total do lote é a soma das durações das cenas
-        val batchDuration = duracaoCenas.sum()
-        cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, batchDuration + tempoDeTransicaoEfetivo)))
+       // val batchDuration = duracaoCenas.sum()
+        //cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, duracaoCenas.sum())))
         cmd.append("\"$outputPath\"")
         
         return cmd.toString()
     }
     
-    
+    fun calcularOffsetsMagicos(duracoes: List<Double>, tempoTransicao: Double): List<Double> {
+        val offsets = mutableListOf<Double>()
+        offsets.add(duracoes[0] - tempoTransicao) // offset da primeira transição
+        
+        for (i in 1 until duracoes.size - 1) {
+            val novoOffset = offsets[i - 1] + duracoes[i]
+            offsets.add("%.2f".format(Locale.US, novoOffset).toDouble())
+        }
+        return offsets
+    }
+
     
     
     private fun buildFFmpegCommandForBatch1(
@@ -770,6 +915,8 @@ object VideoEditorComTransicoes {
         
         // ADICIONAR INPUT DE ÁUDIO
         cmd.append(String.format(Locale.US, "-i \"%s\" ", audioSnippetPath))
+        
+           
         
         
     

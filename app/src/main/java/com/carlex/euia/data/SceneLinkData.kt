@@ -39,3 +39,5 @@ data class SceneLinkData(
     val isGeneratingVideo: Boolean = false, // Estado de geração do VÍDEO para esta cena
     val isClone: Boolean = false // Indica se esta cena é uma duplicata inserida para ajuste de tempo
 )
+
+ 

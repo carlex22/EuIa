@@ -269,10 +269,20 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             audioSnippetPath = createAudioSnippetForPreview(mainAudioPath, scene)
             if (audioSnippetPath == null) throw IOException("Falha ao criar trecho de áudio.")
             _isAudioLoadingForScene.value = null
+            
+            
+            
+            val sceneWithAsset = scene.copy(
+                tempoFim = if (videoPreferencesDataStoreManager.enableSceneTransitions.first()) {
+                    scene.tempoFim!! + 0.5
+                } else {
+                    scene.tempoFim!!
+                }
+            )
 
             val success = VideoEditorComTransicoes.gerarPreviaDeCenaUnica(
                 context = applicationContext,
-                scene = scene,
+                scene = sceneWithAsset,
                 audioSnippetPath = audioSnippetPath,
                 outputPreviewPath = previewFile.absolutePath,
                 videoPreferences = videoPreferencesDataStoreManager,
@@ -865,7 +875,18 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             val previewFile = File(previewsDir, "scene_${scene.cena}_$hash.mp4")
 
             
-            val sceneWithAsset = scene.copy(imagemGeradaPath = generatedAssetPath)
+            //val sceneWithAsset = scene.copy(imagemGeradaPath = generatedAssetPath)
+            
+            
+            val sceneWithAsset = scene.copy(
+                imagemGeradaPath = generatedAssetPath,
+                tempoFim = if (videoPreferencesDataStoreManager.enableSceneTransitions.first()) {
+                    scene.tempoFim!! + 0.5
+                } else {
+                    scene.tempoFim!!
+                }
+            )
+            
 
             val success = VideoEditorComTransicoes.gerarPreviaDeCenaUnica(
                 context = applicationContext,
