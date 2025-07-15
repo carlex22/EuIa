@@ -113,7 +113,7 @@ object GeminiTextAndVisionStandardApi {
                         return@withContext Result.success(resposta)
 
                     } catch (e: ServerException) {
-                        val isRateLimitError = e.message?.contains("429") == true
+                        val isRateLimitError = if (e.message?.contains("429")!! || e.message?.contains("rate")!!) true else false
                         if (isRateLimitError && chaveAtual != null) {
                             Log.w(TAG, "Erro 429 (Rate Limit) ($TIPO_DE_CHAVE) na chave '${chaveAtual.takeLast(4)}'. Bloqueando-a...")
                             gerenciadorDeChaves.setChaveBloqueada(chaveAtual, TIPO_DE_CHAVE)

@@ -18,7 +18,7 @@ import com.carlex.euia.MainActivity
 import com.carlex.euia.R
 import com.carlex.euia.api.ExtrairMl
 import com.carlex.euia.api.GeminiTextAndVisionProRestApi
-import com.carlex.euia.api.GeminiTextAndVisionStandardApi
+
 import com.carlex.euia.data.*
 import com.carlex.euia.prompts.ExtractDetailedPageContentAsKeyValuesPrompt
 import com.carlex.euia.prompts.ExtractInfoFromUrlPrompt

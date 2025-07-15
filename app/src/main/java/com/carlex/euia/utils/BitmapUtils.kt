@@ -20,7 +20,100 @@ object BitmapUtils {
 
     private const val TAG = "BitmapUtils"
 
-    // ... (funções decodeSampledBitmapFromUri, decodeBitmapFromByteArray, etc., permanecem as mesmas) ...
+    // ... (suas funções existentes como decodeSampledBitmapFromUri, etc., permanecem aqui) ...
+
+    /**
+     * Recorta o centro de um bitmap para uma proporção de aspecto específica.
+     * @param source O bitmap original.
+     * @param targetAspectRatio A proporção desejada (ex: 9f / 16f).
+     * @return Um novo bitmap recortado.
+     */
+    fun cropToAspectRatio(source: Bitmap, targetAspectRatio: Float): Bitmap {
+        val sourceWidth = source.width
+        val sourceHeight = source.height
+        val sourceAspectRatio = sourceWidth.toFloat() / sourceHeight
+
+        return if (sourceAspectRatio > targetAspectRatio) {
+            // A imagem é mais larga que o necessário, corta nas laterais
+            val newWidth = (sourceHeight * targetAspectRatio).toInt()
+            val xOffset = (sourceWidth - newWidth) / 2
+            Bitmap.createBitmap(source, xOffset, 0, newWidth, sourceHeight)
+        } else {
+            // A imagem é mais alta que o necessário, corta em cima/embaixo
+            val newHeight = (sourceWidth / targetAspectRatio).toInt()
+            val yOffset = (sourceHeight - newHeight) / 2
+            Bitmap.createBitmap(source, 0, yOffset, sourceWidth, newHeight)
+        }
+    }
+
+    // <<< INÍCIO DA FUNÇÃO ATUALIZADA >>>
+    /**
+     * Desenha um texto estilizado em um bitmap, quebrando o texto em várias linhas
+     * com no máximo 3 palavras e tamanhos de fonte diferentes.
+     *
+     * @param sourceBitmap O bitmap onde o texto será desenhado.
+     * @param text O texto a ser escrito.
+     * @return Um novo bitmap com o texto desenhado.
+     */
+    fun drawTextOnBitmap(sourceBitmap: Bitmap, text: String): Bitmap {
+        val mutableBitmap = sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+
+        // Quebra o texto em linhas com no máximo 3 palavras
+        val words = text.split(" ")
+        val lines = words.chunked(3) { it.joinToString(" ") }
+
+        val baseTextSize = mutableBitmap.width * 0.10f // Tamanho base da fonte (10% da largura)
+        val margin = mutableBitmap.width * 0.05f   // Margem de 5% da largura
+        val lineSpacing = baseTextSize * 0.15f     // Espaçamento entre linhas
+
+        // Paint para o contorno (sombra/efeito)
+        val strokePaint = Paint().apply {
+            style = Paint.Style.STROKE
+            color = Color.BLACK
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+        }
+
+        // Paint para o preenchimento do texto
+        val textPaint = Paint().apply {
+            style = Paint.Style.FILL
+            color = Color.WHITE
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+            setShadowLayer(5f, 5f, 5f, Color.argb(180, 0, 0, 0))
+        }
+
+        // Começa a desenhar da última linha para a primeira, de baixo para cima
+        var currentY = mutableBitmap.height - margin
+        val x = margin
+
+        for ((index, line) in lines.asReversed().withIndex()) {
+            // Diminui o tamanho da fonte para cada linha que sobe (a primeira linha será a maior)
+            val scaleFactor = (1.0f - (index * 0.15f)).coerceAtLeast(0.6f)
+            val currentTextSize = baseTextSize * scaleFactor
+            
+            textPaint.textSize = currentTextSize
+            strokePaint.textSize = currentTextSize
+            strokePaint.strokeWidth = currentTextSize * 0.1f
+
+            // Desenha o contorno e o texto
+            canvas.drawText(line, x, currentY, strokePaint)
+            canvas.drawText(line, x, currentY, textPaint)
+
+            // Atualiza a posição Y para a próxima linha (acima da atual)
+            // Usa fontMetrics para calcular a altura da linha que acabamos de desenhar
+            val fontMetrics = textPaint.fontMetrics
+            val lineHeight = fontMetrics.descent - fontMetrics.ascent
+            currentY -= (lineHeight + lineSpacing)
+        }
+
+        return mutableBitmap
+    }
+    // <<< FIM DA FUNÇÃO ATUALIZADA >>>
+
+    // ... (o resto das suas funções existentes como saveBitmapToFile, etc., permanecem aqui) ...
+    
     suspend fun decodeSampledBitmapFromUri(
         context: Context,
         uri: Uri,
@@ -31,7 +124,6 @@ object BitmapUtils {
         try {
             inputStream = context.contentResolver.openInputStream(uri)
             if (inputStream == null) {
-                //Log.e(TAG, "Falha ao abrir InputStream para URI: $uri")
                 return@withContext null
             }
 
@@ -47,25 +139,11 @@ object BitmapUtils {
 
             inputStream = context.contentResolver.openInputStream(uri)
             if (inputStream == null) {
-                //Log.e(TAG, "Falha ao REABRIR InputStream para URI: $uri")
                 return@withContext null
             }
             val bitmap = BitmapFactory.decodeStream(inputStream, null, options)
-            if (bitmap == null) {
-                //Log.e(TAG, "BitmapFactory.decodeStream retornou null para URI: $uri com inSampleSize=${options.inSampleSize}")
-            }
             return@withContext bitmap
-        } catch (e: FileNotFoundException) {
-            //Log.e(TAG, "Arquivo não encontrado para URI: $uri", e)
-            return@withContext null
-        } catch (e: IOException) {
-            //Log.e(TAG, "IOException ao decodificar Bitmap da URI: $uri", e)
-            return@withContext null
-        } catch (e: OutOfMemoryError) {
-            //Log.e(TAG, "OutOfMemoryError ao decodificar Bitmap da URI: $uri. Tente reduzir reqWidth/reqHeight.", e)
-            return@withContext null
         } catch (e: Exception) {
-            //Log.e(TAG, "Erro inesperado ao decodificar Bitmap da URI: $uri", e)
             return@withContext null
         } finally {
             inputStream?.close()
@@ -87,11 +165,7 @@ object BitmapUtils {
             }
             options.inPreferredConfig = Bitmap.Config.ARGB_8888
             return@withContext BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size, options)
-        } catch (e: OutOfMemoryError) {
-            //Log.e(TAG, "OutOfMemoryError ao decodificar Bitmap de byteArray.", e)
-            return@withContext null
         } catch (e: Exception) {
-            //Log.e(TAG, "Erro ao decodificar Bitmap de byteArray.", e)
             return@withContext null
         }
     }
@@ -104,11 +178,7 @@ object BitmapUtils {
         return@withContext try {
             val decodedBytes = Base64.decode(base64String, Base64.DEFAULT)
             decodeBitmapFromByteArray(decodedBytes, reqWidth, reqHeight)
-        } catch (e: IllegalArgumentException) {
-            //Log.e(TAG, "String Base64 inválida.", e)
-            null
         } catch (e: Exception) {
-            //Log.e(TAG, "Erro ao decodificar Bitmap de Base64.", e)
             null
         }
     }
@@ -124,14 +194,31 @@ object BitmapUtils {
                 inSampleSize *= 2
             }
         }
-        //Log.d(TAG, "Original: ${width}x$height, Requerido: ${reqWidth}x$reqHeight, SampleSize: $inSampleSize")
         return inSampleSize
     }
      
-     fun cropToAspectRatioCenter(
+     fun resizeWithTransparentBackground(
+        sourceBitmap1: Bitmap,
+        targetWidth: Int,
+        targetHeight: Int
+    ): Bitmap? {
+        val originalWidth = sourceBitmap1.width
+        val originalHeight = sourceBitmap1.height
+        
+        if (originalWidth <= originalHeight ) {
+            var sourceBitmap = cropToAspectRatioCenter(sourceBitmap1, 4 , 3)
+            return sourceBitmap
+
+        } else {
+            var sourceBitmap = cropToAspectRatioCenter(sourceBitmap1, 3 , 4)
+            return sourceBitmap
+        }
+    }
+    
+    fun cropToAspectRatioCenter(
         source: Bitmap,
-        aspectWidth: Int,  // Ex: 4 ou 3
-        aspectHeight: Int  // Ex: 3 ou 4
+        aspectWidth: Int,
+        aspectHeight: Int
     ): Bitmap {
         val sw = source.width.toFloat()
         val sh = source.height.toFloat()
@@ -144,11 +231,9 @@ object BitmapUtils {
         var startY = 0f
     
         if (srcRatio > targetRatio) {
-            // Imagem mais larga que o target — corta nas laterais
             cropW = sh * targetRatio
             startX = (sw - cropW) / 2
         } else {
-            // Imagem mais alta que o target — corta no topo/baixo
             cropH = sw / targetRatio
             startY = (sh - cropH) / 2
         }
@@ -159,27 +244,6 @@ object BitmapUtils {
             cropW.toInt(), cropH.toInt()
         )
     }
-    
-     
-     
-    fun resizeWithTransparentBackground( // O nome "TransparentBackground" pode ser menos preciso agora
-        sourceBitmap1: Bitmap,
-        targetWidth: Int,
-        targetHeight: Int
-    ): Bitmap? {
-        val originalWidth = sourceBitmap1.width
-        val originalHeight = sourceBitmap1.height
-        
-        if (originalWidth <= originalHeight ) {
-            //Log.e(TAG, "Bitmap original com dimensões inválidas: ${originalWidth}x${originalHeight}. Retornando null.")
-            var sourceBitmap = cropToAspectRatioCenter(sourceBitmap1, 4 , 3)
-            return sourceBitmap
-
-        } else {
-            var sourceBitmap = cropToAspectRatioCenter(sourceBitmap1, 3 , 4)
-            return sourceBitmap
-        }
-    }
 
     suspend fun saveBitmapToFile(
         context: Context,
@@ -187,20 +251,17 @@ object BitmapUtils {
         projectDirName: String,
         subDir: String,
         baseName: String,
-        // OTIMIZAÇÃO: Parâmetros padrão para WebP
         format: Bitmap.CompressFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP,
         quality: Int = 65
     ): String? = withContext(Dispatchers.IO) {
         val directory = getAppSpecificDirectory(context, projectDirName, subDir)
         if (directory == null) {
-            //Log.e(TAG, "Não foi possível obter/criar o diretório de destino.")
             return@withContext null
         }
 
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val uuid = UUID.randomUUID().toString().substring(0, 8)
         
-        // OTIMIZAÇÃO: Extensão sempre será webp com os novos padrões
         val extension = "webp"
         
         val fileName = "${baseName}_${timestamp}_$uuid.$extension"
@@ -212,21 +273,12 @@ object BitmapUtils {
             val success = bitmap.compress(format, quality, fos)
             fos.flush()
             if (success) {
-                //Log.i(TAG, "Bitmap salvo com sucesso em: ${file.absolutePath} (Formato: $format, Qualidade: $quality)")
                 return@withContext file.absolutePath
             } else {
-                //Log.e(TAG, "Falha ao comprimir bitmap para: ${file.absolutePath}")
                 file.delete()
                 return@withContext null
             }
-        } catch (e: FileNotFoundException) {
-            //Log.e(TAG, "Arquivo não encontrado para escrita: ${file.absolutePath}", e)
-            return@withContext null
-        } catch (e: IOException) {
-            //Log.e(TAG, "IOException ao salvar bitmap: ${file.absolutePath}", e)
-            return@withContext null
         } catch (e: Exception) {
-            //Log.e(TAG, "Erro inesperado ao salvar bitmap: ${file.absolutePath}", e)
             return@withContext null
         } finally {
             fos?.close()
@@ -245,14 +297,12 @@ object BitmapUtils {
             val projectPath = File(baseAppDir, sanitizedProjectDirName)
             finalDir = File(projectPath, subDir)
         } else {
-            //Log.w(TAG, "Armazenamento externo não disponível. Usando armazenamento interno para $sanitizedProjectDirName/$subDir.")
             val internalProjectPath = File(context.filesDir, sanitizedProjectDirName)
             finalDir = File(internalProjectPath, subDir)
         }
 
         if (!finalDir.exists()) {
             if (!finalDir.mkdirs()) {
-                //Log.e(TAG, "Falha ao criar diretório: ${finalDir.absolutePath}")
                 return null
             }
         }
@@ -290,7 +340,6 @@ object BitmapUtils {
     fun safeRecycle(bitmap: Bitmap?, from: String) {
         if (bitmap != null && !bitmap.isRecycled) {
             bitmap.recycle()
-            //Log.d(TAG, "Bitmap reciclado por: $from")
         } else if (bitmap == null) {
             //Log.w(TAG, "Tentativa de reciclar Bitmap nulo por: $from")
         }

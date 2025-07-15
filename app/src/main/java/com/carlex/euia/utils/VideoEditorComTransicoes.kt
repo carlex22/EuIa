@@ -95,7 +95,7 @@ object VideoEditorComTransicoes {
         val alturaFinalVideo = alturaVideoPref ?: DEFAULT_VIDEO_HEIGHT
         
         val sceneMediaInputs = scenes.mapNotNull { scene ->
-            scene.imagemGeradaPath?.let { Pair(scene, it) }
+            scene.videoPreviewPath?.let { Pair(scene, it) }
         }
         
         require(sceneMediaInputs.isNotEmpty()) { "Nenhuma cena válida com mídia encontrada." }
@@ -184,7 +184,7 @@ object VideoEditorComTransicoes {
                 legendaPath = "", 
                 fonteArialPath = fonteArialPath,
                 enableSceneTransitions = enableSceneTransitionsPref,
-                enableZoomPan = enableZoomPanPref,
+                enableZoomPan = true,
                 videoFps = videoFpsPref,
                 videoHdMotion = videoHdMotionPref,
                 outputPath = batchOutputFilePath,
@@ -205,7 +205,7 @@ object VideoEditorComTransicoes {
         val finalVideoWithAudioAndSubsPath = createOutputFilePath(context, "video_final_com_audio_legendas", projectDirName)
         val ffmpegAudioSubsCommand = buildAudioAndSubtitleMixingCommand(
             finalOutputPathConcat, audioPath, musicaPath, fullLegendaAssPath, fonteArialPath,
-            enableSubtitlesPref, finalVideoWithAudioAndSubsPath, videoFpsPref, duracaoCenas.sum()
+            enableSubtitlesPref, finalVideoWithAudioAndSubsPath, videoFpsPref, duracaoCenas.sum()+1
         )
         
         batchNumber++
@@ -258,7 +258,7 @@ object VideoEditorComTransicoes {
         }
     }
 
-    private suspend fun _concatenateSubVideos(appContext: Context, videoPreferencesDataStoreManager: VideoPreferencesDataStoreManager, subVideoPaths: List<String>, outputPath: String, logCallback: (String) -> Unit) {
+    suspend fun _concatenateSubVideos(appContext: Context, videoPreferencesDataStoreManager: VideoPreferencesDataStoreManager, subVideoPaths: List<String>, outputPath: String, logCallback: (String) -> Unit) {
         val listFile = File(getProjectSpecificDirectory(appContext, videoPreferencesDataStoreManager.videoProjectDir.first(), "temp_ffmpeg_assets")!!, "concat_list_${UUID.randomUUID()}.txt")
         try {
             listFile.bufferedWriter().use { out ->
@@ -398,6 +398,8 @@ object VideoEditorComTransicoes {
             "rectcrop", "distance", "fadeblack", "fadewhite"
         )
         val random = java.util.Random()
+        
+        //enableSceneTransitions = true
     
         val videoStreamFinal: String = when {
             enableSceneTransitions && processedMediaPads.size > 1 -> {
@@ -689,4 +691,242 @@ object VideoEditorComTransicoes {
 
     class VideoGenerationException(message: String) : Exception(message)
     private data class Octuple<A, B, C, D, E, F, G, H>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F, val seventh: G, val eighth: H)
+
+
+    // <<< INÍCIO DA NOVA FUNÇÃO >>>
+    /**
+     * Renderiza um clipe de vídeo para uma única cena, aplicando a animação de zoom/pan.
+     * Esta função é otimizada para gerar prévias rápidas.
+     *
+     * @param context Contexto da aplicação.
+     * @param scene A cena a ser renderizada.
+     * @param audioSnippetPath O caminho para o trecho de áudio já recortado desta cena.
+     * @param outputPreviewPath O caminho completo onde o arquivo de vídeo da prévia será salvo.
+     * @param videoPreferences As preferências de vídeo (dimensões, FPS, etc.).
+     * @param logCallback Callback para logs do FFmpeg.
+     * @return Boolean indicando sucesso ou falha.
+     */
+    suspend fun gerarPreviaDeCenaUnica(
+        context: Context,
+        scene: SceneLinkData,
+        audioSnippetPath: String,
+        outputPreviewPath: String,
+        videoPreferences: VideoPreferencesDataStoreManager,
+        logCallback: (String) -> Unit
+    ): Boolean = coroutineScope {
+        Log.i(TAG, "Queimando previa da cena $outputPreviewPath")
+        Log.i(TAG, "audioSnippetPath $audioSnippetPath")
+        val imagePath = scene.imagemGeradaPath
+        if (imagePath.isNullOrBlank()) {
+            Log.e(TAG, "Cena ${scene.id} não tem imagem gerada para criar prévia.")
+            return@coroutineScope false
+        }
+
+        val larguraVideo = videoPreferences.videoLargura.first() ?: DEFAULT_VIDEO_WIDTH
+        val alturaVideo = videoPreferences.videoAltura.first() ?: DEFAULT_VIDEO_HEIGHT
+        val videoFps = videoPreferences.videoFps.first()
+        val enableZoomPan = videoPreferences.enableZoomPan.first()
+        val videoHdMotion = videoPreferences.videoHdMotion.first()
+        val duracao = (scene.tempoFim ?: 0.0) - (scene.tempoInicio ?: 0.0)
+        if (duracao <= 0) return@coroutineScope false
+        
+        var mediaPaths = mutableListOf<String>()
+        var duracaoCenas = mutableListOf<Double>()
+        mediaPaths.add(imagePath)
+        duracaoCenas.add(duracao)
+        
+        Log.i(TAG, "Queimando previa da cena $outputPreviewPath")
+        Log.i(TAG, "audioSnippetPath $audioSnippetPath")
+        Log.i(TAG, "imagePath $imagePath")
+        Log.i(TAG, "duracao $duracao")
+        
+        var addBlurBackground = true
+        
+        var enableSceneTransitions = false
+        var tempoDeTransicaoEfetivo = 0.0
+        
+        val filterComplex = StringBuilder()
+        val cmd = StringBuilder("-y -hide_banner ")
+        
+        val outputPath = outputPreviewPath
+     
+
+         // --- SEÇÃO 1: LEITURA DOS INPUTS (CORRIGIDA) ---
+        var inputIndex = 0
+        mediaPaths.forEachIndexed { index, path ->
+            val isVideoInput = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
+            val duracaoDestaCena = duracaoCenas[index]
+            val isLastInBatch = (index == mediaPaths.lastIndex)
+            
+            if (isVideoInput) {
+                val duracaoLeituraVideo = duracaoDestaCena + tempoDeTransicaoEfetivo
+                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" ", duracaoLeituraVideo, path))
+            } else {
+                val duracaoInputImagem = duracaoDestaCena + tempoDeTransicaoEfetivo
+                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoInputImagem, path))
+            }
+            inputIndex++
+        }
+        
+        // ADICIONAR INPUT DE ÁUDIO
+        cmd.append(String.format(Locale.US, "-i \"%s\" ", audioSnippetPath))
+        
+        
+    
+        // --- SEÇÃO 2: PROCESSAMENTO DE CADA MÍDIA ---
+        val processedMediaPads = mutableListOf<String>()
+        mediaPaths.forEachIndexed { i, path ->
+            val outputPad = "[processed_m$i]"
+            processedMediaPads.add(outputPad)
+    
+            val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
+            val durBase = duracaoCenas[i]
+            val isLast = (i == mediaPaths.lastIndex)
+            val trimDuration = durBase + (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
+    
+            val frames = (trimDuration * videoFps).toInt().coerceAtLeast(1)
+            val durationExata = frames.toDouble() / videoFps
+            val w = larguraVideo
+            val h = alturaVideo
+            val input = "[${i}:v]" 
+    
+            
+            var squareDix = w
+            var squareDiy = h
+            var ss = "${w}x${h}"
+    
+            if (w > h) {
+                squareDix = (squareDiy * 1.2).toInt()
+                ss = "${squareDix}x${squareDiy}"
+            } else if (w < h) {
+                squareDiy = (squareDix * 1.2).toInt()
+                ss = "${squareDix}y${squareDiy}"
+            }
+            
+            // Processamento condicional do background
+            if (addBlurBackground) {
+                // Usar split quando precisar do background blur
+                filterComplex.append("  ${input}split=2[main${i}][bg${i}];\n")
+                filterComplex.append("  [bg${i}]scale='max(iw,${w}*2)':'max(ih,${h}*2)',crop=${w}:${h},boxblur=40:2,setsar=1[bg_final${i}];\n")
+            } else {
+                // Usar diretamente o input quando não precisar do background blur
+                filterComplex.append("  ${input}copy[main${i}];\n")
+            }
+            
+            
+            // <<< INÍCIO DA CORREÇÃO >>>
+            // Processamento do foreground
+            if (isVideo || !enableZoomPan) {
+                // Para vídeos OU para imagens sem zoom-pan, redimensiona para caber dentro, mantendo a proporção.
+                filterComplex.append("[main${i}]scale=$w:$h:force_original_aspect_ratio=decrease[fg_scaled${i}];\n")
+            } else {
+                // Esta lógica agora é apenas para imagens COM zoom-pan habilitado.
+                val fgChain = mutableListOf<String>()
+                val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, squareDix, squareDiy, frames, i)
+                fgChain.add("scale=${squareDix}:${squareDiy}:force_original_aspect_ratio=decrease," +
+                            "pad=${squareDix}:${squareDiy}:(ow-iw)/2:(oh-ih)/2:color=black," +
+                            "setsar=1," +
+                            "zoompan=z=$zoomExpr:s=${ss}:d=$frames:x=$xExpr:y=$yExpr:fps=$videoFps")
+                fgChain.add("crop=$squareDix:$squareDiy")
+                if (videoHdMotion) {
+                    fgChain.add("minterpolate=fps=$videoFps:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
+                }
+                filterComplex.append("  [main${i}]${fgChain.joinToString(",")}[fg_scaled${i}];\n")
+            }
+            // <<< FIM DA CORREÇÃO >>>
+            
+            
+            filterComplex.append("  [fg_scaled${i}]pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0[fg_padded${i}];\n")
+            
+            // Overlay condicional
+            if (addBlurBackground) {
+                filterComplex.append("  [bg_final${i}][fg_padded${i}]overlay=0:0[composite${i}];\n")
+            } else {
+                filterComplex.append("  [fg_padded${i}]copy[composite${i}];\n")
+            }
+            
+            val finalEffects = mutableListOf<String>()
+            finalEffects.add("format=pix_fmts=rgba")
+            finalEffects.add("fps=$videoFps")
+            finalEffects.add("trim=duration=$durationExata")
+            finalEffects.add("setpts=PTS-STARTPTS")
+            filterComplex.append("  [composite${i}]${finalEffects.joinToString(separator = ",")}$outputPad;\n")
+        }
+    
+        // --- SEÇÃO 3: TRANSIÇÕES E CONCATENAÇÃO ---
+        val tiposDeTransicao = listOf(
+            "fade", "slidedown", "circleopen", "circleclose",
+            "rectcrop", "distance", "fadeblack", "fadewhite"
+        )
+        val random = java.util.Random()
+    
+        val videoStreamFinal: String = when {
+            enableSceneTransitions && processedMediaPads.size > 1 -> {
+                // Transições com xfade
+                processedMediaPads.forEachIndexed { index, padName ->
+                    filterComplex.append("  $padName setpts=PTS-STARTPTS[sc_trans$index];\n")
+                }
+                var currentStream = "[sc_trans0]"
+                var durationOfCurrentStream = duracaoCenas[0] + tempoDeTransicaoEfetivo
+                for (i in 0 until processedMediaPads.size - 1) {
+                    val nextSceneStream = "[sc_trans${i + 1}]"
+                    val nextSceneOriginalDuration = duracaoCenas[i+1] 
+                    val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
+                    val xfadeOffset = max(0.0, durationOfCurrentStream) - tempoDeTransicaoEfetivo
+    
+                    val tipoTransicao = tiposDeTransicao[random.nextInt(tiposDeTransicao.size)]
+    
+                    filterComplex.append(
+                        "  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=${tempoDeTransicaoEfetivo}:offset=$xfadeOffset$xfadeOutputStreamName;\n"
+                    )
+                    currentStream = xfadeOutputStreamName
+                    durationOfCurrentStream = durationOfCurrentStream + nextSceneOriginalDuration
+                    durationOfCurrentStream = max(0.1, durationOfCurrentStream)
+                }
+                currentStream
+            }
+            
+            processedMediaPads.isNotEmpty() && processedMediaPads.size > 1 -> {
+                // Concatenação simples sem transições
+                processedMediaPads.forEachIndexed { index, pad ->
+                    filterComplex.append("  $pad setpts=PTS-STARTPTS[s_concat$index];\n")
+                }
+                val concatInputs = processedMediaPads.indices.joinToString("") { "[s_concat$it]" }
+                filterComplex.append("  $concatInputs concat=n=${processedMediaPads.size}:v=1:a=0[vc_final_batch];\n")
+                "[vc_final_batch]"
+            }
+            processedMediaPads.isNotEmpty() -> {
+                // Vídeo único
+                filterComplex.append("  ${processedMediaPads[0]} copy[vc_final_batch];\n")
+                "[vc_final_batch]"
+            }
+            else -> {
+                // Fallback para vídeo preto
+                val totalDurationFallback = duracaoCenas.sum().takeIf { it > 0.0 } ?: 0.1
+                filterComplex.append("color=c=black:s=${larguraVideo}x${alturaVideo}:d=${max(0.1, totalDurationFallback)}[vc_final_batch];\n")
+                "[vc_final_batch]"
+            }
+        }
+    
+        // --- SEÇÃO 4: COMANDO FINAL DE OUTPUT (CORRIGIDO) ---
+        cmd.append("-filter_complex \"${filterComplex}\" ")
+        cmd.append("-map \"$videoStreamFinal\" ")
+        cmd.append("-map ${inputIndex}:a ") // Mapear o áudio do último input adicionado
+        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
+        cmd.append("-movflags +faststart ")
+        
+        // A duração total do lote é a soma das durações das cenas
+        val batchDuration = duracaoCenas.sum()
+        cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, batchDuration + tempoDeTransicaoEfetivo)))
+        cmd.append("\"$outputPath\"")
+
+        try {
+            _executeFFmpegCommand(cmd.toString(), outputPreviewPath, "Prévia Cena ${scene.cena}", logCallback)
+            return@coroutineScope true
+        } catch (e: Exception) {
+            Log.e(TAG, "Falha ao gerar prévia para cena ${scene.id}", e)
+            return@coroutineScope false
+        }
+    }
+    
 }

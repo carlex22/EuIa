@@ -13,7 +13,7 @@ import com.carlex.euia.utils.ProjectPersistenceManager
 import androidx.work.*
 import com.carlex.euia.MainActivity
 import com.carlex.euia.R
-import com.carlex.euia.api.GeminiTextAndVisionStandardApi
+import com.carlex.euia.api.GeminiTextAndVisionProRestApi
 import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.ImagemReferencia
 import com.carlex.euia.data.RefImageDataStoreManager
@@ -196,7 +196,7 @@ class RefImageAnalysisWorker(
     ): JSONArray {
         Log.d(TAG, "Iniciando gerarDetalhesVisuais com prompt: '$prompt', imagensPatch count: ${imagensPatch.size}")
         val respostaResult = try {
-            GeminiTextAndVisionStandardApi.perguntarAoGemini(prompt, imagensPatch, "")
+            GeminiTextAndVisionProRestApi.perguntarAoGemini(prompt, imagensPatch, "")
         } catch (e: Exception) {
              Log.e(TAG, "Erro na chamada Gemini (no Worker): ${e.message}", e)
              return JSONArray()

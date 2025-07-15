@@ -7,6 +7,8 @@
     <string name="video_prefs_toast_pitchj_rate_saved">Ajustes de voz salvos.</string>
     <string name="video_prefs_toast_durnation_saved">Duração da cena salva.</string>
     <!-- Adicione as novas strings abaixo -->
+  <string name="error_loading_preview">Erro ao iniciar previa.</string>
+  <string name="notification_content_preview_generating">Gerando previa da cena: %1$s</string>
 
 
     <!-- ... outras strings que você já tenha ... -->

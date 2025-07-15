@@ -2,6 +2,7 @@
 package com.carlex.euia.viewmodel
 
 import android.app.Application
+import android.graphics.BitmapFactory // <<< CORREÇÃO AQUI
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
@@ -15,8 +16,10 @@ import com.carlex.euia.api.GeminiTextAndVisionProRestApi
 import com.carlex.euia.api.YouTubeUploadService
 import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.VideoGeneratorDataStoreManager
+import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.carlex.euia.data.VideoProjectDataStoreManager
 import com.carlex.euia.prompts.CreateYouTubeMetadataPrompt
+import com.carlex.euia.utils.BitmapUtils
 import com.carlex.euia.worker.VideoRenderWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -29,7 +32,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 class VideoGeneratorViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -40,6 +42,7 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
     private val audioDataStoreManager = AudioDataStoreManager(application)
     private val videoProjectDataStoreManager = VideoProjectDataStoreManager(application)
     private val videoGeneratorDataStoreManager = VideoGeneratorDataStoreManager(application)
+    private val videoPreferencesDataStoreManager = VideoPreferencesDataStoreManager(application)
     private val workManager = WorkManager.getInstance(application)
     private val jsonParser = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -167,22 +170,64 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
             }
         }
     }
-
+    
     private suspend fun generateThumbnailFromPrompt(prompt: String) {
+        var apiBitmap: android.graphics.Bitmap? = null
+        var croppedBitmap: android.graphics.Bitmap? = null
+        var finalThumbnailBitmap: android.graphics.Bitmap? = null
+
         try {
             Toast.makeText(appContext, appContext.getString(R.string.toast_generating_thumbnail_started), Toast.LENGTH_SHORT).show()
+            
             val result = GeminiImageApi.gerarImagem("youtube_thumb_${UUID.randomUUID().toString().take(6)}", prompt, appContext, emptyList())
-            if (result.isSuccess) {
-                _selectedThumbnailPath.value = result.getOrThrow()
-                Toast.makeText(appContext, appContext.getString(R.string.toast_thumbnail_generated_success), Toast.LENGTH_SHORT).show()
-            } else {
+            if (result.isFailure) {
                 throw result.exceptionOrNull() ?: Exception(appContext.getString(R.string.error_generating_thumbnail_unknown))
             }
+            
+            val imagePath = result.getOrThrow()
+            apiBitmap = BitmapFactory.decodeFile(imagePath)
+            File(imagePath).delete()
+            
+            if (apiBitmap == null) throw Exception("Falha ao decodificar a imagem gerada pela API.")
+
+            val targetWidth = videoPreferencesDataStoreManager.videoLargura.first() ?: 720
+            val targetHeight = videoPreferencesDataStoreManager.videoAltura.first() ?: 1280
+            val targetRatio = targetWidth.toFloat() / targetHeight.toFloat()
+            croppedBitmap = BitmapUtils.cropToAspectRatio(apiBitmap, targetRatio)
+            BitmapUtils.safeRecycle(apiBitmap, "generateThumbnailFromPrompt (apiBitmap)")
+
+            val titleToDraw = _uploadTitle.value.ifBlank { generatedVideoTitle.value }
+            if (titleToDraw.isNotBlank()) {
+                finalThumbnailBitmap = BitmapUtils.drawTextOnBitmap(croppedBitmap, titleToDraw)
+                BitmapUtils.safeRecycle(croppedBitmap, "generateThumbnailFromPrompt (croppedBitmap)")
+            } else {
+                finalThumbnailBitmap = croppedBitmap
+            }
+
+            val projectDir = videoPreferencesDataStoreManager.videoProjectDir.first()
+            val finalThumbPath = BitmapUtils.saveBitmapToFile(
+                context = appContext,
+                bitmap = finalThumbnailBitmap,
+                projectDirName = projectDir,
+                subDir = "thumbnails",
+                baseName = "final_thumb"
+            )
+
+            if (finalThumbPath != null) {
+                _selectedThumbnailPath.value = finalThumbPath
+                Toast.makeText(appContext, appContext.getString(R.string.toast_thumbnail_generated_success), Toast.LENGTH_SHORT).show()
+            } else {
+                throw Exception("Falha ao salvar a thumbnail final.")
+            }
+
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao gerar thumbnail", e)
+            Log.e(TAG, "Erro ao gerar e processar a thumbnail", e)
             Toast.makeText(appContext, appContext.getString(R.string.error_generating_thumbnail_toast, e.message), Toast.LENGTH_LONG).show()
         } finally {
             _isGeneratingMetadata.value = false
+            BitmapUtils.safeRecycle(apiBitmap, "generateThumbnailFromPrompt (finally apiBitmap)")
+            BitmapUtils.safeRecycle(croppedBitmap, "generateThumbnailFromPrompt (finally croppedBitmap)")
+            BitmapUtils.safeRecycle(finalThumbnailBitmap, "generateThumbnailFromPrompt (finally finalThumbnailBitmap)")
         }
     }
 
@@ -234,8 +279,6 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
             val legendFilePath = audioDataStoreManager.legendaPath.first()
             val inputData = workDataOf(VideoRenderWorker.KEY_AUDIO_PATH to audioFilePath, VideoRenderWorker.KEY_MUSIC_PATH to musicFilePath, VideoRenderWorker.KEY_LEGEND_PATH to legendFilePath)
 
-            // CORREÇÃO: A chamada para enfileirar o trabalho é a mesma.
-            // O WorkManager usará a configuração do AndroidManifest para decidir o processo.
             val videoRenderRequest = OneTimeWorkRequestBuilder<VideoRenderWorker>()
                 .setInputData(inputData)
                 .addTag(VideoRenderWorker.TAG_VIDEO_RENDER)
@@ -248,11 +291,6 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
         }
     }
     
-    
-    // <<< CÓDIGO NOVO >>>
-    /**
-     * Cancela a tarefa de renderização de vídeo que está em andamento no WorkManager.
-     */
     fun cancelVideoGeneration() {
         viewModelScope.launch {
             videoGeneratorDataStoreManager.setCurrentlyGenerating(isGenerating=false)
@@ -261,5 +299,4 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
         workManager.cancelAllWorkByTag(VideoRenderWorker.TAG_VIDEO_RENDER)
         Toast.makeText(appContext, R.string.video_gen_vm_toast_generation_cancelled, Toast.LENGTH_SHORT).show()
     }
-    
 }

@@ -275,9 +275,8 @@ private fun SceneLinkItem(
     projectViewModel: VideoProjectViewModel,
     allProjectReferenceImages: List<ImagemReferencia>,
     currentlyPlayingSceneId: String?,
-    isAudioLoadingForScene: String?,
-    onPlayAudioSnippet: (SceneLinkData) -> Unit,
-    onStopAudioSnippet: () -> Unit,
+    isGeneratingPreviewForScene: String?,
+    
     onGenerateImageWithConfirmation: (sceneId: String, prompt: String) -> Unit
 ) {
     val context = LocalContext.current
@@ -303,8 +302,8 @@ private fun SceneLinkItem(
     val filmFrameShape = RoundedCornerShape(0.dp)
     val photoAreaShape = RoundedCornerShape(6.dp)
 
-    val isCurrentlyPlayingThisSceneAudio = currentlyPlayingSceneId == sceneLinkData.id
-    val isAudioLoadingForThisScene = isAudioLoadingForScene == sceneLinkData.id
+    val isCurrentlyPlayingThisScene = currentlyPlayingSceneId == sceneLinkData.id
+    val isGeneratingPreviewForThisScene = isGeneratingPreviewForScene == sceneLinkData.id
 
     val defaultEnabledIconTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
     val primaryActionIconTint = MaterialTheme.colorScheme.primary
@@ -314,8 +313,7 @@ private fun SceneLinkItem(
     val refImageIsVideo = originalReferenceImageDetails?.pathVideo != null
     val refImageContainsPeople = originalReferenceImageDetails?.containsPeople ?: false
 
-    var isVideoPlayingThisScene by remember(sceneLinkData.id, sceneLinkData.pathThumb) { mutableStateOf(false) }
-
+    val isVideoPlayingThisScene = isCurrentlyPlayingThisScene 
 
     Box(
         modifier = Modifier
@@ -344,7 +342,9 @@ private fun SceneLinkItem(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(all = 8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(all = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -363,12 +363,7 @@ private fun SceneLinkItem(
                             .fillMaxWidth()
                             .weight(1f)
                             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.2f), RoundedCornerShape(3.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(3.dp))
-                            .clickable(enabled = !sceneLinkData.pathThumb.isNullOrBlank()) {
-                                if (!sceneLinkData.pathThumb.isNullOrBlank()) {
-                                    isVideoPlayingThisScene = !isVideoPlayingThisScene
-                                }
-                            },
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(3.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         val isGeneratingImage = sceneLinkData.isGenerating
@@ -376,148 +371,128 @@ private fun SceneLinkItem(
                         val isGeneratingVideo = sceneLinkData.isGeneratingVideo
                         val isGeneratingAnything = isGeneratingImage || isChangingClothes || isGeneratingVideo
 
-                        val displayPath = sceneLinkData.pathThumb ?: sceneLinkData.imagemGeradaPath
-
-                        when {
-                            isGeneratingImage -> {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
-                                    Text(stringResource(R.string.scene_item_status_generating_attempt, sceneLinkData.generationAttempt), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if (sceneLinkData.generationAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
-                                        Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
+                        if (isCurrentlyPlayingThisScene && sceneLinkData.videoPreviewPath != null) {
+                            VideoPlayerInternal(
+                                videoPath = sceneLinkData.videoPreviewPath!!,
+                                isPlaying = true,
+                                onPlaybackStateChange = { isPlaying ->
+                                    if (!isPlaying) {
+                                        projectViewModel.stopPlayback()
+                                    }
+                                },
+                                invalidPathErrorText = stringResource(id = R.string.error_loading_preview)
+                            )
+                        } else {
+                            when {
+                                isGeneratingAnything -> {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                        CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
+                                        val statusText = when {
+                                            isGeneratingImage -> stringResource(R.string.scene_item_status_generating_attempt, sceneLinkData.generationAttempt)
+                                            isChangingClothes -> stringResource(R.string.scene_item_status_changing_clothes_attempt, sceneLinkData.clothesChangeAttempt)
+                                            else -> stringResource(R.string.scene_item_status_generating_video_attempt, sceneLinkData.generationAttempt)
+                                        }
+                                        Text(statusText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (sceneLinkData.generationAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
+                                            Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
+                                        }
                                     }
                                 }
-                            }
-                            isChangingClothes -> {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
-                                    Text(stringResource(R.string.scene_item_status_changing_clothes_attempt, sceneLinkData.clothesChangeAttempt), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if (sceneLinkData.clothesChangeAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
-                                        Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
-                                    }
+                                !sceneLinkData.pathThumb.isNullOrBlank() -> {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context).data(File(sceneLinkData.pathThumb!!)).crossfade(true).placeholder(R.drawable.ic_placeholder_image).error(R.drawable.ic_broken_image).build(),
+                                            contentDescription = stringResource(R.string.content_desc_generated_image),
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
                                 }
-                            }
-                             isGeneratingVideo -> {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
-                                    Text(stringResource(R.string.scene_item_status_generating_video_attempt, sceneLinkData.generationAttempt), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if (sceneLinkData.generationAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
-                                        Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
-                                    }
-                                }
-                            }
-                            !displayPath.isNullOrBlank() -> {
-                                if (!sceneLinkData.pathThumb.isNullOrBlank() && isVideoPlayingThisScene && !sceneLinkData.imagemGeradaPath.isNullOrBlank()) {
-                                    VideoPlayerInternal(
-                                        videoPath = sceneLinkData.imagemGeradaPath!!,
-                                        isPlaying = true,
-                                        onPlaybackStateChange = { playing -> isVideoPlayingThisScene = playing },
-                                        invalidPathErrorText = stringResource(R.string.error_video_file_not_found_scene)
-                                    )
-                                }
+                                else -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        if (!sceneLinkData.generationErrorMessage.isNullOrBlank()) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                                                    .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
+                                                    .padding(8.dp)
+                                                    .clickable { projectViewModel.clearSceneGenerationError(sceneLinkData.id) },
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Error,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                                Text(
+                                                    text = sceneLinkData.generationErrorMessage!!,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    textAlign = TextAlign.Center,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                                )
+                                                Text(
+                                                    text = stringResource(R.string.status_tap_to_clear_error),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            Spacer(Modifier.height(16.dp))
+                                        }
 
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context).data(File(displayPath)).crossfade(true).placeholder(R.drawable.ic_placeholder_image).error(R.drawable.ic_broken_image).build(),
-                                    contentDescription = stringResource(if (!sceneLinkData.pathThumb.isNullOrBlank()) R.string.content_desc_video_thumbnail else R.string.content_desc_generated_image),
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                    alpha = if (!sceneLinkData.pathThumb.isNullOrBlank() && isVideoPlayingThisScene) 0.0f else 1.0f
-                                )
-
-                               /* if (!sceneLinkData.pathThumb.isNullOrBlank()) {
-                                    Icon(
-                                        if (isVideoPlayingThisScene) Icons.Filled.PauseCircleOutline else Icons.Filled.PlayCircleOutline,
-                                        contentDescription = stringResource(if (isVideoPlayingThisScene) R.string.content_desc_pause_video_overlay else R.string.content_desc_play_video_overlay),
-                                        modifier = Modifier.align(Alignment.Center).size(60.dp),
-                                        tint = Color.White.copy(alpha = 0.9f)
-                                    )
-                                }*/
-                            }
-                            else -> {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    if (!sceneLinkData.generationErrorMessage.isNullOrBlank()) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
-                                                .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
-                                                .padding(8.dp)
-                                                .clickable { projectViewModel.clearSceneGenerationError(sceneLinkData.id) },
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
+                                        Text(
+                                            text = stringResource(R.string.scene_placeholder_title),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            textAlign = TextAlign.Center,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            text = stringResource(R.string.scene_placeholder_instructions),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            textAlign = TextAlign.Center,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
-                                                imageVector = Icons.Default.Error,
+                                                imageVector = Icons.Outlined.AutoFixHigh,
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onErrorContainer
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
-                                                text = sceneLinkData.generationErrorMessage!!,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                textAlign = TextAlign.Center,
-                                                color = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.status_tap_to_clear_error),
-                                                style = MaterialTheme.typography.labelSmall,
+                                                text = " " + stringResource(R.string.scene_placeholder_action_generate),
+                                                style = MaterialTheme.typography.labelMedium,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
                                         }
-                                        Spacer(Modifier.height(16.dp))
-                                    }
-                                    
-                                    Text(
-                                        text = stringResource(R.string.scene_placeholder_title),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(16.dp))
-                                    Text(
-                                        text = stringResource(R.string.scene_placeholder_instructions),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.AutoFixHigh,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Text(
-                                            text = " " + stringResource(R.string.scene_placeholder_action_generate),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    Spacer(Modifier.height(8.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.FolderOpen,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Text(
-                                            text = " " + stringResource(R.string.scene_placeholder_action_select),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.FolderOpen,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = " " + stringResource(R.string.scene_placeholder_action_select),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        if (!displayPath.isNullOrBlank() && !sceneLinkData.generationErrorMessage.isNullOrBlank() && !isGeneratingAnything) {
+
+                        if (!sceneLinkData.imagemGeradaPath.isNullOrBlank() && !sceneLinkData.generationErrorMessage.isNullOrBlank() && !isGeneratingAnything) {
                             Text(
                                 text = stringResource(R.string.scene_item_error_prefix, sceneLinkData.generationErrorMessage!!),
                                 color = MaterialTheme.colorScheme.error,
@@ -559,28 +534,38 @@ private fun SceneLinkItem(
                                     Icon(Icons.Filled.ImageNotSupported, contentDescription = stringResource(R.string.scene_item_placeholder_no_ref_image_desc), modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                                 }
                             }
-                            Text(text = stringResource(R.string.scene_item_label_ref_image_caption), style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Color.White.copy(alpha = 0.9f), textAlign = TextAlign.Center, modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(vertical = 1.dp))
+                            Text(text = stringResource(R.string.scene_item_label_ref_image_caption), style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Color.White.copy(alpha = 0.9f), textAlign = TextAlign.Center, modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.5f))
+                                .padding(vertical = 1.dp))
                         }
                         sceneLinkData.similaridade?.let {
-                             Text(stringResource(R.string.scene_item_label_similarity, it), style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(2.dp)).padding(horizontal = 2.dp, vertical = 1.dp), color = MaterialTheme.colorScheme.onSurface)
+                             Text(stringResource(R.string.scene_item_label_similarity, it), style = MaterialTheme.typography.labelSmall, modifier = Modifier
+                                 .align(Alignment.BottomStart)
+                                 .padding(4.dp)
+                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(2.dp))
+                                 .padding(horizontal = 2.dp, vertical = 1.dp), color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val iconButtonSize = 36.dp
                     val iconSize = 20.dp
-                    val generalActionsEnabled = !sceneLinkData.isGenerating && !sceneLinkData.isChangingClothes && !sceneLinkData.isGeneratingVideo
-                    val playAudioButtonEnabled = generalActionsEnabled && sceneLinkData.tempoInicio != null && sceneLinkData.tempoFim != null && sceneLinkData.tempoFim > sceneLinkData.tempoInicio && !isAudioLoadingForThisScene
+                    val generalActionsEnabled = !sceneLinkData.isGenerating && !sceneLinkData.isChangingClothes && !sceneLinkData.isGeneratingVideo && !isGeneratingPreviewForThisScene
+                    val playAudioButtonEnabled = generalActionsEnabled && sceneLinkData.videoPreviewPath != null && sceneLinkData.tempoInicio != null && sceneLinkData.tempoFim != null && sceneLinkData.tempoFim > sceneLinkData.tempoInicio
                     val replaceGenEnabled = generalActionsEnabled && allProjectReferenceImages.isNotEmpty()
                     val generateImageButtonEnabled = generalActionsEnabled && (sceneLinkData.promptGeracao?.isNotBlank() == true)
 
                     val changeClothesEnabled = generalActionsEnabled &&
-                                               sceneLinkData.pathThumb.isNullOrBlank() &&
+                                               
                                                !sceneLinkData.imagemGeradaPath.isNullOrBlank() &&
                                                !refImageIsVideo &&
                                                refImageContainsPeople &&
@@ -589,24 +574,51 @@ private fun SceneLinkItem(
                     val generateVideoEnabled = generalActionsEnabled &&
                                                !refImageIsVideo &&
                                                !refImageContainsPeople &&
-                                               sceneLinkData.pathThumb.isNullOrBlank() &&
+                                               
                                                !sceneLinkData.imagemGeradaPath.isNullOrBlank()
 
                     IconButton(
-                        onClick = {
-                            if (isCurrentlyPlayingThisSceneAudio) onStopAudioSnippet()
-                            else onPlayAudioSnippet(sceneLinkData)
-                        },
+                        onClick = { projectViewModel.onPlayPausePreviewClicked(sceneLinkData) },
                         modifier = Modifier.size(iconButtonSize),
                         enabled = playAudioButtonEnabled
                     ) {
                         val currentPlayIconTint = if (playAudioButtonEnabled) primaryActionIconTint else disabledIconTint
+                    
                         when {
-                            isAudioLoadingForThisScene -> CircularProgressIndicator(modifier = Modifier.size(iconSize), strokeWidth = 2.dp, color = primaryActionIconTint)
-                            isCurrentlyPlayingThisSceneAudio -> Icon(Icons.Filled.StopCircle, contentDescription = stringResource(R.string.scene_item_action_stop_audio), modifier = Modifier.size(iconSize), tint = primaryActionIconTint)
-                            else -> Icon(Icons.Filled.PlayCircleOutline, contentDescription = stringResource(R.string.scene_item_action_play_audio_snippet), modifier = Modifier.size(iconSize), tint = currentPlayIconTint)
+                            !playAudioButtonEnabled -> {
+                                // Exibe CircularProgressIndicator quando o botão está desabilitado
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(iconSize),
+                                    strokeWidth = 2.dp,
+                                    color = currentPlayIconTint
+                                )
+                            }
+                            isGeneratingPreviewForThisScene -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(iconSize),
+                                    strokeWidth = 2.dp,
+                                    color = primaryActionIconTint
+                                )
+                            }
+                            isCurrentlyPlayingThisScene -> {
+                                Icon(
+                                    imageVector = Icons.Filled.StopCircle,
+                                    contentDescription = stringResource(R.string.scene_item_action_stop_audio),
+                                    modifier = Modifier.size(iconSize),
+                                    tint = primaryActionIconTint
+                                )
+                            }
+                            else -> {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayCircleOutline,
+                                    contentDescription = stringResource(R.string.scene_item_action_play_audio_snippet),
+                                    modifier = Modifier.size(iconSize),
+                                    tint = currentPlayIconTint
+                                )
+                            }
                         }
                     }
+
                     IconButton(
                         onClick = {
                             if (allProjectReferenceImages.isNotEmpty()) {
@@ -621,7 +633,7 @@ private fun SceneLinkItem(
 
                     IconButton(
                         onClick = { onGenerateImageWithConfirmation(sceneLinkData.id, sceneLinkData.promptGeracao ?: "") },
-                        enabled = generalActionsEnabled && generateImageButtonEnabled && sceneLinkData.pathThumb.isNullOrBlank(),
+                        enabled = generalActionsEnabled && generateImageButtonEnabled,
                         modifier = Modifier.size(iconButtonSize)
                     ) {
                         if (sceneLinkData.isGenerating) {
@@ -631,7 +643,7 @@ private fun SceneLinkItem(
                                     Icon(Icons.Filled.Cancel, contentDescription = stringResource(R.string.scene_item_action_cancel_generation), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(iconSize - 4.dp))
                                 }
                             }
-                        } else Icon(Icons.Outlined.AutoFixHigh, contentDescription = stringResource(R.string.scene_item_action_generate), modifier = Modifier.size(iconSize), tint = if (generateImageButtonEnabled && sceneLinkData.pathThumb.isNullOrBlank()) primaryActionIconTint else disabledIconTint)
+                        } else Icon(Icons.Outlined.AutoFixHigh, contentDescription = stringResource(R.string.scene_item_action_generate), modifier = Modifier.size(iconSize), tint = if (generateImageButtonEnabled) primaryActionIconTint else disabledIconTint)
                     }
                     IconButton(
                         onClick = { promptStateInDialog = TextFieldValue(sceneLinkData.promptGeracao ?: ""); showPromptEditDialog = true },
@@ -878,17 +890,17 @@ fun VideoProjectContent(
     val isProcessingGlobalScenes by projectViewModel.isGeneratingScene.collectAsState()
     val allProjectReferenceImages by projectViewModel.currentImagensReferenciaStateFlow.collectAsState()
     val currentlyPlayingSceneId by projectViewModel.currentlyPlayingSceneId.collectAsState()
-    val isAudioLoadingForScene by projectViewModel.isAudioLoadingForScene.collectAsState()
+    val isGeneratingPreviewForScene by projectViewModel.isGeneratingPreviewForSceneId.collectAsState()
     val sceneIdToRecreateImage by projectViewModel.sceneIdToRecreateImage.collectAsState()
     val promptForRecreateImage by projectViewModel.promptForRecreateImage.collectAsState()
     val currentSceneIdForDialogRefChange by projectViewModel.sceneIdForReferenceChangeDialog.collectAsState()
-    
+
     val showImageBatchCostDialog by projectViewModel.showImageBatchCostConfirmationDialog.collectAsState()
     val imageBatchCost by projectViewModel.pendingImageBatchCost.collectAsState()
     val imageBatchCount by projectViewModel.pendingImageBatchCount.collectAsState()
-    
+
     val globalSceneError by projectViewModel.globalSceneError.collectAsState()
-    
+
     val sceneIdForPixabaySearch by projectViewModel.showPixabaySearchDialogForSceneId.collectAsState()
     val searchQuery by projectViewModel.pixabaySearchQuery.collectAsState()
     val searchResults by projectViewModel.pixabaySearchResults.collectAsState()
@@ -999,9 +1011,8 @@ fun VideoProjectContent(
                             projectViewModel = projectViewModel,
                             allProjectReferenceImages = allProjectReferenceImages,
                             currentlyPlayingSceneId = currentlyPlayingSceneId,
-                            isAudioLoadingForScene = isAudioLoadingForScene,
-                            onPlayAudioSnippet = { scene -> projectViewModel.playAudioSnippetForScene(scene) },
-                            onStopAudioSnippet = { projectViewModel.stopAudioSnippet() },
+                            isGeneratingPreviewForScene = isGeneratingPreviewForScene,
+                            
                             onGenerateImageWithConfirmation = { sceneIdVal, promptVal -> projectViewModel.requestImageGenerationWithConfirmation(sceneIdVal, promptVal) }
                         )
                     }

@@ -112,7 +112,7 @@ interface GeminiProRestApiService {
 object GeminiTextAndVisionProRestApi {
 
     
-    private const val modelName = "gemini-2.5-pro"
+    //private const val modelName = "gemini-2.5-pro"
     private const val TIPO_DE_CHAVE = "text"
     private const val RETRY_DELAY_MILLIS = 1000L
 
@@ -148,7 +148,8 @@ object GeminiTextAndVisionProRestApi {
         pergunta: String,
         imagens: List<String>, // <<<< Continua recebendo caminhos de arquivo (strings)
         arquivoTexto: String? = null,
-        youtubeUrl: String? = null
+        youtubeUrl: String? = null,
+        model: String? = "gemini-2.5-pro"
     ): Result<String> {
         val applicationContext = getApplicationFromContext()
             ?: return Result.failure(IllegalStateException("Contexto da aplicação não disponível."))
@@ -179,7 +180,7 @@ object GeminiTextAndVisionProRestApi {
                         val textoArquivoLido = arquivoTexto?.let { lerArquivoTexto(it) }
 
                         val result = performRestCall(
-                            modelName = modelName,
+                            modelName = model!!,
                             apiKey = chaveAtual,
                             prompt = pergunta,
                             imagePaths = adjustedImagePaths, // <<<< AGORA PASSAMOS List<String>

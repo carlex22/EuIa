@@ -82,7 +82,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         Log.i("MainActivity", "Injetando contexto da aplicação nas classes de API.")
-        GeminiTextAndVisionStandardApi.setApplicationContext(application)
         GeminiTextAndVisionProApi.setApplicationContext(application)
         GeminiTextAndVisionProRestApi.setApplicationContext(application)
 

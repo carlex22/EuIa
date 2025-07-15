@@ -14,6 +14,11 @@ data class SceneLinkData(
     val descricaoReferencia: String,
     val promptGeracao: String? = null, // Prompt para gerar imagem ESTÁTICA
     var imagemGeradaPath: String? = null, // Caminho da IMAGEM ESTÁTICA gerada OU do VÍDEO gerado
+    var videoPreviewPath: String? = null, // Caminho da IMAGEM ESTÁTICA gerada OU do VÍDEO gerado
+
+
+
+
     val similaridade: Int? = null,
     val aprovado: Boolean = false,
     val exibirProduto: Boolean? = null,

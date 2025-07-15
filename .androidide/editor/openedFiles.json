@@ -1,52 +1,67 @@
 {
   "allFiles": [
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/VideoEditorComTransicoes.kt",
       "selection": {
         "end": {
-          "column": 48,
-          "index": 96574,
-          "line": 1428
+          "column": 10,
+          "index": 18910,
+          "line": 401
         },
         "start": {
-          "column": 18,
-          "index": 96544,
-          "line": 1428
+          "column": 10,
+          "index": 18910,
+          "line": 401
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/VideoInfoScreen.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/SrtToAssConverter.kt",
       "selection": {
         "end": {
-          "column": 15,
-          "index": 8506,
-          "line": 190
+          "column": 46,
+          "index": 4574,
+          "line": 71
         },
         "start": {
-          "column": 8,
-          "index": 8499,
-          "line": 190
+          "column": 46,
+          "index": 4574,
+          "line": 71
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/RefImageInfoContent.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoProjectViewModel.kt",
       "selection": {
         "end": {
-          "column": 21,
-          "index": 7750,
-          "line": 175
+          "column": 44,
+          "index": 44375,
+          "line": 870
         },
         "start": {
-          "column": 21,
-          "index": 7750,
-          "line": 175
+          "column": 44,
+          "index": 44375,
+          "line": 870
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/RefImageAnalysisWorker.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/VideoProcessingWorker.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 18471,
+          "line": 368
+        },
+        "start": {
+          "column": 4,
+          "index": 16146,
+          "line": 321
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/VideoRenderWorker.kt",
       "selection": {
         "end": {
           "column": 0,
@@ -61,50 +76,35 @@
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/ImageProcessingWorker.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoGeneratorViewModel.kt",
       "selection": {
         "end": {
-          "column": 48,
-          "index": 21048,
-          "line": 418
+          "column": 1,
+          "index": 16462,
+          "line": 301
         },
         "start": {
-          "column": 48,
-          "index": 21048,
-          "line": 418
+          "column": 1,
+          "index": 16462,
+          "line": 301
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoViewModel.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/utils/BitmapUtils.kt",
       "selection": {
         "end": {
-          "column": 0,
-          "index": 6995,
-          "line": 144
+          "column": 1,
+          "index": 12804,
+          "line": 346
         },
         "start": {
-          "column": 0,
-          "index": 6995,
-          "line": 144
-        }
-      }
-    },
-    {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/VideoProjectContent.kt",
-      "selection": {
-        "end": {
-          "column": 33,
-          "index": 22429,
-          "line": 424
-        },
-        "start": {
-          "column": 32,
-          "index": 21708,
-          "line": 418
+          "column": 1,
+          "index": 12804,
+          "line": 346
         }
       }
     }
   ],
-  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/ImageProcessingWorker.kt"
+  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoGeneratorViewModel.kt"
 }

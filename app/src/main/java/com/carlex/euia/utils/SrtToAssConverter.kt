@@ -68,8 +68,8 @@ class SrtToAssConverter(
 
     // <<<<< NOVOS PARÂMETROS PARA CONTROLE DE FONTE DINÂMICA >>>>>
     private val minFontSizeRatio: Float = 0.12f, // 3% da altura do vídeo
-    private val maxFontSizeRatio: Float = 0.25f, // 8% da altura do vídeo
-    private val idealCharsForScaling: Int = 10, // Número ideal de caracteres para o tamanho base
+    private val maxFontSizeRatio: Float = 0.20f, // 8% da altura do vídeo
+    private val idealCharsForScaling: Int = 14, // Número ideal de caracteres para o tamanho base
     private val marginInferior: Double = 0.30
 ) {
 

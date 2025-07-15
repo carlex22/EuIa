@@ -18,7 +18,6 @@ import com.carlex.euia.R
 import com.carlex.euia.api.Audio
 import com.carlex.euia.api.GeminiAudio
 import com.carlex.euia.api.GeminiMultiSpeakerAudio
-import com.carlex.euia.api.GeminiTextAndVisionStandardApi
 import com.carlex.euia.api.GeminiTextAndVisionProRestApi
 import com.carlex.euia.data.AudioDataStoreManager
 import com.carlex.euia.data.ImagemReferencia
