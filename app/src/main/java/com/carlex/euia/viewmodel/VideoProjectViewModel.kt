@@ -305,7 +305,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
                                 var thumbPath = file.absolutePath
                                 
                                 if (isVideo) {
-                                    val expectedThumbName = "thumb_from_${file.nameWithoutExtension}.webp"
+                                    val expectedThumbName = "thumb_${file.nameWithoutExtension}.webp"
                                     val thumbFile = "$projectDir/ref_images/$expectedThumbName"
                                     thumbPath = thumbFile
                                 }
@@ -1041,51 +1041,6 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    private fun parseSceneData(jsonString: String, allRefs: List<ImagemReferencia>): List<SceneLinkData> {
-        val sceneList = mutableListOf<SceneLinkData>()
-        val jsonArray = JSONArray(jsonString)
-        var lastTimeEnd: Double? = 0.0
-
-        for (i in 0 until jsonArray.length()) {
-            val cenaObj = jsonArray.getJSONObject(i)
-            val originalImageIndex = cenaObj.optString("FOTO_REFERENCIA", null)?.toIntOrNull()
-            var refPath = ""
-            var refDesc = ""
-            var videoPath: String? = null
-            var thumbPath: String? = null
-            var isVideo = false
-
-            if (originalImageIndex != null && originalImageIndex > 0 && originalImageIndex <= allRefs.size) {
-                val ref = allRefs[originalImageIndex - 1]
-                refPath = ref.path
-                refDesc = ref.descricao
-                if (ref.pathVideo != null) {
-                    videoPath = ref.pathVideo
-                    thumbPath = ref.path
-                    isVideo = true
-                }
-            }
-
-            sceneList.add(SceneLinkData(
-                id = UUID.randomUUID().toString(),
-                cena = cenaObj.optString("CENA", null),
-                tempoInicio = lastTimeEnd,
-                tempoFim = cenaObj.optDouble("TEMPO_FIM", 0.0).takeIf { it > 0 },
-                imagemReferenciaPath = refPath,
-                descricaoReferencia = refDesc,
-                promptGeracao = cenaObj.optString("PROMPT_PARA_IMAGEM", null),
-                exibirProduto = cenaObj.optBoolean("EXIBIR_PRODUTO", false),
-                imagemGeradaPath = videoPath,
-                pathThumb = thumbPath,
-                isGenerating = false,
-                aprovado = isVideo,
-                promptVideo = cenaObj.optString("TAG_SEARCH_WEB", null)
-            ))
-            lastTimeEnd = cenaObj.optDouble("TEMPO_FIM", 0.0).takeIf { it > 0 }
-        }
-        return sceneList
-    }
-
     
     fun generateVideoForScene(sceneId: String, videoPromptFromDialog: String, sourceImagePathFromSceneParameter: String) {
         viewModelScope.launch {
@@ -1232,6 +1187,58 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             postSnackbarMessage("Download do asset iniciado...")
         }
     }
-    // <<< FIM DAS NOVAS FUNÇÕES >>>
+
+        
+    private fun parseSceneData(jsonString: String, allRefs: List<ImagemReferencia>): List<SceneLinkData> {
+        val sceneList = mutableListOf<SceneLinkData>()
+        try {
+            val jsonArray = JSONArray(jsonString)
+            var lastTimeEnd: Double? = 0.0
     
+            for (i in 0 until jsonArray.length()) {
+                val cenaObj = jsonArray.getJSONObject(i)
+                val originalImageIndex = cenaObj.optString("FOTO_REFERENCIA", null)?.toIntOrNull()
+                var refPath = ""
+                var refDesc = ""
+                var videoPath: String? = null
+                var thumbPath: String? = null
+                var isVideo = false
+    
+                if (originalImageIndex != null && originalImageIndex > 0 && originalImageIndex <= allRefs.size) {
+                    val ref = allRefs[originalImageIndex - 1]
+                    refPath = ref.path
+                    refDesc = ref.descricao
+                    if (ref.pathVideo != null) {
+                        videoPath = ref.pathVideo
+                        thumbPath = ref.path
+                        isVideo = true
+                    }
+                }
+    
+                sceneList.add(SceneLinkData(
+                    id = UUID.randomUUID().toString(),
+                    cena = cenaObj.optString("CENA", null),
+                    tempoInicio = lastTimeEnd,
+                    tempoFim = cenaObj.optDouble("TEMPO_FIM", 0.0).takeIf { it > 0 },
+                    imagemReferenciaPath = refPath,
+                    descricaoReferencia = refDesc,
+                    promptGeracao = cenaObj.optString("PROMPT_PARA_IMAGEM", null),
+                    exibirProduto = cenaObj.optBoolean("EXIBIR_PRODUTO", false),
+                    imagemGeradaPath = videoPath,
+                    pathThumb = thumbPath,
+                    isGenerating = false,
+                    aprovado = isVideo,
+                    promptVideo = cenaObj.optString("TAG_SEARCH_WEB", null)
+                ))
+                lastTimeEnd = cenaObj.optDouble("TEMPO_FIM", 0.0).takeIf { it > 0 }
+            }
+        } catch (e: JSONException) {
+            Log.e(TAG, "Falha ao fazer parse da resposta da IA para cenas. A resposta não era um JSONArray válido. Resposta: '$jsonString'", e)
+            // Retorna uma lista vazia se a resposta não for um JSON Array
+            return emptyList()
+        }
+        return sceneList
+    }
+
+
 }

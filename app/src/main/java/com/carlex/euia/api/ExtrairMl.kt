@@ -6,21 +6,18 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
+import android.graphics.PorterDuff
 import android.os.Build
 import android.util.Log
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
@@ -32,40 +29,159 @@ class ExtrairMl {
     private val DEFAULT_RECORTE_WIDTH = 720
     private val DEFAULT_RECORTE_HEIGHT = 1280
 
-    suspend fun extrairDados(originalUrl: String, context: Context): Result<Map<String, Any>> {
+    private fun decodeUnicode(theString: String): String {
+        var aChar: Char
+        val len = theString.length
+        val outBuffer = StringBuffer(len)
+        var x = 0
+        while (x < len) {
+            aChar = theString[x++]
+            if (aChar == '\\') {
+                aChar = theString[x++]
+                if (aChar == 'u') {
+                    var value = 0
+                    for (i in 0..3) {
+                        aChar = theString[x++]
+                        when (aChar) {
+                            in '0'..'9' -> value = (value shl 4) + aChar.toString().toInt()
+                            in 'a'..'f' -> value = (value shl 4) + 10 + aChar.minus('a')
+                            in 'A'..'F' -> value = (value shl 4) + 10 + aChar.minus('A')
+                            else -> throw IllegalArgumentException("Malformed \\uxxxx encoding.")
+                        }
+                    }
+                    outBuffer.append(value.toChar())
+                } else {
+                    if (aChar == 't') aChar = '\t' else if (aChar == 'r') aChar = '\r' else if (aChar == 'n') aChar = '\n'
+                    outBuffer.append(aChar)
+                }
+            } else outBuffer.append(aChar)
+        }
+        return outBuffer.toString()
+    }
+
+    suspend fun extrairDados(url: String, context: Context): Result<Map<String, Any>> {
         return withContext(Dispatchers.IO) {
             val videoPreferencesManager = VideoPreferencesDataStoreManager(context)
             val projectDirName = videoPreferencesManager.videoProjectDir.first()
             val larguraPreferidaRecorte = videoPreferencesManager.videoLargura.first()
             val alturaPreferidaRecorte = videoPreferencesManager.videoAltura.first()
 
-            val cleanUrl = originalUrl.substringBefore("#")
-            Log.i(TAG, "--- INÍCIO DA EXTRAÇÃO HÍBRIDA ---")
-            Log.d(TAG, "URL Limpa: $cleanUrl")
+            Log.i(TAG, "--- INÍCIO DA EXTRAÇÃO DE DADOS ---")
+            Log.d(TAG, "URL de entrada: $url")
+            Log.d(TAG, "Diretório do projeto: '$projectDirName'")
+
+            val dadosProduto = mutableMapOf<String, Any>()
+            val paginasParaProcessar = mutableSetOf(url)
 
             try {
+                // ETAPA 1: BAIXAR A PÁGINA PRINCIPAL E ENCONTRAR VARIAÇÕES
                 Log.d(TAG, "ETAPA 1: Baixando página principal...")
-                val connection = URL(cleanUrl).openConnection() as HttpURLConnection
-                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36")
+                val connection = URL(url).openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
                 connection.connect()
-                val html = connection.inputStream.bufferedReader().use { it.readText() }
+                val htmlPrincipal = connection.inputStream.bufferedReader().use { it.readText() }
                 connection.disconnect()
-                
+                Log.d(TAG, "Página principal baixada.")
+
                 val debugDir = getProjectSpecificDirectory(context, projectDirName, "debug_html")
-                File(debugDir, "0_pagina_principal.html").writeText(html)
+                File(debugDir, "0_pagina_principal.html").writeText(htmlPrincipal)
+                Log.i(TAG, "HTML principal salvo para depuração.")
 
-                Log.i(TAG, "Tentativa 1: Extrair dados via JSON __PRELOADED_STATE__.")
-                val jsonRegex = Regex("""<script id="__PRELOADED_STATE__"[^>]*>(.*?)</script>""")
-                val jsonMatch = jsonRegex.find(html)
+                dadosProduto["titulo"] = Regex("""<h1.*?ui-pdp-title.*?>(.*?)</h1>""").find(htmlPrincipal)?.groupValues?.get(1)?.trim() ?: ""
+                dadosProduto["descricao"] = Regex("""<p.*?ui-pdp-description__content.*?>(.*?)</p>""", RegexOption.DOT_MATCHES_ALL).find(htmlPrincipal)?.groupValues?.get(1)?.trim()?.replace(Regex("<.*?>"), "") ?: ""
 
-                if (jsonMatch != null) {
-                    Log.d(TAG, "Bloco __PRELOADED_STATE__ encontrado! Processando via JSON.")
-                    val preloadedStateJson = JSONObject(jsonMatch.groupValues[1])
-                    return@withContext processarViaJson(preloadedStateJson, context, projectDirName, larguraPreferidaRecorte, alturaPreferidaRecorte)
+                val linkRegex = Regex("""<a\s+href="([^"]+)"[^>]*>""")
+                
+                linkRegex.findAll(htmlPrincipal).forEach { match ->
+                    var urlVariacao = match.groupValues[1].replace("&", "&")
+                    
+                    if (urlVariacao.contains("_JM?attributes=")) {
+                        if (urlVariacao.startsWith("/MLB-")) {
+                            urlVariacao = "https://produto.mercadolivre.com.br$urlVariacao"
+                        }
+                        paginasParaProcessar.add(urlVariacao)
+                    }
                 }
                 
-                Log.w(TAG, "Bloco __PRELOADED_STATE__ não encontrado. Usando método de fallback com Regex no HTML.")
-                return@withContext processarViaRegex(html, cleanUrl, context, projectDirName, larguraPreferidaRecorte, alturaPreferidaRecorte)
+                Log.i(TAG, "Total de páginas (original + variações) para processar: ${paginasParaProcessar.size}")
+
+                // ETAPA 2: ITERAR SOBRE TODAS AS PÁGINAS E EXTRAIR IMAGENS
+                Log.i(TAG, "ETAPA 2: Iniciando iteração sobre as páginas para extrair imagens...")
+                val imagensEncontradas = mutableSetOf<String>()
+                val imagensSalvasCaminhosOriginais = mutableListOf<String>()
+                var imageCounter = 0
+
+                val imageUrlRegexes = listOf(
+                    """"url":"(https:[^"]+)"""",
+                    """data-src="(https:[^"]+)"""",
+                    """src="(https:[^"]+)""""
+                )
+
+                paginasParaProcessar.forEachIndexed { index, paginaUrl ->
+                    if (!isActive) return@forEachIndexed
+                    Log.i(TAG, "--> Processando página ${index + 1}/${paginasParaProcessar.size}: $paginaUrl")
+                    
+                    val htmlPagina = if (paginaUrl == url) htmlPrincipal else {
+                        val paginaConnection = URL(paginaUrl).openConnection() as HttpURLConnection
+                        paginaConnection.connect()
+                        val html = paginaConnection.inputStream.bufferedReader().use { it.readText() }
+                        paginaConnection.disconnect()
+                        File(debugDir, "pagina_variacao_${index + 1}.html").writeText(html)
+                        html
+                    }
+                    
+                    for (regexPattern in imageUrlRegexes) {
+                        val regex = Regex(regexPattern)
+                        regex.findAll(htmlPagina).forEach { matchResult ->
+                            var processedImageUrl = decodeUnicode(matchResult.groupValues[1])
+                            
+                            
+                            if (!processedImageUrl.contains(".svg")) {
+                                if (processedImageUrl.contains("/D_Q_NP_")) {
+                                    processedImageUrl = processedImageUrl.replace("/D_Q_NP_", "/D_NQ_NP_")
+                                }
+                                if (processedImageUrl.contains("/D_NQ_NP_")) {
+                                    processedImageUrl = processedImageUrl.replace("/D_NQ_NP_", "/D_NQ_NP_2X_")
+                                }
+                                
+                                if (processedImageUrl !in imagensEncontradas) {
+                                    imagensEncontradas.add(processedImageUrl)
+                                    
+                                    try {
+                                        Log.i(TAG, "$processedImageUrl")
+                        
+                                        val imageConnection = URL(processedImageUrl).openConnection() as HttpURLConnection
+                                        imageConnection.connect()
+                                        val byteArray = imageConnection.inputStream.use { it.readBytes() }
+                                        imageConnection.disconnect()
+    
+                                        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                        BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size, options)
+    
+                                        if (min(options.outHeight, options.outWidth) < MIN_IMAGE_DIMENSION) {
+                                            return@forEach
+                                        }
+                                        
+                                        val fileInfo = getFilenameAndExtension(imageConnection)
+                                        val baseName1 = fileInfo?.first ?: "${System.currentTimeMillis()}"
+                                        val extension1 = fileInfo?.second ?: "jpg"
+       
+                                        val baseName = "MLB_$baseName1.$extension1"
+                                        val originalPath = salvarImagemOriginal(byteArray, baseName, processedImageUrl, context, projectDirName)
+                                        imagensSalvasCaminhosOriginais.add(originalPath)
+                                        imageCounter++
+                                    } catch (e: Exception) {
+                                        Log.i(TAG, "$processedImageUrl Exception")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                dadosProduto["imagensSalvas"] = imagensSalvasCaminhosOriginais
+                Log.i(TAG, "--- FIM DA EXTRAÇÃO. Total de imagens únicas salvas: ${imagensSalvasCaminhosOriginais.size} ---")
+                Result.success(dadosProduto)
 
             } catch (e: Exception) {
                 Log.e(TAG, "--- ERRO CRÍTICO NA EXTRAÇÃO ---", e)
@@ -73,211 +189,80 @@ class ExtrairMl {
             }
         }
     }
+    
+    
+    private fun getFilenameAndExtension(connection: HttpURLConnection): Pair<String, String>? {
+        var filenameWithExt: String? = null
 
-    private suspend fun processarViaJson(preloadedState: JSONObject, context: Context, projectDirName: String, largura: Int?, altura: Int?): Result<Map<String, Any>> {
-        val dadosProduto = mutableMapOf<String, Any>()
-        val midiasParaProcessar = mutableSetOf<String>()
-
-        try {
-            val initialState = preloadedState.getJSONObject("pageState").getJSONObject("initialState")
-            val components = initialState.getJSONObject("components")
-            
-            dadosProduto["titulo"] = components.getJSONObject("header").getString("title").trim()
-            dadosProduto["descricao"] = components.getJSONObject("description").getString("content").trim()
-
-            val gallery = components.getJSONObject("fixed").getJSONObject("gallery")
-            val pictureConfig = gallery.getJSONObject("picture_config")
-            val pictures = gallery.getJSONArray("pictures")
-
-            for (i in 0 until pictures.length()) {
-                val picture = pictures.getJSONObject(i)
-                val imageUrl = pictureConfig.getString("template_2x").replace("{id}", picture.getString("id")).replace("{sanitizedTitle}", "")
-                midiasParaProcessar.add(imageUrl)
-            }
-            Log.i(TAG, "[JSON] Encontradas ${pictures.length()} imagens na galeria.")
-
-            val videos = gallery.optJSONArray("videos")
-            videos?.let {
-                for (i in 0 until it.length()) {
-                    val manifestUrl = it.getJSONObject(i).getJSONObject("source").getString("url")
-                    midiasParaProcessar.add(manifestUrl)
-                    Log.i(TAG, "[JSON] Encontrado manifesto de vídeo: $manifestUrl")
-                }
-            }
-            
-            val assetsSalvos = processarMidias(midiasParaProcessar, context, projectDirName, largura, altura)
-            dadosProduto["imagensSalvas"] = assetsSalvos
-            
-            return Result.success(dadosProduto)
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao processar via JSON.", e)
-            return Result.failure(e)
+        // 1. Método Preferencial: Cabeçalho Content-Disposition
+        val contentDisposition = connection.getHeaderField("Content-Disposition")
+        if (contentDisposition != null) {
+            // Regex para extrair o nome do arquivo, lidando com aspas opcionais
+            val regex = Regex("""filename="?([^"]+)"?""")
+            filenameWithExt = regex.find(contentDisposition)?.groupValues?.get(1)
         }
-    }
 
-    private suspend fun processarViaRegex(html: String, url: String, context: Context, projectDirName: String, largura: Int?, altura: Int?): Result<Map<String, Any>> {
-        val dadosProduto = mutableMapOf<String, Any>()
-        val paginasParaProcessar = mutableSetOf(url)
-        val midiasParaProcessar = mutableSetOf<String>()
-        
-        try {
-            dadosProduto["titulo"] = Regex("""<h1.*?ui-pdp-title.*?>(.*?)</h1>""").find(html)?.groupValues?.get(1)?.trim() ?: ""
-            dadosProduto["descricao"] = Regex("""<p.*?ui-pdp-description__content.*?>(.*?)</p>""", RegexOption.DOT_MATCHES_ALL).find(html)?.groupValues?.get(1)?.trim()?.replace(Regex("<.*?>"), "") ?: ""
-
-            val linkRegex = Regex("""<a\s+href="([^"]+)"[^>]*>""")
-            linkRegex.findAll(html).forEach { match ->
-                var urlVariacao = match.groupValues[1].replace("&", "&")
-                if (urlVariacao.contains("_JM?attributes=")) {
-                    if (urlVariacao.startsWith("/MLB-")) urlVariacao = "https://produto.mercadolivre.com.br$urlVariacao"
-                    paginasParaProcessar.add(urlVariacao)
-                }
-            }
-            
-            val imageUrlRegex = Regex("""(https://http2\.mlstatic\.com/D_NQ_NP_.*?-[A-Z]\.(?:jpg|webp))""")
-            val videoManifestRegex = Regex("""<video[^>]*>.*?<source[^>]*src="([^"]*storage/shorts-api[^"]+)"""", RegexOption.DOT_MATCHES_ALL)
-
-            for (paginaUrl in paginasParaProcessar) {
-                if (!currentCoroutineContext().isActive) break
-                val htmlPagina = if (paginaUrl == url) html else {
-                    val conn = URL(paginaUrl).openConnection() as HttpURLConnection
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    conn.connect()
-                    conn.inputStream.bufferedReader().use { it.readText() }
-                }
-
-                imageUrlRegex.findAll(htmlPagina).forEach { midiasParaProcessar.add(it.value) }
-                videoManifestRegex.findAll(htmlPagina).forEach { midiasParaProcessar.add(it.groupValues[1]) }
-            }
-            
-            Log.i(TAG, "[REGEX] Mídias encontradas para processar: ${midiasParaProcessar.size}")
-            val assetsSalvos = processarMidias(midiasParaProcessar, context, projectDirName, largura, altura)
-            dadosProduto["imagensSalvas"] = assetsSalvos
-            
-            return Result.success(dadosProduto)
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao processar via REGEX.", e)
-            return Result.failure(e)
+        // 2. Método de Fallback: Parsing da URL
+        if (filenameWithExt.isNullOrBlank()) {
+            val path = connection.url.path
+            filenameWithExt = path.substringAfterLast('/')
         }
+
+        // 3. Extrai nome e extensão do resultado
+        if (!filenameWithExt.isNullOrBlank()) {
+            val name = filenameWithExt.substringBeforeLast('.', "")
+            val ext = filenameWithExt.substringAfterLast('.', "jpg") // Fallback para jpg se não houver extensão
+            
+            // Se o nome estiver vazio (ex: URL termina com "/"), retorna null
+            if (name.isBlank()) return null
+
+            return Pair(name, ext)
+        }
+
+        return null
     }
     
-    // <<< FUNÇÃO CORRIGIDA >>>
-    private suspend fun processarMidias(urls: Set<String>, context: Context, projectDirName: String, largura: Int?, altura: Int?): List<String> {
-        val assetsSalvos = mutableListOf<String>()
-        var assetCounter = 0
-        for (mediaUrl in urls) {
-            // A verificação de coroutine ativa deve ser feita aqui
-            if (!currentCoroutineContext().isActive) break
-            
-            val pathSalvo = if (mediaUrl.contains("storage/shorts-api")) {
-                processarVideo(mediaUrl, context, projectDirName, assetCounter)
-            } else {
-                processarImagem(mediaUrl, context, projectDirName, assetCounter, largura, altura)
-            }
-            if (pathSalvo != null) {
-                assetsSalvos.add(pathSalvo) // Agora o tipo é garantido como String
-                assetCounter++
-            }
-        }
-        return assetsSalvos
-    }
     
-    // As funções abaixo agora são membros da classe e podem chamar umas às outras.
-    
-    private suspend fun processarImagem(imageUrl: String, context: Context, projectDirName: String, counter: Int, largura: Int?, altura: Int?): String? {
-        Log.d(TAG, "  [Processando Imagem] URL: $imageUrl")
-        try {
-            val imageConnection = URL(imageUrl).openConnection() as HttpURLConnection
-            imageConnection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-            imageConnection.connect()
-            val byteArray = imageConnection.inputStream.use { it.readBytes() }
-            imageConnection.disconnect()
 
-            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size, options)
-            if (min(options.outHeight, options.outWidth) < MIN_IMAGE_DIMENSION) return null
-
-            val baseName = "imgML_${System.currentTimeMillis()}_$counter"
-            val originalPath = salvarImagemOriginal(byteArray, baseName, imageUrl, context, projectDirName)
-
-            val bitmapOriginal = BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
-            if (bitmapOriginal != null) {
-                val recorteBitmap = criarRecorteBitmap(bitmapOriginal, largura ?: DEFAULT_RECORTE_WIDTH, altura ?: DEFAULT_RECORTE_HEIGHT)
-                if (recorteBitmap != null) {
-                    salvarRecorte(recorteBitmap, baseName, context, projectDirName)
-                    recorteBitmap.recycle()
-                }
-                bitmapOriginal.recycle()
-            }
-            return originalPath
-        } catch (e: Exception) {
-            return null
-        }
-    }
-
-    private suspend fun processarVideo(manifestoUrl: String, context: Context, projectDirName: String, counter: Int): String? {
-        Log.i(TAG, "  [Processando Vídeo] URL do Manifesto: $manifestoUrl")
-        try {
-            val connection = URL(manifestoUrl).openConnection() as HttpURLConnection
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-            connection.connect()
-            if (connection.responseCode != 200) return null
-            val manifestoContent = connection.inputStream.bufferedReader().use { it.readText() }
-            connection.disconnect()
-
-            val playlistUrl = Regex("""(https://clips\.mlstatic\.com/[^"\s]+)""").find(manifestoContent)?.groupValues?.get(1)
-            if (playlistUrl.isNullOrBlank()) return null
-
-            val videoFile = downloadAndConvertHls(playlistUrl, context, projectDirName, "videoML_$counter") ?: return null
-            val thumbnailPath = extrairThumbnail(videoFile.absolutePath, context, projectDirName, "thumb_from_${videoFile.nameWithoutExtension}")
-            if (thumbnailPath == null) {
-                videoFile.delete()
-                return null
-            }
-            return thumbnailPath
-        } catch (e: Exception) {
-            return null
-        }
-    }
-    
-    private suspend fun downloadAndConvertHls(playlistUrl: String, context: Context, projectDirName: String, baseName: String): File? = withContext(Dispatchers.IO) {
-        val videoDir = getProjectSpecificDirectory(context, projectDirName, "ref_videos")
-        val outputFile = File(videoDir, "$baseName.mp4")
-        val command = "-y -i \"$playlistUrl\" -c copy -bsf:a aac_adtstoasc \"${outputFile.absolutePath}\""
-        val session = FFmpegKit.execute(command)
-        if (ReturnCode.isSuccess(session.returnCode) && outputFile.exists() && outputFile.length() > 1024) {
-            return@withContext outputFile
-        } else {
-            outputFile.delete()
-            return@withContext null
-        }
-    }
-
-    private suspend fun extrairThumbnail(videoPath: String, context: Context, projectDirName: String, thumbName: String): String? = withContext(Dispatchers.IO) {
-        val thumbDir = getProjectSpecificDirectory(context, projectDirName, "ref_images")
-        val thumbFile = File(thumbDir, "$thumbName.webp")
-        val command = "-i \"$videoPath\" -vframes 1 -q:v 2 \"${thumbFile.absolutePath}\""
-        val session = FFmpegKit.execute(command)
-        return@withContext if (ReturnCode.isSuccess(session.returnCode) && thumbFile.exists()) {
-            thumbFile.absolutePath
-        } else {
-            null
-        }
-    }
-
+    // <<< INÍCIO DA MUDANÇA >>>
+    /**
+     * Retorna um diretório específico para o projeto DENTRO DO CACHE da aplicação.
+     * Ideal para armazenar arquivos temporários que serão processados e depois descartados.
+     */
     private fun getProjectSpecificDirectory(context: Context, projectDirName: String, subDir: String): File {
-        val baseAppDir = context.getExternalFilesDir(null) ?: File(context.filesDir, "fallback_dir").apply { mkdirs() }
+        // Usa o diretório de cache como base. É o local apropriado para arquivos temporários.
+        val baseAppDir = context.cacheDir
+        
+        // Cria um subdiretório para o projeto atual para manter a organização
         val projectPath = File(baseAppDir, projectDirName)
+        
+        // Cria o subdiretório final (ex: 'imagens_ml_originais') dentro da pasta do projeto
         val finalDir = File(projectPath, subDir)
-        if (!finalDir.exists()) finalDir.mkdirs()
+        
+        // Garante que a estrutura de diretórios exista
+        if (!finalDir.exists()) {
+            finalDir.mkdirs()
+        }
+        
         return finalDir
     }
+    // <<< FIM DA MUDANÇA >>>
+
+    
+    
 
     private fun salvarImagemOriginal(byteArray: ByteArray, baseName: String, imageUrl: String, context: Context, projectDirName: String): String {
-        val extension = imageUrl.substringAfterLast(".", "jpg").substringBefore("?").lowercase(Locale.ROOT)
+        val extension = imageUrl.substringAfterLast(".", "webp").substringBefore("?").lowercase(Locale.ROOT)
         val nomeArquivo = "${baseName}_original.$extension"
         val fileDir = getProjectSpecificDirectory(context, projectDirName, "imagens_ml_originais")
         val file = File(fileDir, nomeArquivo)
-        return try { FileOutputStream(file).use { it.write(byteArray) }; file.absolutePath } catch (e: IOException) { "" }
+        return try {
+            FileOutputStream(file).use { it.write(byteArray) }
+            file.absolutePath
+        } catch (e: IOException) {
+            Log.e(TAG, "Erro ao salvar imagem original $nomeArquivo", e)
+            ""
+        }
     }
 
     fun criarRecorteBitmap(bitmap: Bitmap, larguraFinalDesejada: Int, alturaFinalDesejada: Int): Bitmap? {
@@ -289,18 +274,23 @@ class ExtrairMl {
         val canvas = Canvas(newBitmap)
         
         val scale = max(larguraFinalDesejada.toFloat() / originalWidth.toFloat(), alturaFinalDesejada.toFloat() / originalHeight.toFloat())
+        
         val newScaledWidth = scale * originalWidth
         val newScaledHeight = scale * originalHeight
+        
         val xOffset = (larguraFinalDesejada - newScaledWidth) / 2f
         val yOffset = (alturaFinalDesejada - newScaledHeight) / 2f
 
         return try {
-            val matrix = Matrix()
+            val matrix = android.graphics.Matrix()
             matrix.setScale(scale, scale)
             matrix.postTranslate(xOffset, yOffset)
+            
             canvas.drawBitmap(bitmap, matrix, null)
+            
             newBitmap
         } catch (e: Exception) {
+            Log.e(TAG, "Erro ao criar recorte/redimensionamento do bitmap: ${e.message}", e)
             newBitmap.recycle()
             null
         }
@@ -320,6 +310,9 @@ class ExtrairMl {
                 }
             }
             file.absolutePath
-        } catch (e: Exception) { "" }
+        } catch (e: Exception) {
+             Log.e(TAG, "Erro ao salvar recorte $nomeArquivo", e)
+            ""
+        }
     }
 }

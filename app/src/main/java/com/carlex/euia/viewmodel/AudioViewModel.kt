@@ -170,7 +170,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
         // FIM DA CORREÇÃO
 
         // Considerar a lógica de erro aqui, se um worker falhou
-        val failedWork = workInfos.firstOrNull { it.state == WorkInfo.State.FAILED }
+        /*val failedWork = workInfos.firstOrNull { it.state == WorkInfo.State.FAILED }
         if (failedWork != null && !isStillImporting) {
             val errorMessage = failedWork.outputData.getString(UrlImportWorker.KEY_OUTPUT_ERROR_MESSAGE)
             viewModelScope.launch {
@@ -178,7 +178,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
                 audioDataStoreManager.setGenerationError(errorMessage) 
                 showToastOverlay("Importação de URL falhou: $errorMessage")
             }
-        }
+        }*/
     }
     
 

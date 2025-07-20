@@ -13,6 +13,8 @@
 
 
 <string name="action_save_and_generate">Gerar nova imagem</string>
+<string name="notification_content_url_phase1_processing_image_progress">Processando imagens</string>
+<string name="notification_content_url_phase1_processing_images">Processando imagens</string>
 
 
 <string name="video_prefs_label_selected_option">Opção Selecionada</string>

@@ -53,7 +53,7 @@ class VideoDownloadWorker(
             }
 
             // Gerar a thumbnail
-            val generatedThumbPath = generateThumbnail(downloadedVideoFile.absolutePath, projectDirName, "thumb_from_${downloadedVideoFile.nameWithoutExtension}")
+            val generatedThumbPath = generateThumbnail(downloadedVideoFile.absolutePath, projectDirName, "thumb_${downloadedVideoFile.nameWithoutExtension}")
             if (generatedThumbPath == null || !isActive) {
                 downloadedVideoFile.delete()
                 throw Exception("Falha na geração da thumbnail ou tarefa cancelada.")

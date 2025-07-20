@@ -127,7 +127,7 @@ class PixabayVideoSearchWorker(
                 Sua resposta DEVE ser apenas o ID (a URL da thumbnail/preview) da melhor opção, e nada mais.
             """.trimIndent()
 
-            val geminiResult = GeminiTextAndVisionProRestApi.perguntarAoGemini(geminiPrompt, emptyList(), null, null, "gemini-2.5-flash")
+            val geminiResult = GeminiTextAndVisionProRestApi.perguntarAoGemini(geminiPrompt, emptyList(), null, null, "gemini-2.0-flash")
             if (geminiResult.isFailure) {
                 throw geminiResult.exceptionOrNull() ?: IllegalStateException("A IA falhou em escolher um asset.")
             }
@@ -148,7 +148,7 @@ class PixabayVideoSearchWorker(
             var finalAssetPath = downloadedFile.absolutePath
             var finalThumbPath: String? = null
             if (chosenAsset.type == "Video") {
-                finalThumbPath = generateThumbnail(downloadedFile.absolutePath, projectDirName, "thumb_from_${downloadedFile.nameWithoutExtension}")
+                finalThumbPath = generateThumbnail(downloadedFile.absolutePath, projectDirName, "thumb_${downloadedFile.nameWithoutExtension}")
             } else {
                 finalThumbPath = finalAssetPath
             }

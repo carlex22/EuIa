@@ -71,7 +71,7 @@ class RefImageViewModel(application: Application) : AndroidViewModel(application
             Log.d(TAG, "Estado de análise atualizado para: $isProcessing (via WorkInfo)")
         }
 
-        workInfos.firstOrNull { it.state == WorkInfo.State.FAILED }?.let { failedWorkInfo ->
+        /*workInfos.firstOrNull { it.state == WorkInfo.State.FAILED }?.let { failedWorkInfo ->
             val errorMsgFromWorker = failedWorkInfo.outputData.getString(RefImageAnalysisWorker.KEY_ERROR_MESSAGE)
             // <<< --- CORREÇÃO AQUI: Usar getApplication<Application>().getString --- >>>
             val displayMessage = if (!errorMsgFromWorker.isNullOrBlank()) {
@@ -81,7 +81,7 @@ class RefImageViewModel(application: Application) : AndroidViewModel(application
             }
             Log.e(TAG, "Tarefa de análise ${failedWorkInfo.id} falhou: $displayMessage")
             //viewModelScope.launch { _errorMessage.emit(displayMessage) }
-        }
+        }*/
     }
 
     init {

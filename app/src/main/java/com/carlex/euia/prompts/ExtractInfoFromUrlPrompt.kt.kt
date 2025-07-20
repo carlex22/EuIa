@@ -74,35 +74,35 @@ class ExtractInfoFromUrlPrompt(
         URL: "$contentUrl"
         
         Vamos lembra como voce mestre genial se prepara lendo seu RACIOCÍNIO anotado em seu diario secreto pessoal.
-A sua receita basica secreta do sucesso, seu tempero e forma mais guardada que a da coca-cola
-
-== ETAPA 1: FILOSOFIA → NARRATIVA ==
-Analise a essência conceitual do projeto:
-- Qual é o insight central que move esta narrativa?
-- Que perspectiva única está sendo apresentada?
-- Como transformar conceitos abstratos em história tangível?
-- Qual é a "grande ideia" por trás do conteúdo?
-
-== ETAPA 2: TEORIA → PRÁTICA ==
-Conecte conceitos com aplicação real:
-- Como os conceitos se manifestam na vida cotidiana?
-- Que exemplos concretos ilustram a teoria?
-- Quais são as implicações práticas para o público?
-- Como tornar o abstrato em acionável?
-
-== ETAPA 3: CONVERSA → ESTRUTURA ==
-Transforme diálogo em roteiro estruturado:
-- Qual é o gancho emocional mais forte?
-- Como criar progressão lógica e envolvente?
-- Que pontos de conexão ressoam com o público?
-- Como equilibrar informação e entretenimento?
-
-== ETAPA 4: APLICAÇÃO → IMPACTO ==
-Defina resultado desejado:
-- Que mudança de perspectiva esperamos?
-- Qual ação específica o público deve tomar?
-- Como medir o sucesso da narrativa?
-- Qual é o legado da mensagem?
+        A sua receita basica secreta do sucesso, seu tempero e forma mais guardada que a da coca-cola
+        
+        == ETAPA 1: FILOSOFIA → NARRATIVA ==
+        Analise a essência conceitual do projeto:
+        - Qual é o insight central que move esta narrativa?
+        - Que perspectiva única está sendo apresentada?
+        - Como transformar conceitos abstratos em história tangível?
+        - Qual é a "grande ideia" por trás do conteúdo?
+        
+        == ETAPA 2: TEORIA → PRÁTICA ==
+        Conecte conceitos com aplicação real:
+        - Como os conceitos se manifestam na vida cotidiana?
+        - Que exemplos concretos ilustram a teoria?
+        - Quais são as implicações práticas para o público?
+        - Como tornar o abstrato em acionável?
+        
+        == ETAPA 3: CONVERSA → ESTRUTURA ==
+        Transforme diálogo em roteiro estruturado:
+        - Qual é o gancho emocional mais forte?
+        - Como criar progressão lógica e envolvente?
+        - Que pontos de conexão ressoam com o público?
+        - Como equilibrar informação e entretenimento?
+        
+        == ETAPA 4: APLICAÇÃO → IMPACTO ==
+        Defina resultado desejado:
+        - Que mudança de perspectiva esperamos?
+        - Qual ação específica o público deve tomar?
+        - Como medir o sucesso da narrativa?
+        - Qual é o legado da mensagem?
         
 
         Sua tarefa é extrair e gerar as seguintes informações, retornando-as como um ÚNICO objeto JSON.
@@ -122,11 +122,10 @@ Defina resultado desejado:
         4.  "suggested_target_audience": String
             *   Sugira o PÚBLICO-ALVO ideal para o vídeo. Máximo de 6 tokens.
         
-        --- OBJETIVOS DA NARRATIVA ---
-        $objectiveInstructions
+        
 
         formato de resposta esperada:
-        {
+        [{
           "suggested_title": "string",
           "main_summary": "string",
           "video_objective_introduction": "string",
@@ -134,7 +133,7 @@ Defina resultado desejado:
           "video_objective_outcome": "string",
           "suggested_language_tone": "string",
           "suggested_target_audience": "string"
-        }
+        }]
         """.trimIndent()
     }
 }

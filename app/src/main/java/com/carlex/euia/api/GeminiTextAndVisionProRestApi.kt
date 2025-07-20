@@ -151,14 +151,16 @@ object GeminiTextAndVisionProRestApi {
         imagens: List<String>, // <<<< Continua recebendo caminhos de arquivo (strings)
         arquivoTexto: String? = null,
         youtubeUrl: String? = null,
-        model: String? = "gemini-2.5-pro"
+        model: String? = "gemini-2.0-flash"//"gemini-2.5-pro"
     ): Result<String> {
         val applicationContext = getApplicationFromContext()
             ?: return Result.failure(IllegalStateException("Contexto da aplicação não disponível."))
 
         val authViewModel = AuthViewModel(applicationContext)
         var creditsDeducted = false
-
+        
+        Log.i(TAG, "imagens ${imagens.toString()}")
+        
         return withContext(Dispatchers.IO) {
             try {
                 authViewModel.checkAndDeductCredits(TaskType.TEXT_PRO).getOrThrow()
@@ -204,7 +206,7 @@ object GeminiTextAndVisionProRestApi {
                         )
                         
                         // Log.i(TAG, "textoArquivoLido $textoArquivoLido")
-                        // Log.i(TAG, "prompt $pergunta")
+                         Log.i(TAG, "prompt $pergunta")
 
 
                         if (result.isSuccess) {
@@ -304,6 +306,10 @@ object GeminiTextAndVisionProRestApi {
             contents = listOf(RestContent(parts = parts)),
             generationConfig = RestGenerationConfig(temperature = 2.0f, topP = 0.95f)
         )
+        
+        
+        Log.i(TAG, "parts ${parts.toString()}")
+        
 
         val response = retrofitService.generateContentStream(modelName, apiKey, request)
         if (!response.isSuccessful) throw IOException("Erro HTTP ${response.code()}: ${response.errorBody()?.string()}")

@@ -33,8 +33,11 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
 
     val context = application
 
+    // <<< INÍCIO DA MUDANÇA PRINCIPAL >>>
+    // Este StateFlow agora expõe uma lista de ImagemReferencia JÁ VERIFICADA.
     val imagensReferenciaList: StateFlow<List<ImagemReferencia>> =
         dataStoreManager.imagensReferenciaJson
+            // 1. O map transforma a string JSON em uma lista de objetos
             .map { jsonString ->
                 try {
                     if (jsonString.isNotBlank() && jsonString != "[]") {
@@ -47,13 +50,40 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
                     emptyList()
                 }
             }
+            // 2. O transform subsequente faz a verificação de arquivos em background (IO)
+            .transform { list ->
+                val verifiedList = withContext(Dispatchers.IO) {
+                    list.filter { item ->
+                        // Verifica o arquivo principal (vídeo ou imagem)
+                        val mainFile = File(item.path)
+                        val mainFileExists = mainFile.exists() && mainFile.isFile
+
+                        // Se for um vídeo, verifica também o thumbnail
+                        val thumbFileExists = if (item.pathVideo != null) {
+                            item.pathThumb?.let { File(it).exists() } ?: false
+                        } else {
+                            true // Para imagens, não há thumbnail separado a verificar
+                        }
+                        
+                        if (!mainFileExists || !thumbFileExists) {
+                            Log.w(TAG, "Item removido da lista por não existir no disco: ${item.path}")
+                        }
+                        
+                        mainFileExists && thumbFileExists
+                    }
+                }
+                // 3. Emite a lista final e verificada para a UI
+                emit(verifiedList)
+            }
+            // 4. Converte o Flow em um StateFlow para a UI observar
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+    // <<< FIM DA MUDANÇA PRINCIPAL >>>
 
     val isAnyImageProcessing: StateFlow<Boolean> = dataStoreManager.isProcessingImages
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
 
-     val _toastMessage = MutableSharedFlow<String>()
-    val toastMessage: SharedFlow<String> = _toastMessage.asSharedFlow()
+    private val _snackbarMessage = MutableStateFlow<String?>(null)
+    val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
     private val workInfoObserver = Observer<List<WorkInfo>> { workInfos ->
         val isProcessing = workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
@@ -62,26 +92,9 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    
-    private val _snackbarMessage = MutableStateFlow<String?>(null) // Usando StateFlow
-    val snackbarMessage: StateFlow<String?> = _snackbarMessage
-
-    fun setSnackbarMessage(message: String) {
+    fun setSnackbarMessage(message: String?) {
         _snackbarMessage.value = message
     }
-    
-
-    public fun showToast(message: String) {
-        setSnackbarMessage(message)
-    }
-    
-    
-    public fun showToastOverlay(message: String) {
-        viewModelScope.launch(Dispatchers.Main) {
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-        }
-    }
-    
 
     init {
         workManager.getWorkInfosByTagLiveData(WorkerTags.IMAGE_PROCESSING_WORK)
@@ -96,7 +109,7 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun processImages(uris: List<Uri>) {
         if (isAnyImageProcessing.value) {
-            viewModelScope.launch { _toastMessage.emit("Processamento de imagem já em andamento.") }
+            viewModelScope.launch { setSnackbarMessage("Processamento de imagem já em andamento.") }
             return
         }
         viewModelScope.launch {
@@ -107,78 +120,61 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
                 .addTag(WorkerTags.IMAGE_PROCESSING_WORK)
                 .build()
             workManager.enqueue(workRequest)
-            _toastMessage.emit("Processamento de imagens iniciado.")
+            setSnackbarMessage("Processamento de imagens iniciado.")
         }
     }
     
-    public fun mostrarToast(mensagem: String) {
-        Toast.makeText(context, mensagem, Toast.LENGTH_SHORT).show()
-    }
-
     fun removeImage(pathToRemove: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentList = imagensReferenciaList.first()
+        viewModelScope.launch {
+            // A lista já está validada, então apenas filtramos e salvamos
+            val currentList = imagensReferenciaList.value
             val updatedList = currentList.filterNot { it.path == pathToRemove }
             saveImagensReferenciaList(updatedList)
 
-            try {
-                val fileToDelete = File(pathToRemove)
-                
-                // Extrai nome sem extensão e diretório pai
-                val fileNameWithoutExt = fileToDelete.nameWithoutExtension
-                val parentDir = fileToDelete.parent
-                
-                // Novo nome com sufixo "thumb" e extensão .webp
-                val thumbFileName = "thumb_${fileNameWithoutExt}.webp"
-                
-                // Caminho completo do novo arquivo
-                val fileToDeleteY = File(parentDir, thumbFileName)
-                
-                
-                if (fileToDeleteY.exists()) fileToDeleteY.delete()
-                if (fileToDelete.exists()) fileToDelete.delete()
-            } catch (e: Exception) {
-                Log.e(TAG, "Falha ao remover arquivo de imagem: $pathToRemove", e)
+            // A exclusão do arquivo continua sendo uma operação de IO
+            withContext(Dispatchers.IO) {
+                try {
+                    val fileToDelete = File(pathToRemove)
+                    
+                    val fileNameWithoutExt = fileToDelete.nameWithoutExtension
+                    val parentDir = fileToDelete.parent
+                    val thumbFileName = "thumb_${fileNameWithoutExt}.webp"
+                    val thumbFileToDelete = File(parentDir, thumbFileName)
+                    
+                    if (thumbFileToDelete.exists()) thumbFileToDelete.delete()
+                    if (fileToDelete.exists()) fileToDelete.delete()
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Falha ao remover arquivo de imagem: $pathToRemove", e)
+                }
             }
             
-            withContext(Dispatchers.Main) {
-                _toastMessage.emit("Imagem removida da lista.")
-            }
+            setSnackbarMessage("Imagem removida da lista.")
         }
     }
 
     fun updateImageDescription(pathToUpdate: String, newDescription: String) {
         viewModelScope.launch {
-            val currentList = imagensReferenciaList.first()
+            val currentList = imagensReferenciaList.value
             val updatedList = currentList.map { item ->
                 if (item.path == pathToUpdate) item.copy(descricao = newDescription) else item
             }
             saveImagensReferenciaList(updatedList)
         }
     }
-    
-    // <<< INÍCIO DA FUNÇÃO QUE ESTAVA FALTANDO >>>
-    /**
-     * Atualiza um item da lista de imagens de referência com o novo caminho
-     * do arquivo editado e exclui o arquivo antigo.
-     * @param originalPath O caminho original da imagem que foi enviada para edição.
-     * @param newEditedPath O caminho da nova imagem salva pelo editor.
-     */
+
     fun onImageEdited(originalPath: String, newEditedPath: String) {
         viewModelScope.launch {
-            val currentList = imagensReferenciaList.first()
+            val currentList = imagensReferenciaList.value
             val updatedList = currentList.map {
                 if (it.path == originalPath) {
-                    // Atualiza o caminho para o novo arquivo editado
                     it.copy(path = newEditedPath)
                 } else {
                     it
                 }
             }
-            // Salva a lista com o caminho atualizado
             saveImagensReferenciaList(updatedList)
 
-            // Limpa o arquivo antigo para não ocupar espaço desnecessário
             launch(Dispatchers.IO) {
                 try {
                     val oldFile = File(originalPath)
@@ -190,10 +186,9 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
                     Log.e(TAG, "Falha ao remover arquivo de imagem original após edição", e)
                 }
             }
-            _toastMessage.emit("Imagem editada com sucesso!")
+            setSnackbarMessage("Imagem editada com sucesso!")
         }
     }
-    // <<< FIM DA FUNÇÃO QUE ESTAVA FALTANDO >>>
 
     override fun onCleared() {
         super.onCleared()

@@ -367,7 +367,7 @@ class AudioNarrativeWorker(
                         pergunta = promptCorrecaoLegenda,
                         imagens = emptyList(),
                         arquivoTexto = null,
-                        model = "gemini-2.0-flash-lite"
+                        model = "gemini-2.0-flash"
                     )
                     
 

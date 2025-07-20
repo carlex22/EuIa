@@ -66,6 +66,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 private const val TAG_CONTENT = "VideoProjectContent"
@@ -983,29 +985,42 @@ private fun VideoPlayerInternal(
     invalidPathErrorText: String
 ) {
     val context = LocalContext.current
-    val videoUri = remember(videoPath) {
-        if (videoPath.startsWith("http")) {
-            Uri.parse(videoPath)
-        } else if (videoPath.isNotBlank()) {
-            val file = File(videoPath)
-            if (file.exists() && file.isFile) {
-                try {
-                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                } catch (e: Exception) {
-                    Log.e(TAG_CONTENT, "VideoPlayer: Erro ao obter URI para: $videoPath", e)
+    // 1. O estado da Uri agora é inicializado como nulo.
+    var videoUri by remember { mutableStateOf<Uri?>(null) }
+
+    // 2. LaunchedEffect executa a operação de I/O em uma corrotina de background
+    //    sempre que o videoPath mudar.
+    LaunchedEffect(videoPath) {
+        videoUri = withContext(Dispatchers.IO) {
+            try {
+                // Lógica para obter a Uri, agora segura para a thread principal.
+                if (videoPath.startsWith("http")) {
+                    Uri.parse(videoPath)
+                } else if (videoPath.isNotBlank()) {
+                    val file = File(videoPath)
+                    if (file.exists()) {
+                        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    } else {
+                        Log.w(TAG_CONTENT, "VideoPlayer: Arquivo de vídeo não encontrado: $videoPath")
+                        null
+                    }
+                } else {
                     null
                 }
-            } else {
-                Log.w(TAG_CONTENT, "VideoPlayer: Arquivo de vídeo não encontrado: $videoPath")
+            } catch (e: Exception) {
+                Log.e(TAG_CONTENT, "VideoPlayer: Erro ao obter URI para: $videoPath", e)
                 null
             }
-        } else null
+        }
     }
 
+    // 3. O restante do código lida com o ciclo de vida e a exibição da VideoView.
     var videoViewInstance by remember { mutableStateOf<VideoView?>(null) }
+    val currentOnPlaybackStateChange by rememberUpdatedState(onPlaybackStateChange)
 
     DisposableEffect(videoUri) {
         onDispose {
+            // Garante que o player pare e libere recursos ao sair do Composable
             videoViewInstance?.apply {
                 stopPlayback()
             }
@@ -1013,29 +1028,31 @@ private fun VideoPlayerInternal(
         }
     }
 
-    if (videoUri != null) {
+    // 4. A VideoView só é criada quando a `videoUri` está pronta (não é nula).
+    val currentVideoUri = videoUri
+    if (currentVideoUri != null) {
         AndroidView(
             factory = { ctx ->
                 VideoView(ctx).apply {
                     videoViewInstance = this
-                    setVideoURI(videoUri)
+                    setVideoURI(currentVideoUri)
                     setOnPreparedListener { mediaPlayer ->
-                        Log.d(TAG_CONTENT, "VideoPlayer (Scene): Vídeo preparado. URI: $videoUri")
+                        Log.d(TAG_CONTENT, "VideoPlayer (Scene): Vídeo preparado. URI: $currentVideoUri")
                         if (isPlaying) {
                             mediaPlayer.start()
-                            onPlaybackStateChange(true)
+                            currentOnPlaybackStateChange(true)
                         } else {
-                             onPlaybackStateChange(false)
+                            currentOnPlaybackStateChange(false)
                         }
-                        mediaPlayer.isLooping = true // <<< MUDANÇA: Loop para prévias >>>
+                        mediaPlayer.isLooping = true // Loop para prévias
                     }
                     setOnCompletionListener {
-                        Log.d(TAG_CONTENT, "VideoPlayer (Scene): Reprodução completa. URI: $videoUri")
-                        onPlaybackStateChange(false)
+                        Log.d(TAG_CONTENT, "VideoPlayer (Scene): Reprodução completa. URI: $currentVideoUri")
+                        currentOnPlaybackStateChange(false)
                     }
                     setOnErrorListener { _, what, extra ->
-                        Log.e(TAG_CONTENT, "VideoPlayer (Scene): Erro. What: $what, Extra: $extra. URI: $videoUri")
-                        onPlaybackStateChange(false)
+                        Log.e(TAG_CONTENT, "VideoPlayer (Scene): Erro. What: $what, Extra: $extra. URI: $currentVideoUri")
+                        currentOnPlaybackStateChange(false)
                         true
                     }
                 }
@@ -1050,12 +1067,16 @@ private fun VideoPlayerInternal(
             modifier = Modifier.fillMaxSize()
         )
     } else {
+        // Exibe um placeholder enquanto a URI está sendo carregada ou se houve um erro.
         Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-            Text(invalidPathErrorText, color = Color.White, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
+            if (videoPath.isNotBlank()) { // Mostra o indicador de progresso se um caminho válido foi fornecido
+                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+            } else {
+                Text(invalidPathErrorText, color = Color.White, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
+            }
         }
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
