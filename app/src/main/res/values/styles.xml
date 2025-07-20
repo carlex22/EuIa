@@ -1,0 +1,9 @@
+<resources>
+<style name="EditorActionButton">
+    <item name="android:layout_width">48dp</item>
+    <item name="android:layout_height">48dp</item>
+    <item name="android:padding">8dp</item>
+    <item name="android:layout_marginEnd">16dp</item>
+    <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+</style>
+</resources>

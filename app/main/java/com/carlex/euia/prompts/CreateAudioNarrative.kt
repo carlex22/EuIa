@@ -54,6 +54,7 @@ class CreateAudioNarrative {
 
     **Formato esperado resposta:** Nao comente ou responda algo sobre essa tarefa... A sua resposta final, deve conter uma lista JSON contendo um objeto com a seguinte estrutura EXATA:
     [
+    
       {
         "aprovado": true,
         "promptAudio": "string (pode incluir comandos de estilo de fala)",

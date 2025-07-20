@@ -37,7 +37,7 @@ fun VideoCreationWorkflowScreen(
     val selectedStageIndex by videoWorkflowViewModel.selectedWorkflowTabIndex.collectAsState()
     val workflowStages = videoWorkflowViewModel.workflowStages
 
-    val isImageProcessing by videoInfoViewModel.isAnyImageProcessing.collectAsState()
+    val isImageProcessing = false //by videoInfoViewModel.isAnyImageProcessing.collectAsState()
     val isRefInfoAnalyzing by refImageInfoViewModel.isAnalyzing.collectAsState()
     val isAudioProcessing by audioViewModel.isAudioProcessing.collectAsState()
     val audioGenerationProgressText by audioViewModel.generationProgressText.collectAsState()

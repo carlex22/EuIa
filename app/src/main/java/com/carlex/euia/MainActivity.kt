@@ -2,12 +2,9 @@
 package com.carlex.euia
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -18,21 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
 import com.carlex.euia.api.*
 import com.carlex.euia.ui.AppNavigationHostComposable
+import com.carlex.euia.viewmodel.PermissionViewModel
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.carlex.euia.utils.OverlayManager // Importar OverlayManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     
     private val showNotificationPermissionDialog = mutableStateOf(false) 
-    // Removido showOverlayPermissionDialog, será gerenciado por OverlayManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
@@ -44,7 +41,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    // CORREÇÃO: Aguardar Firebase estar pronto
     private suspend fun ensureFirebaseInitialized() {
         withContext(Dispatchers.IO) {
             try {
@@ -52,7 +48,7 @@ class MainActivity : ComponentActivity() {
                 Log.d("MainActivity", "Firebase já inicializado.")
             } catch (e: IllegalStateException) {
                 Log.w("MainActivity", "Firebase não inicializado ainda, aguardando...")
-                delay(200) // Aguarda mais tempo
+                delay(200) 
                 try {
                     FirebaseApp.getInstance()
                 } catch (e2: IllegalStateException) {
@@ -86,30 +82,67 @@ class MainActivity : ComponentActivity() {
         GeminiTextAndVisionProRestApi.setApplicationContext(application)
 
         askNotificationPermission()
-        // A lógica de permissão de overlay será iniciada pelo OverlayManager quando necessário.
-
-        // CORREÇÃO: Aguardar Firebase antes de configurar UI
+        
         lifecycleScope.launch {
             ensureFirebaseInitialized()
-            
-            // CORREÇÃO: Aguardar um pouco mais para garantir que tudo está pronto
             delay(300)
             
             setContent {
+                val permissionViewModel: PermissionViewModel = viewModel()
+                val showOverlayDialog by permissionViewModel.showInitialOverlayDialog.collectAsState()
+                val showZombieWarningDialog by permissionViewModel.showZombieWorkerDialog.collectAsState()
+
+                LaunchedEffect(Unit) {
+                    permissionViewModel.checkOverlayPermissionOnStartup(this@MainActivity)
+                    permissionViewModel.ZombieWorkerDetected(this@MainActivity)
+                }
+
                 MaterialTheme {
                     val navController = rememberNavController()
-                    
-                    // CORREÇÃO: Aguardar mais um frame
-                    LaunchedEffect(Unit) {
-                        delay(100)
-                    }
-                    
                     AppNavigationHostComposable(
                         navController = navController,
                         mainActivityContext = this@MainActivity
                     )
 
-                    // Diálogos de permissão permanecem iguais
+                    // Diálogo inicial para permissão de sobreposição
+                    if (showOverlayDialog) {
+                        AlertDialog(
+                            onDismissRequest = { /* Não permite fechar clicando fora */ },
+                            title = { Text(stringResource(R.string.overlay_permission_dialog_title)) },
+                            text = { Text(stringResource(R.string.overlay_permission_dialog_message)) },
+                            confirmButton = {
+                                Button(onClick = { permissionViewModel.onAuthorizeClicked(this@MainActivity) }) {
+                                    Text(stringResource(R.string.overlay_permission_dialog_confirm_button))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { permissionViewModel.onIgnoreInitialDialogClicked() }) {
+                                    Text(stringResource(R.string.overlay_permission_dialog_ignore_button))
+                                }
+                            }
+                        )
+                    }
+                    
+                    // Diálogo de aviso sobre "workers zumbis"
+                    if (showZombieWarningDialog) {
+                        AlertDialog(
+                            onDismissRequest = { permissionViewModel.onDismissZombieWarningDialog() },
+                            title = { Text(stringResource(R.string.zombie_worker_dialog_title)) },
+                            text = { Text(stringResource(R.string.zombie_worker_dialog_message)) },
+                            confirmButton = {
+                                Button(onClick = { permissionViewModel.onAuthorizeClicked(this@MainActivity) }) {
+                                    Text(stringResource(R.string.overlay_permission_dialog_confirm_button))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { permissionViewModel.onIgnoreZombieWarningClicked() }) {
+                                    Text(stringResource(R.string.overlay_permission_dialog_ignore_button)) // Reutilizando a string "Ignorar"
+                                }
+                            }
+                        )
+                    }
+
+                    // Diálogo de permissão de notificação (sem alterações)
                     if (showNotificationPermissionDialog.value) {
                         AlertDialog(
                             onDismissRequest = { showNotificationPermissionDialog.value = false },
@@ -141,19 +174,5 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         Log.d("MainActivity", "onStart chamado.")
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Ao retornar para a MainActivity, esconda o overlay se estiver visível
-        //OverlayManager.hideOverlay(applicationContext)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // Ao sair da MainActivity, se houver uma renderização em andamento, mostre o overlay
-        // POR SIMPLICIDADE, VOU ADICIONAR UMA CHAMADA GENÉRICA NO OverlayManager para ele se auto-monitorar via WorkManager.
-        // Isso evita que a MainActivity precise saber o estado de todos os Workers.
-        //OverlayManager.monitorAndShowOverlayIfNeeded(applicationContext)
     }
 }

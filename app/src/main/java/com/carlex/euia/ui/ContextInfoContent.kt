@@ -37,6 +37,9 @@ fun ContextInfoContent(
     provideSaveActionDetails: (action: () -> Unit, isEnabled: Boolean) -> Unit,
     onDirtyStateChange: (isDirty: Boolean) -> Unit
 ) {
+
+
+    var msg = "x"
     val scope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
@@ -85,7 +88,21 @@ fun ContextInfoContent(
 
     // A operação '!' em um Boolean funciona normalmente. O problema pode ter sido de inferência anterior.
     val isUiEnabled = !isUrlImporting
-
+    
+    
+    val snackbarMessage by audioViewModel.snackbarMessage.collectAsState() // Observa a mensagem
+    
+    
+    LaunchedEffect(snackbarMessage) {
+         if (!snackbarMessage.isNullOrBlank()){
+            scope.launch { 
+                snackbarHostState.showSnackbar(snackbarMessage!!, duration = SnackbarDuration.Short)
+            }
+            audioViewModel.setSnackbarMessage("")
+         }
+         
+    }
+    
 
     LaunchedEffect(anythingChanged, editingTitleText, localObjectiveIntroduction, localObjectiveVideo, localObjectiveOutcome, localTargetAudience, localLanguageTone, localVideoTime) {
         val saveAction = {
@@ -108,6 +125,12 @@ fun ContextInfoContent(
         provideSaveActionDetails(saveAction, anythingChanged && isUiEnabled)
         onDirtyStateChange(anythingChanged)
     }
+    
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(innerPadding) // Aplica o padding do Scaffold pai
+    ){
 
     Column(
         modifier = modifier
@@ -123,79 +146,22 @@ fun ContextInfoContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = stringResource(R.string.context_info_import_data_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f)
-            )
-            // --- INÍCIO DA MODIFICAÇÃO DO BOTÃO DE IMPORTAR/CANCELAR ---
-            val iconButtonSize = 48.dp // Tamanho padrão do IconButton
-            val progressIndicatorSize = 32.dp // Tamanho do CircularProgressIndicator
-            val cancelIconSize = 24.dp // Tamanho do ícone de Cancelar
-
-            if (isUrlImporting) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(iconButtonSize)) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(progressIndicatorSize),
-                        strokeWidth = 2.dp, // Ajuste a espessura conforme necessário
-                        color = MaterialTheme.colorScheme.primary // Cor do indicador
-                    )
-                    IconButton(
-                        onClick = { audioViewModel.cancelUrlImport() },
-                        modifier = Modifier.size(iconButtonSize) // O IconButton ocupa o mesmo espaço
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Cancel,
-                            contentDescription = stringResource(R.string.context_info_cancel_import_button_desc),
-                            tint = MaterialTheme.colorScheme.error, // Cor do ícone de cancelar
-                            modifier = Modifier.size(cancelIconSize)
-                        )
-                    }
-                }
-            } else {
-                IconButton(
-                    onClick = { showUrlImportDialog = true },
-                    modifier = Modifier.size(iconButtonSize),
-                    enabled = isUiEnabled // <<<<< ADICIONADO: Habilita/desabilita o botão >>>>>
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.CloudDownload,
-                        contentDescription = stringResource(R.string.context_info_import_data_button_desc),
-                        tint = if (isUiEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f), // <<<<< ADICIONADO: Muda a cor se desabilitado >>>>>
-                        modifier = Modifier.size(progressIndicatorSize) // Usa o mesmo tamanho base do indicador
-                    )
-                }
+            Button(
+                onClick = {
+                    showUrlImportDialog = true
+                },
+                enabled = isUiEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp) // Espaço abaixo do botão
+            ) {
+                Text(stringResource(R.string.context_info_import_data_title))
             }
-            // --- FIM DA MODIFICAÇÃO DO BOTÃO DE IMPORTAR/CANCELAR ---
         }
         Divider(modifier = Modifier.padding(bottom = 16.dp))
 
   
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(stringResource(R.string.audio_info_label_narrative_mode), style = MaterialTheme.typography.titleMedium)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (isChatNarrative) stringResource(R.string.audio_info_mode_dialogue)
-                    else stringResource(R.string.audio_info_mode_single_narrator)
-                )
-                Spacer(Modifier.width(8.dp))
-                Switch(
-                    checked = isChatNarrative,
-                    onCheckedChange = { audioViewModel.setIsChatNarrative(it) },
-                    enabled = isUiEnabled, // <<<<< ADICIONADO: Habilita/desabilita o switch >>>>>
-                    thumbContent = if (isChatNarrative) {
-                        { Icon(imageVector = Icons.Filled.Chat, contentDescription = stringResource(R.string.audio_info_mode_dialogue)) }
-                    } else {
-                        { Icon(imageVector = Icons.Filled.RecordVoiceOver, contentDescription = stringResource(R.string.audio_info_mode_single_narrator)) }
-                    }
-                )
-            }
-        }
         
         SettingsSectionTitleInternal(stringResource(R.string.context_info_section_title_video))
         OutlinedTextField(
@@ -295,6 +261,16 @@ fun ContextInfoContent(
         }
         Spacer(modifier = Modifier.height(32.dp))
     }
+    }
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter) // Aligns the Snackbar at the bottom center
+        )
+    }
+
 
     if (showUrlImportDialog) {
         AlertDialog(

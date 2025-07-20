@@ -34,7 +34,7 @@ class GenerateKeyPairsFromText(private val textContent: String) {
 
         **Array JSON resultante 
         A sua resposta final, deve conter somente uma lista JSON contendo:
-        [{"chave": "string", "valor": "string"}]
+        ["foto": 1, "data": {"chave": "string", "valor": "string"}, ...]
 
     """.trimIndent()
 }

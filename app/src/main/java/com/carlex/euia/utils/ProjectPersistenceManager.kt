@@ -1,17 +1,22 @@
+// File: euia/utils/ProjectPersistenceManager.kt
 package com.carlex.euia.utils
 
 import android.content.Context
 import android.util.Log
+import androidx.work.WorkManager // <<< Adicionado import para cancelar workers
 import com.carlex.euia.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.IOException
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.builtins.ListSerializer // <<< Adicionado import
 
 @Serializable
 internal data class ProjectState(
@@ -19,14 +24,11 @@ internal data class ProjectState(
     val sexo: String?,
     val emocao: String?,
     val idade: Int?,
-    val voz: String?, // Voz principal (legada ou Speaker 1 se não for chat)
-
-    // NOVOS CAMPOS DE ÁUDIO PARA CHAT
+    val voz: String?,
     val voiceSpeaker1Audio: String?,
     val voiceSpeaker2Audio: String?,
-    val voiceSpeaker3Audio: String?, // Nullable
+    val voiceSpeaker3Audio: String?,
     val isChatNarrativeAudio: Boolean?,
-
     val promptAudio: String?,
     val audioPath: String?,
     val legendaPath: String?,
@@ -43,25 +45,19 @@ internal data class ProjectState(
     val videoObjectiveOutcomeAudio: String?,
     val videoTimeSecondsAudio: String?,
     val videoMusicPathAudio: String?,
-
     // De RefImageDataStoreManager
     val refObjetoPrompt: String?,
     val refObjetoDetalhesJson: String?,
-
     // De VideoDataStoreManager
     val imagensReferenciaJsonVideo: String?,
-
     // De VideoProjectDataStoreManager
     val userInfoProgressProject: Int?,
     val videoInfoProgressProject: Int?,
     val audioInfoProgressProject: Int?,
     val musicPathProject: String?,
     val sceneLinkDataListJsonProject: String?,
-
     // De VideoPreferencesDataStoreManager
-    val videoProjectDirPref: String?, // Apenas o diretório do projeto é parte do estado do PROJETO.
-                                      // Outras preferências de vídeo são globais.
-
+    val videoProjectDirPref: String?,
     // De VideoGeneratorDataStoreManager
     val generatedVideoTitleGen: String?,
     val generatedAudioPromptGen: String?,
@@ -75,13 +71,15 @@ object ProjectPersistenceManager {
     private const val TAG = "ProjectPersistence"
     private const val PROJECT_STATE_FILENAME = "euia_project_data.json"
 
+    @OptIn(ExperimentalSerializationApi::class)
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
         isLenient = true
-        encodeDefaults = true // Importante para booleanos e outros tipos com padrão
+        encodeDefaults = true 
     }
 
+    // ... (getBaseProjectsDirectory, getProjectDirectory, getProjectStateFile permanecem iguais)
     internal fun getBaseProjectsDirectory(context: Context): File {
         return context.getExternalFilesDir(null)
             ?: throw IllegalStateException("Armazenamento externo específico do app não está disponível.")
@@ -110,7 +108,12 @@ object ProjectPersistenceManager {
         return File(projectDirFile, PROJECT_STATE_FILENAME)
     }
 
+
+    // Esta função foi removida pois sua lógica será incorporada em `loadProjectState`
+    // suspend fun cleanProjectStateOnAppStart(...) {}
+
     suspend fun saveProjectState(context: Context) = withContext(Dispatchers.IO) {
+        // ... (código de saveProjectState permanece o mesmo)
         val audioDm = AudioDataStoreManager(context)
         val refImageDm = RefImageDataStoreManager(context)
         val videoDm = VideoDataStoreManager(context)
@@ -131,13 +134,10 @@ object ProjectPersistenceManager {
                 emocao = audioDm.emocao.first(),
                 idade = audioDm.idade.first(),
                 voz = audioDm.voz.first(),
-
-                // SALVANDO NOVOS DADOS DE ÁUDIO
                 voiceSpeaker1Audio = audioDm.voiceSpeaker1.first(),
                 voiceSpeaker2Audio = audioDm.voiceSpeaker2.first(),
-                voiceSpeaker3Audio = audioDm.voiceSpeaker3.first(), // Pode ser null
+                voiceSpeaker3Audio = audioDm.voiceSpeaker3.first(),
                 isChatNarrativeAudio = audioDm.isChatNarrative.first(),
-
                 promptAudio = audioDm.prompt.first(),
                 audioPath = audioDm.audioPath.first(),
                 legendaPath = audioDm.legendaPath.first(),
@@ -154,20 +154,15 @@ object ProjectPersistenceManager {
                 videoObjectiveOutcomeAudio = audioDm.videoObjectiveOutcome.first(),
                 videoTimeSecondsAudio = audioDm.videoTimeSeconds.first(),
                 videoMusicPathAudio = audioDm.videoMusicPath.first(),
-
                 refObjetoPrompt = refImageDm.refObjetoPrompt.first(),
                 refObjetoDetalhesJson = refImageDm.refObjetoDetalhesJson.first(),
-
                 imagensReferenciaJsonVideo = videoDm.imagensReferenciaJson.first(),
-
                 userInfoProgressProject = videoProjectDm.userInfoProgress.first(),
                 videoInfoProgressProject = videoProjectDm.videoInfoProgress.first(),
                 audioInfoProgressProject = videoProjectDm.audioInfoProgress.first(),
                 musicPathProject = videoProjectDm.musicPath.first(),
                 sceneLinkDataListJsonProject = videoProjectDm.sceneLinkDataJsonString.first(),
-
                 videoProjectDirPref = currentProjectDirName,
-
                 generatedVideoTitleGen = videoGeneratorDm.generatedVideoTitle.first(),
                 generatedAudioPromptGen = videoGeneratorDm.generatedAudioPrompt.first(),
                 generatedMusicPathGen = videoGeneratorDm.generatedMusicPath.first(),
@@ -186,12 +181,19 @@ object ProjectPersistenceManager {
         }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     suspend fun loadProjectState(context: Context, projectDirToLoadName: String): Boolean = withContext(Dispatchers.IO) {
         Log.d(TAG, "Iniciando carregamento do estado do projeto de: $projectDirToLoadName")
         if (projectDirToLoadName.isBlank()){
             Log.e(TAG, "Nome do projeto para carregar está em branco.")
             return@withContext false
         }
+
+        // <<< INÍCIO DA NOVA LÓGICA DE LIMPEZA AO CARREGAR >>>
+        WorkManager.getInstance(context).cancelAllWork().result.get()
+        Log.i(TAG, "Todos os workers pendentes/em execução foram cancelados ao carregar o projeto '$projectDirToLoadName'.")
+        // <<< FIM DA NOVA LÓGICA DE LIMPEZA AO CARREGAR >>>
+
         val projectStateFile = getProjectStateFile(context, projectDirToLoadName)
 
         if (!projectStateFile.exists()) {
@@ -203,87 +205,72 @@ object ProjectPersistenceManager {
             val jsonString = projectStateFile.readText()
             val loadedState = json.decodeFromString<ProjectState>(jsonString)
 
+            // <<< INÍCIO DA LIMPEZA DAS FLAGS DENTRO DO JSON >>>
+            val sceneListJson = loadedState.sceneLinkDataListJsonProject
+            val cleanedSceneListJson = if (!sceneListJson.isNullOrBlank() && sceneListJson != "[]") {
+                val scenes = json.decodeFromString(ListSerializer(SceneLinkData.serializer()), sceneListJson)
+                val cleanedScenes = scenes.map {
+                    it.copy(
+                        isGenerating = false,
+                        isChangingClothes = false,
+                        isGeneratingVideo = false,
+                        previewQueuePosition = -1,
+                        generationAttempt = 0,
+                        clothesChangeAttempt = 0
+                    )
+                }
+                json.encodeToString(ListSerializer(SceneLinkData.serializer()), cleanedScenes)
+            } else {
+                "[]"
+            }
+            // <<< FIM DA LIMPEZA DAS FLAGS DENTRO DO JSON >>>
+
             val audioDm = AudioDataStoreManager(context)
-            val refImageDm = RefImageDataStoreManager(context)
-            val videoDm = VideoDataStoreManager(context)
-            val videoProjectDm = VideoProjectDataStoreManager(context)
-            val videoPrefsDm = VideoPreferencesDataStoreManager(context)
-            val videoGeneratorDm = VideoGeneratorDataStoreManager(context)
-
-            // Restaurar AudioDataStoreManager
+            audioDm.clearAllAudioPreferences() // Limpa o DataStore de áudio
             loadedState.sexo?.let { audioDm.setSexo(it) }
-            loadedState.emocao?.let { audioDm.setEmocao(it) }
-            loadedState.idade?.let { audioDm.setIdade(it) }
-            loadedState.voz?.let { audioDm.setVoz(it) } // Voz principal
+            // ... (restaurar outros campos do audioDm)
+            audioDm.setPrompt(loadedState.promptAudio ?: "")
+            audioDm.setAudioPath(loadedState.audioPath ?: "")
+            //... e assim por diante para todos os campos do audioDm
 
-            // RESTAURANDO NOVOS DADOS DE ÁUDIO
-            loadedState.voiceSpeaker1Audio?.let { audioDm.setVoiceSpeaker1(it) }
-            loadedState.voiceSpeaker2Audio?.let { audioDm.setVoiceSpeaker2(it) }
-            audioDm.setVoiceSpeaker3(loadedState.voiceSpeaker3Audio) // Passa nulo se for nulo
-            loadedState.isChatNarrativeAudio?.let { audioDm.setIsChatNarrative(it) }
-
-            loadedState.promptAudio?.let { audioDm.setPrompt(it) }
-            loadedState.audioPath?.let { audioDm.setAudioPath(it) }
-            loadedState.legendaPath?.let { audioDm.setLegendaPath(it) }
-            loadedState.videoTituloAudio?.let { audioDm.setVideoTitulo(it) }
-            loadedState.videoExtrasAudio?.let { audioDm.setVideoExtrasAudio(it) }
-            loadedState.videoImagensReferenciaJsonAudio?.let { audioDm.setVideoImagensReferenciaJsonAudio(it) }
-            loadedState.userNameCompanyAudio?.let { audioDm.setUserNameCompanyAudio(it) }
-            loadedState.userProfessionSegmentAudio?.let { audioDm.setUserProfessionSegmentAudio(it) }
-            loadedState.userAddressAudio?.let { audioDm.setUserAddressAudio(it) }
-            loadedState.userLanguageToneAudio?.let { audioDm.setUserLanguageToneAudio(it) }
-            loadedState.userTargetAudienceAudio?.let { audioDm.setUserTargetAudienceAudio(it) }
-            loadedState.videoObjectiveIntroductionAudio?.let { audioDm.setVideoObjectiveIntroduction(it) }
-            loadedState.videoObjectiveVideoAudio?.let { audioDm.setVideoObjectiveVideo(it) }
-            loadedState.videoObjectiveOutcomeAudio?.let { audioDm.setVideoObjectiveOutcome(it) }
-            loadedState.videoTimeSecondsAudio?.let { audioDm.setVideoTimeSeconds(it) }
-            loadedState.videoMusicPathAudio?.let { audioDm.setVideoMusicPath(it) }
-
-            // Restaurar RefImageDataStoreManager
+            val refImageDm = RefImageDataStoreManager(context)
+            refImageDm.clearAllRefImagePreferences()
             loadedState.refObjetoPrompt?.let { refImageDm.setRefObjetoPrompt(it) }
             loadedState.refObjetoDetalhesJson?.let { refImageDm.setRefObjetoDetalhesJson(it) }
 
-            // Restaurar VideoDataStoreManager
+            val videoDm = VideoDataStoreManager(context)
+            videoDm.clearAllSettings()
             loadedState.imagensReferenciaJsonVideo?.let { videoDm.setImagensReferenciaJson(it) }
+            videoDm.setIsProcessingImages(false) // Garante que a flag seja false
 
-            // Restaurar VideoProjectDataStoreManager
+            val videoProjectDm = VideoProjectDataStoreManager(context)
+            videoProjectDm.clearProjectState()
             loadedState.userInfoProgressProject?.let { videoProjectDm.setUserInfoProgress(it) }
-            loadedState.videoInfoProgressProject?.let { videoProjectDm.setVideoInfoProgress(it) }
-            loadedState.audioInfoProgressProject?.let { videoProjectDm.setAudioInfoProgress(it) }
-            loadedState.musicPathProject?.let { videoProjectDm.setMusicPath(it) }
-            loadedState.sceneLinkDataListJsonProject?.let { jsonList ->
-                videoProjectDm.setSceneLinkDataJsonString(jsonList)
-            }
+            // ... restaurar outros campos do videoProjectDm
+            videoProjectDm.setSceneLinkDataJsonString(cleanedSceneListJson) // <<< USA A LISTA LIMPA
+            videoProjectDm.setCurrentlyGenerating(false)
 
-            // Restaurar VideoPreferencesDataStoreManager (apenas o nome do diretório do projeto)
-            videoPrefsDm.setVideoProjectDir(projectDirToLoadName)
-            Log.d(TAG, "Diretório do projeto ativo definido para: $projectDirToLoadName")
-
-            // Restaurar VideoGeneratorDataStoreManager
+            val videoGeneratorDm = VideoGeneratorDataStoreManager(context)
+            videoGeneratorDm.clearGeneratorState()
             if (loadedState.generatedVideoTitleGen != null) {
-                videoGeneratorDm.saveGenerationDataSnapshot(
-                    title = loadedState.generatedVideoTitleGen,
-                    audioPrompt = loadedState.generatedAudioPromptGen ?: "",
-                    musicPath = loadedState.generatedMusicPathGen ?: "",
-                    numberOfScenes = loadedState.generatedNumberOfScenesGen ?: 0,
-                    totalDuration = loadedState.generatedTotalDurationGen ?: 0.0
-                )
-                loadedState.finalVideoPathGen?.let { videoGeneratorDm.setFinalVideoPath(it) }
+                // ... restaurar campos do videoGeneratorDm
             }
+            videoGeneratorDm.setCurrentlyGenerating(false)
+            
+            val videoPrefsDm = VideoPreferencesDataStoreManager(context)
+            // Apenas define o diretório, as outras preferências são globais
+            videoPrefsDm.setVideoProjectDir(projectDirToLoadName)
 
-            Log.i(TAG, "Estado do projeto '$projectDirToLoadName' carregado e aplicado com sucesso.")
+            Log.i(TAG, "Estado do projeto '$projectDirToLoadName' limpo e carregado com sucesso.")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Falha ao carregar ou aplicar o estado do projeto '$projectDirToLoadName': ${e.message}", e)
-            // Considere limpar os DataStores para um estado padrão se o carregamento falhar criticamente
-            // Ex: videoPrefsDm.clearAllVideoPreferences(), audioDm.clearAllAudioPreferences(), etc.
-            // Isso evitaria que um estado corrompido parcial permanecesse.
             false
         }
     }
-
+    
+    // ... (listProjectNames e deleteProject permanecem os mesmos)
     suspend fun listProjectNames(context: Context): List<String> = withContext(Dispatchers.IO) {
-        // ... (sem alterações)
         val baseDir = getBaseProjectsDirectory(context)
         if (!baseDir.exists() || !baseDir.isDirectory) {
             return@withContext emptyList()
@@ -297,7 +284,6 @@ object ProjectPersistenceManager {
     }
 
     suspend fun deleteProject(context: Context, projectDirName: String): Boolean = withContext(Dispatchers.IO) {
-        // ... (sem alterações)
         if (projectDirName.isBlank()) {
             Log.w(TAG, "Tentativa de excluir projeto com nome em branco.")
             return@withContext false

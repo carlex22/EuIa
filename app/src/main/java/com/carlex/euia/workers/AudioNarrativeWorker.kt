@@ -125,7 +125,7 @@ class AudioNarrativeWorker(
     override suspend fun doWork(): Result = coroutineScope {
         Log.d(TAG, "doWork() Iniciado.")
         
-                OverlayManager.showOverlay(appContext, "🔊", 0) 
+        OverlayManager.showOverlay(appContext, "🔊", 0) 
 
         val promptToUseInput = inputData.getString(KEY_PROMPT_TO_USE) ?: ""
         val isNewNarrative = inputData.getBoolean(KEY_IS_NEW_NARRATIVE, true)
@@ -208,7 +208,7 @@ class AudioNarrativeWorker(
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Erro ao ler arquivo de contexto ($contextFilePath). Erro: ${e.message}")
+                        setGenerationErrorWorker("Erro ao ler arquivo de contexto")
                     }
                 }
                 val arquivoTextoParaGemini = if (isChatNarrativeInput) {
@@ -278,11 +278,11 @@ class AudioNarrativeWorker(
                     return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to finalErrorMessage))
                 }
                 updateNotificationProgress(appContext.getString(R.string.notification_content_audio_using_existing_text))
-                updateWorkerProgress("Usando texto existente...", true)
+                updateWorkerProgress("Gerando Novo Audio...", true)
             }
             
             OverlayManager.showOverlay(appContext, "🔊", 50) 
-
+ 
             if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_task_cancelled_before_audio_generation))
 
             val audioResult: kotlin.Result<String>
@@ -332,12 +332,81 @@ class AudioNarrativeWorker(
                     setLegendaPathWorker(generatedLegendaPath)
                     updateNotificationProgress(applicationContext.getString(R.string.notification_content_audio_subs_generated_successfully))
                     updateWorkerProgress("Legenda gerada.", true)
+                    
+                    
+                    
+                    
+                    Log.d(TAG, "Iniciando correção da legenda...")
+                    updateNotificationProgress(appContext.getString(R.string.notification_content_audio_correcting_subs))
+                    updateWorkerProgress("Corrigindo legenda...", true)
+                    val srtContentOriginal = File(generatedLegendaPath!!).readText()
+                    val promptCorrecaoLegenda = """
+                        Você é um revisor de legendas profissional.
+                        A seguir está o conteúdo de um arquivo de legenda no formato SRT e o prompt da narrativa original.
+                        Sua tarefa é corrigir APENAS os erros gramaticais e ortográficos no TEXTO de cada entrada da legenda.
+                        NÃO altere os números de sequência.
+                        NÃO altere os timestamps (códigos de tempo).
+                        NÃO altere a formatação de quebra de linha dentro de uma entrada de legenda.
+                        Mantenha a estrutura e o formato EXATAMENTE como no original.
+                        Retorne APENAS o conteúdo do arquivo corrigido. sem incluir ``` exiba so a resposta final formato texto
+
+                        Contexto da Narrativa Original:
+                        $finalPromptUsed
+                        
+                        Conteúdo SRT Original para correção:
+                        $srtContentOriginal
+                    """.trimIndent()
+
+                    val correcaoResult = /*GeminiTextAndVisionStandardApi.perguntarAoGemini(
+                        pergunta = promptCorrecaoLegenda,
+                        imagens = emptyList(),
+                        arquivoTexto = null
+                    )*/
+                    
+                    GeminiTextAndVisionProRestApi.perguntarAoGemini(
+                        pergunta = promptCorrecaoLegenda,
+                        imagens = emptyList(),
+                        arquivoTexto = null,
+                        model = "gemini-2.0-flash-lite"
+                    )
+                    
+
+                    if (!coroutineContext.isActive) throw kotlinx.coroutines.CancellationException(appContext.getString(R.string.error_task_cancelled_during_subtitle_correction))
+
+                    if (correcaoResult.isSuccess) {
+                        val srtCorrigido = correcaoResult.getOrNull()
+                        if (!srtCorrigido.isNullOrBlank()) {
+                            val nomeBaseLegendaOriginal = File(generatedLegendaPath!!).nameWithoutExtension
+                            val arquivoLegendaCorrigida = File(projectDir, "${nomeBaseLegendaOriginal}_corrigido.txt")
+                            try {
+                                arquivoLegendaCorrigida.writeText(srtCorrigido)
+                                Log.i(TAG, "Legenda corrigida salva em: ${arquivoLegendaCorrigida.absolutePath}")
+                                updateNotificationProgress(appContext.getString(R.string.notification_content_audio_subs_corrected))
+                                updateWorkerProgress("Legenda corrigida.", true)
+                                setLegendaPathWorker(arquivoLegendaCorrigida.absolutePath!!)
+                            } catch (ioe: IOException) {
+                                Log.e(TAG, "Falha ao salvar legenda corrigida: ${ioe.message}", ioe)
+                            }
+                        } else {
+                            Log.w(TAG, "Gemini retornou legenda corrigida vazia.")
+                        }
+                    } else {
+                        Log.w(TAG, "Falha ao corrigir legenda com Gemini: ${correcaoResult.exceptionOrNull()?.message}")
+                    }
+                    
+                    
+                    
                 } else {
                     finalErrorMessage = legendaResult.exceptionOrNull()?.message ?: appContext.getString(R.string.error_unknown_subtitle_generation_failure)
                     setGenerationErrorWorker(finalErrorMessage)
                     updateNotificationProgress(appContext.getString(R.string.notification_content_audio_subs_generation_failed, finalErrorMessage.take(30)), true)
                     overallSuccess = false
                 }
+                
+                
+                
+                
+                
             } else {
                 finalErrorMessage = audioResult.exceptionOrNull()?.message ?: appContext.getString(R.string.error_unknown_audio_api_failure)
                 setGenerationErrorWorker(finalErrorMessage)
@@ -412,7 +481,7 @@ class AudioNarrativeWorker(
         }
     }
 
-    private fun ajustarRespostaGeminiAudioWorker(resposta: String): String {
+    private suspend fun ajustarRespostaGeminiAudioWorker(resposta: String): String {
         var respostaLimpa = resposta.trim()
         if (respostaLimpa.startsWith("```json", ignoreCase = true)) {
             respostaLimpa = respostaLimpa.removePrefix("```json").trimStart()
@@ -431,15 +500,17 @@ class AudioNarrativeWorker(
                 when {
                      jsonSubstring.trimStart().startsWith('[') -> JSONArray(jsonSubstring)
                      jsonSubstring.trimStart().startsWith('{') -> JSONObject(jsonSubstring)
-                    else -> Log.w(TAG, "Substring não é claramente um JSON Array ou Object: $jsonSubstring")
+                    else -> { 
+                        setGenerationErrorWorker("Falha ao receber dados JSON da IA")
+                    }
                 }
                 return jsonSubstring
             } catch (e: JSONException){
-                 Log.w(TAG, "Substring extraída não é JSON válido: '$jsonSubstring'. Erro: ${e.message}. Retornando resposta limpa de markdown.")
+                 setGenerationErrorWorker("Falha ao receber dados JSON da IA")
                  return respostaLimpa
             }
         } else {
-             Log.w(TAG, "Falha ao isolar JSON, retornando resposta limpa de markdown: $respostaLimpa")
+             ("Falha ao receber dados JSON da IA")
             return respostaLimpa
         }
     }
@@ -462,6 +533,10 @@ class AudioNarrativeWorker(
     }
 
     private suspend fun setGenerationErrorWorker(errorMsg: String?) {
+        audioDataStoreManager.setGenerationError(errorMsg)
+    }
+    
+    private suspend fun setGenerationProgressText(errorMsg: String?) {
         audioDataStoreManager.setGenerationError(errorMsg)
     }
 

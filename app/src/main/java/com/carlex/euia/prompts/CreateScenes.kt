@@ -118,39 +118,25 @@ Passo 6. voce recebeu varias imagems de referencia, entenda cada uma, e pense co
 Passo 8. seje criativo e pense no texto para PROMPT_PARA_IMAGEM. siga estas diretrizes CRUCIAIS para garantir excelência e realismo, e evitar problemas comuns:
 
     A.  **Qualidade e Detalhamento:**
-        *   cada PROMPT_PARA_IMAGEM de conter maximo 20–50 tokens".
-        *   O objetivo é criar **imagens realistas ou artísticas ricas em detalhes, formas e texturas**.
+        *   cada PROMPT_PARA_IMAGEM de conter maximo 40–80 tokens".
+        *   O objetivo é criar **imagens realistas ou artísticas como desenhos cartoom, ricas em detalhes, formas e texturas**.
         *   O `PROMPT_PARA_IMAGEM` deve ser descritivo o suficiente para guiar a IA na criação de uma imagem que ilustre o desenvolvimento da ideia da narrativa de forma poética, glamurosa, profissional, ética e elegante.
-        *   O `PROMPT_PARA_IMAGEM` deve dar prioridade máxima e clareza ao 'elemento visual mais crítico'
-        *   Sempre priorize focar em elementos proporcionais, como uma pintura ou foto profissional.
-        *   Inclua termos como "cenario", "detalhes", "visao longe", "lente angulat", "panoramica" ou "zoom out", "camera afastada", conforme apropriado para o estilo.
-        *   use cenas intermediarias ou que nak foquem direranente no contexto, elas devem ser criadas com um estilo e represebtacao cartunista
+        *   O `PROMPT_PARA_IMAGEM` deve dar prioridade máxima e clareza ao 'elemento visual da narrativa'
+        *   Inclua  "cenario", "detalhes", "lentes", conforme apropriado para o estilo.
+        *   use cenas intermediarias ou que nao foquem direranente no contexto, essas devem ser criadas com um estilo e representacao artistica como desenho
         *   Mantenha a mesma palheta de cor para compor todas as cenas** 
-        *   Voce é profucional descreve contexto e cenarios de forma proficional, nada de 2d ou fundo monocromaticos ou imagens sem contexto criativo.
-        *   Sempre inclir detalhes do cenario/ambiente para nao criarmos imagens sem fundo.
         
     B.  **Imagem referencia da cena**
-        *   Voce pode escolher usar 1 imagem das que recebeu para compor a cena de forma realista.
-        *   Nesse casso o seu PROMPT_PARA_IMAGEM deve focar em um comwndo para que o modelo edite ou use algum doz elemento da imagem que se referencie diretamente com o contexto e o titulo do video.
-        *   Sempre que a cena exibir ou focar no objeto/produto referenciado no titulo, use uma imagembreferencua que melhor se enquadre 
-        *   busque descrever as cenas usando a imagem referencia nao na mesma posicao ou cenario da foto original, algumas cenas poderiam ficar iguais, sempre tente pedir para pocicionar ou detalhar o objeto principal, em angulos, cenarios ou contexto levemente diferenre
-   
-    C.  **Elementos 2d**
-        *   Proibido incluir no prompt descricao de elementos 2d como formas geometrivas ou textos de qualquer expecie
+        *   Voce pode escolher usar 1 imagem das que recebeu em anexo, para compor a cena de forma realista.
+        *   Nesse casso o seu PROMPT_PARA_IMAGEM deve focar em transformar ou editar a imagem de referencia compondo o visual que s cena precisa.
+        *   Sempre que a cena exibir ou focar no objeto/produto referenciado no titulo, use uma imagem das enviadas para o modelo editar da que melhor forna qye  se enquadre 
         
         
-    D.  **Inicio prompt**
-        *   Para cada parágrafo, entenda seu propósito no contexto. Crie um PROMPT_PARA_IMAGEM que sirva a esse propósito visualmente."       
-        *   no inicio do prompt informe ao modelo se:
-            *   Vai criar uma imagem intermediaria, ex:Crie uma imagem que ilustre de forna de um cartoon/de um desenho/de uma pintura ..."
-            *   Sempre que o nartador falar sobre o produto/objeto central ou suaa caracteristicas, voce deve preferencialmente usar uma imagem de referencia para compor a cena
-            *   Sempre quecalgumw caracterisca, beneficio, propriedade, valor, aolgo que referencie o produto ou objeto do titulo, voce deve obrigatorio compor a cene com alguma das imagens referencia enviadas
-          
      
     E.  **divisao cenas em subgrupos":**
         *   ao final divida em cena em outras menores, com duracao entre obrigatoria de cada uma dessa divisao:
-            IMPORTANTE: CADA NOVA CENS DO SUBGRUPO DEVE TER A DURACAO ENTRE no minimo 3 a 5 segundos (TEMPO_FIM - TEMPO_INICIO).. 
-        *   cada cena desse grupo deve ter o mesmo prompt com pequenas mudancas na composicai imagem ( mudar possicao objeto/pessoa  central e ou na camera e lente e ou no cenario fundo e ou no tempo dia/noite de cada novs cena desse grupo 
+            IMPORTANTE: CADA NOVA CENS DO SUBGRUPO DEVE TER A DURACAO ENTRE no minimo 4 a 7 segundos (TEMPO_FIM - TEMPO_INICIO).. 
+        *   cada cena desse grupo deve ter o mesmo prompt com pequenas mudancas na composicao imagem ou criar uma cena intermedharis de ligacao.
         *   o tempo inicio e fim de cada cena do subgrupo deve ser distribuido em consideracao ao tempo total da cena a se dividida.
         
         exempo: 
@@ -174,14 +160,14 @@ Passo 8. seje criativo e pense no texto para PROMPT_PARA_IMAGEM. siga estas dire
      2. Identifique a emoção principal. 
      2. Separe text em uma lista de grupos de falas para cada cena. Identifique a emoção da cena. 
      3. Pense em uma metáfora visual para essa emoção. 
-     4. Pense como usar a imagem regerencia e a composição da câmera .. close-up, plano geral. 
-     5. Escreva o prompt final para a imagem de cada cena  
+     4. Pense como usar as imagens referencia anexas
+     5. Escreva o prompt final para a imagem de cada cena  de forma brilhante e autentica.
      6. Subdivida os a lista das cenas em subgrupos para  uma lista final 
      7. Verifique se os tempos inicio e fim de cada cena da lista final  estão corretos. Só então, escreva o JSON. cada cena inicia no tempo final da anterior, ajuste se necessario"     
      
      
      Ultima tarefa... criar valor TAG_SEARCH_WEB em cada cena, esse valor tem que estar na linguaguem en_US
-     se voce voce procurar na internet um video ou imagem para fazer referencia ao texto da transcrição do audio da cena expecifica, usuaria com ate 5 palavras, quais termos para procurar um documento relevante.. defina esses termos para TAG_SEARCH_WEB.. na linguaguem en_US
+     se voce foce procurar na internet um video ou imagem para fazer referencia ao texto da transcrição do audio da cena especifica e seu paragrafo, usuaria com ate 5 palavras, quais termos usaria procurar um documento relevante.. defina esses termos para TAG_SEARCH_WEB.. na linguaguem en_US
 
 *Formato esperado resposta lista subgrupos das cenas final:** Nao comente ou responda algo sobre essa tarefa... A sua resposta final, deve conter uma lista JSON contendo:
 [{"CENA": int, "TEMPO_INICIO": double, "TEMPO_FIM": double, "PROMPT_PARA_IMAGEM": "string", "EXIBIR_PRODUTO": "boolean", "FOTO_REFERENCIA": Int, "TAG_SEARCH_WEB": "STRING"}]

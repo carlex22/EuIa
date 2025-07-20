@@ -52,22 +52,22 @@ class AudioDataStoreManager(private val context: Context) {
 
     val sexo: Flow<String> = context.audioDataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { preferences -> preferences[PreferencesKeys.SEXO] ?: "Female" }
+        .map { preferences -> preferences[PreferencesKeys.SEXO] ?: "" }
 
     val emocao: Flow<String> = context.audioDataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { preferences -> preferences[PreferencesKeys.EMOCAO] ?: "Neutro" }
+        .map { preferences -> preferences[PreferencesKeys.EMOCAO] ?: "" }
 
     val idade: Flow<Int> = context.audioDataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { preferences -> preferences[PreferencesKeys.IDADE] ?: 30 }
+        .map { preferences -> preferences[PreferencesKeys.IDADE] ?: 0 }
 
     val voz: Flow<String> = context.audioDataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { preferences -> preferences[PreferencesKeys.VOZ] ?: "" }
 
     val voiceSpeaker1: Flow<String> = context.audioDataStore.data
-        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .catch { if (it is     IOException) emit(emptyPreferences()) else throw it }
         .map { preferences -> preferences[PreferencesKeys.VOICE_SPEAKER_1] ?: "" }
 
     val voiceSpeaker2: Flow<String> = context.audioDataStore.data
@@ -156,7 +156,7 @@ class AudioDataStoreManager(private val context: Context) {
 
     val videoTimeSeconds: Flow<String> = context.audioDataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { preferences -> preferences[PreferencesKeys.VIDEO_TIME_SECONDS] ?: "" }
+        .map { preferences -> preferences[PreferencesKeys.VIDEO_TIME_SECONDS] ?: "30" }
 
     val videoMusicPath: Flow<String> = context.audioDataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }

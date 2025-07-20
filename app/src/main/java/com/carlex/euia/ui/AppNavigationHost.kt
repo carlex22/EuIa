@@ -604,8 +604,8 @@ private fun WorkflowBottomBar(
                                 Text(stringResource(R.string.action_save))
                             }
                             AppDestinations.WORKFLOW_STAGE_IMAGES -> Button(
-                                onLaunchPickerClick,
-                                enabled = !isCurrentStageProcessing
+                                onLaunchPickerClick
+                               // enabled = isCurrentStageProcessing
                             ) {
                                 Icon(Icons.Filled.AddPhotoAlternate, null)
                                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))

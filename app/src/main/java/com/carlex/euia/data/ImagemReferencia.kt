@@ -15,6 +15,7 @@ data class ImagemReferencia(
     val descricao: String,
     val isProcessing: Boolean = false,
     val pathVideo: String? = null, // Path to the video file, if this is a video reference
+    val pathThumb: String? = null, // Path to the video file, if this is a video reference
     val videoDurationSeconds: Long? = null,
     val containsPeople: Boolean = false
 )

@@ -163,7 +163,7 @@ class VideoWorkflowViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun setLaunchPickerAction(action: (() -> Unit)?) { _currentStageLaunchPickerAction.value = action }
-    // REMOVIDO: setLaunchMusicAction
+    
 
     fun setAnalyzeAction(action: (() -> Unit)?) { _currentStageAnalyzeAction.value = action }
     fun setCreateNarrativeAction(action: (() -> Unit)?) { _currentStageCreateNarrativeAction.value = action }

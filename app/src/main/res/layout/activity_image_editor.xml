@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ja.burhanrashid52.photoeditor.PhotoEditorView
+        android:id="@+id/photoEditorView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:photo_src="@drawable/ic_placeholder_image" />
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/editor_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/black_overlay"
+        android:layout_alignParentBottom="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <ImageView
+                android:id="@+id/action_crop"
+                android:src="@drawable/ic_crop"
+                style="@style/EditorActionButton" />
+            <ImageView
+                android:id="@+id/action_rotate"
+                android:src="@drawable/ic_rotate"
+                style="@style/EditorActionButton" />
+            <ImageView
+                android:id="@+id/action_add_text"
+                android:src="@drawable/ic_add_text"
+                style="@style/EditorActionButton" />
+            <!-- Adicione mais botões aqui se desejar -->
+            
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:id="@+id/action_save"
+                android:src="@drawable/ic_save"
+                style="@style/EditorActionButton" />
+
+        </LinearLayout>
+    </androidx.appcompat.widget.Toolbar>
+</RelativeLayout>

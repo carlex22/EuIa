@@ -1,19 +1,100 @@
-=<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+<string name="media_explorer_title">Explorar Mídia Online</string>
+    <string name="media_explorer_use_this">Usar esta Mídia</string>
+    <string name="media_explorer_back_to_grid_desc">Voltar para a grade de resultados</string>
+    <string name="media_explorer_preview_title">Pré-visualização</string>
+
+    <!-- Novas strings para o diálogo de edição de prompt e seleção de imagem de referência -->
+    <string name="scene_item_action_save_and_generate">Salvar e Gerar</string>
+    <string name="scene_item_dialog_title_select_ref_image">Selecionar Imagem de Referência</string>
+    <string name="scene_item_action_select_ref_image_desc">Selecionar imagem de referência para a cena</string>
+
+
+<string name="action_save_and_generate">Gerar nova imagem</string>
+
 
 <string name="video_prefs_label_selected_option">Opção Selecionada</string>
     <string name="video_prefs_toast_pitchm_saved">Tom da voz salvo.</string>
     <string name="video_prefs_toast_raten_saved">Velocidade da voz salva.</string>
     <string name="video_prefs_toast_pitchj_rate_saved">Ajustes de voz salvos.</string>
     <string name="video_prefs_toast_durnation_saved">Duração da cena salva.</string>
-    <!-- Adicione as novas strings abaixo -->
+    
   <string name="error_loading_preview">Erro ao iniciar previa.</string>
   <string name="notification_content_preview_generating">Gerando previa da cena: %1$s</string>
 
+<!-- Para os diálogos de permissão de sobreposição -->
+<string name="overlay_permission_dialogh_title">Permissão Necessária</string>
+<string name="overlay_permission_dialog_menssage">Para garantir que tarefas longas (como renderização de vídeo) continuem mesmo com o app em segundo plano, precisamos da sua permissão para "Aparecer sobre outros apps". Isso nos permite mostrar um indicador de progresso flutuante.</string>
+<string name="overlay_permission_dialgog_confirm_button">Autorizar</string>
+<string name="overlay_permission_dialog_ignore_button">Ignorar</string>
+<string name="actinon_ok">OK</string>
+<string name="zombie_worker_dialog_title">Aviso de Tarefa em Andamento</string>
+<string name="zombie_worker_dialog_message">Detectamos que uma tarefa estava em andamento da última vez que o app foi fechado. Se o Android fechar o app para economizar bateria, as tarefas podem ser interrompidas. Conceder a permissão de sobreposição ajuda a manter o app ativo durante processos longos.</string>
 
-    <!-- ... outras strings que você já tenha ... -->
+<!-- Para o OverlayManager -->
+<string name="overlay_service_start_failed">Não foi possível iniciar o indicador de progresso. Por favor, conceda a permissão de sobreposição nas configurações.</string>
 
-    <!-- Strings para a tela de seleção de música -->
+  <string name="title_activity_image_editor">title_activity_image_editor</string>  
+
+    <!-- File: res/values/strings.xml -->
+
+    <!-- ... suas strings existentes ... -->
+
+    <!-- =============================================================== -->
+    <!-- NOVAS STRINGS PARA DIÁLOGO DE SELEÇÃO DE ASSETS E PRÉ-VISUALIZAÇÃO -->
+    <!-- =============================================================== -->
+
+    <!-- Usado no diálogo de seleção de assets quando não há vídeos ou imagens no projeto -->
+    <string name="scene_item_dialog_no_assets_available">Nenhum vídeo ou imagem encontrado no projeto.</string>
+
+    <!-- Título do diálogo de seleção de assets -->
+    <string name="scene_item_dialog_title_select_asset">Selecionar Asset para a Cena</string>
+
+    <!-- Descrição para acessibilidade do ícone de play sobreposto em vídeos no diálogo -->
+    <string name="content_desc_video_indicator">Indicador de Vídeo</string>
+
+    <!-- Mensagem de Toast após substituir o asset de uma cena com sucesso -->
+    <string name="scene_item_toast_asset_replaced">Asset da cena substituído.</string>
+
+    <!-- Usada para dar feedback imediato de que a geração da prévia foi enfileirada -->
+    <string name="toast_preview_generation_queued">Geração da pré-visualização iniciada…</string>
+    
+    
+
+    
+    
+    
+
+    
+    <string name="notification_title_preview_generation">Gerando Pré-visualização de Cena</string>
+
+    
+    <string name="notification_content_preview_starting">Iniciando a criação da pré-visualização…</string>
+    <string name="notification_content_preview_preparing_audio">Preparando áudio para a cena %1$s…</string>
+    <string name="notification_content_preview_rendering">Renderizando a prévia da cena %1$s…</string>
+    <string name="notification_content_preview_success">Pré-visualização da cena %1$s pronta.</string>
+
+    
+    <string name="status_generating_preview">Gerando prévia…</string>
+    <string name="scene_item_status_in_queue">Na Fila</string>
+
+    
+    <string name="error_preview_scene_id_missing">ID da cena não fornecido para a pré-visualização.</string>
+    <string name="error_preview_scene_not_found">Cena %1$s não encontrada para gerar pré-visualização.</string>
+    <string name="error_preview_no_asset">A cena %1$s não tem um asset gerado para criar a prévia.</string>
+    <string name="error_preview_main_audio_missing">O áudio principal do projeto não foi encontrado.</string>
+    <string name="error_preview_audio_snippet_failed">Falha ao preparar o áudio para a prévia da cena.</string>
+    <string name="error_preview_render_failed">Ocorreu um erro ao renderizar a pré-visualização do vídeo.</string>
+    <string name="scene_item_status_generating_video_for_scene">Gerando vídeo para a cena %1$s…</string>
+
+
+
+
+    
+
+    
     <string name="music_import_new_file">Importar Novo Arquivo de Música</string>
     <string name="music_no_files_found">Nenhuma música na sua biblioteca compartilhada.\nImporte um arquivo para começar.</string>
     <string name="music_action_jplay">Tocar</string>
@@ -23,7 +104,7 @@
 
 
 
-    <!-- ... suas outras strings ... -->
+    
 
     <string name="scene_item_action_find_stock_video_desc">Buscar e importar vídeo de banco de imagens para esta cena</string>
     <string name="notification_title_pixabay_search">Buscando Vídeo de Estoque</string>
@@ -36,30 +117,30 @@
     <string name="notification_content_pixabay_failed">Falha na busca: %1$s</string>
     
 
-    <!-- ... -->
+    
     <string name="video_render_cancelled">Renderização de vídeo cancelada.</string>
     <string name="video_render_unknown_error">Erro desconhecido na renderização.</string>
 
-    <!-- ... -->
-    <!-- String MODIFICADA para o diálogo de confirmação -->
+    
+    
     <string name="dialog_message_image_batch_cost">Gerar %1$d imagens terá um custo de %2$d créditos. \n\nComo alternativa, você pode tentar preencher todas as cenas com vídeos de estoque gratuitos, sem custo.</string>
 
-    <!-- String NOVA para o botão de busca de vídeos -->
+    
     <string name="dialog_action_search_free_videos">Buscar Vídeos Grátis</string>
     <string name="toast_batch_video_search_started">Iniciando busca de vídeos para todas as cenas...</string>
 
 
 
-    <!-- Strings para o diálogo de importação de vídeo da web -->
+    
     <string name="scene_item_dialog_import_video_title">Importar Vídeo da Web</string>
     <string name="scene_item_dialog_import_video_label">URL do Vídeo</string>
     <string name="scene_item_dialog_import_video_action">Importar</string>
     <string name="scene_item_action_import_video_desc">Importar vídeo da web para esta cena</string>
     <string name="error_invalid_url">URL inválida. Por favor, verifique o link e tente novamente.</string>
 
-    <!-- ... suas outras strings ... -->
     
-    <!-- Strings para busca de vídeo na Pixabay -->
+    
+    
     <string name="pixabay_search_dialog_title">Buscar Vídeo na Pixabay</string>
     <string name="pixabay_search_field_label">Termos de busca (ex: natureza, cidade)</string>
     <string name="pixabay_search_action_desc">Buscar vídeos</string>
@@ -71,17 +152,17 @@
     <string name="video_prefs_label_default_scene_type">Tipo de Cena Padrão</string>
     <string name="video_prefs_label_default_image_style">Estilo de Imagem Padrão</string>
     <string name="video_prefs_label_preferred_ai_model">Modelo de IA Preferido</string>
-<!-- app/src/main/res/values/strings.xml -->
 
-    <!-- Outras strings existentes -->
 
-    <!-- Strings para VideoRenderWorker (NOVAS ou VERIFICAR) -->
+    
+
+    
     <string name="video_render_notification_concatenating_batches">Concatenando lotes de vídeo...</string>
     <string name="video_render_notification_mixing_audio_subtitles">Mixando áudio e adicionando legendas...</string>
     <string name="video_render_notificagtion_title">Renderização de Vídeo</string>
     <string name="overlay_stayrting">Iniciando processo...</string>
 
-    <!-- Strings de Erro/Status (VERIFICAR ou ADICIONAR) -->
+    
     <string name="error_rendering_duplicate">Erro: Uma renderização já está em andamento ou falhou. Cancele a tarefa anterior ou reinicie o app.</string>
     <string name="error_missing_essential_data">Dados essenciais faltando. Cenas: %1$d, Áudio presente: %2$b</string>
     <string name="error_video_editor_empty_path">Editor de vídeo retornou um caminho vazio.</string>
@@ -92,9 +173,9 @@
 
 
 
-    <!-- ... suas strings existentes ... -->
+    
 
-    <!-- Strings para a nova aba de Música -->
+    
     <string name="workflow_stage_title_music">Música</string>
     <string name="music_select_local_file">Selecionar Música do Dispositivo</string>
     <string name="music_current_selection">Seleção Atual: %1$s</string>
@@ -108,11 +189,11 @@
 
 
 
-    <!-- Cores para o Overlay -->
-    <color name="overlay_discard_active_color">#FF4081</color> <!-- Vermelho vibrante para a lixeira ativa (ex: Color.Magenta ou similar) -->
-    <color name="overlay_discard_inactive_color">#99FF0000</color> <!-- Vermelho semi-transparente para a lixeira inativa (Alpha 99 para ser visível mas discreto) -->
+    
+    <color name="overlay_discard_active_color">#FF4081</color> 
+    <color name="overlay_discard_inactive_color">#99FF0000</color> 
 
-    <!-- Seus outros recursos de cor, por exemplo: -->
+    
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
@@ -121,7 +202,7 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Overlay -->
+    
     <string name="overlay_permission_dialojg_title">Permissão de Sobreposição</string>
     <string name="overlay_permission_dialog_mesksage">Para exibir o progresso em segundo plano, o aplicativo precisa da permissão "Desenhar sobre outros apps". Por favor, conceda esta permissão nas configurações.</string>
     <string name="overlay_permission_dialog_confirm_kbutton">Ir para Configurações</string>
@@ -134,15 +215,15 @@
     <string name="overlay_discard_icon_desc">Ícone de lixeira para descartar o overlay</string>
     <string name="overlay_drag_to_discard">Arraste para descartar</string>
 
-    <!-- Outras strings existentes no seu projeto -->
+    
 
 
 
 
 
-<!-- strings.xml -->
 
-    <!-- ... seus outros strings ... -->
+
+    
     <string name="notification_channel_video_render_name">Renderização de Vídeo</string>
     <string name="notification_channel_video_render_description">Notificações para o processo de renderização de vídeo.</string>
     <string name="notification_title_video_render">Renderizando Vídeo</string>
@@ -177,7 +258,7 @@
 <string name="registration_label_profession_segment">Profissão / Segmento</string>
 <string name="registration_label_address">Endereço</string>
 
-    <!-- Erros de Autenticação e Login -->
+    
     <string name="google_sign_in_required">Login com Google é necessário.</string>
     <string name="google_sign_in_cancelled">Login com Google cancelado.</string>
     <string name="google_sign_in_api_exception">Erro de API do Google Sign-In (código: %d)</string>
@@ -192,7 +273,7 @@
     <string name="auth_failed_login">Falha no login: %s</string>
     <string name="auth_failed_password_reset">Falha ao enviar e-mail de redefinição de senha: %s</string>
 
-    <!-- Erros de Geração de Chave e Criptografia -->
+    
     <string name="error_failed_generate_validation_key">Falha ao gerar chave de validação local.</string>
     <string name="error_failed_encrypt_validation_check">Falha ao criptografar a verificação de validação.</string>
     <string name="error_failed_encrypt_initial_credits">Falha ao criptografar os créditos iniciais.</string>
@@ -209,7 +290,7 @@
     <string name="error_failed_decrypt_balance">Falha ao verificar saldo de créditos. Contate o suporte.</string>
     <string name="error_failed_encrypt_new_balance">Falha ao atualizar saldo de créditos. A operação foi cancelada.</string>
 
-    <!-- Erros de Créditos e Status do Usuário -->
+    
     <string name="error_user_not_authenticated">Usuário não autenticado.</string>
     <string name="error_user_profile_not_found">Perfil do usuário não encontrado no servidor.</string>
     <string name="error_insufficient_credits">Créditos insuficientes. Você tem %1$d e precisa de %2$d. %3$s</string>
@@ -218,15 +299,15 @@
     <string name="credits_already_expired">Seus créditos gratuitos já expiraram.</string>
     <string name="initial_balance_set_to_zero">Seu saldo foi definido para 0.</string>
 
-    <!-- Erros Genéricos de Transação -->
+    
     <string name="error_credit_transaction_failed_generic">A transação de créditos falhou. Por favor, tente novamente.</string>
     <string name="error_credit_transaction_failed_unknown">Erro desconhecido durante a transação de créditos.</string>
 
 
 
-    <!-- Strings usadas no AuthViewModel.kt -->
+    
 
-    <!-- Erros e Falhas -->
+    
     <string name="error_user_not_logged_in">Erro: Usuário não logado.</string>
     <string name="error_security_validation_failed">Erro de segurança: Validação falhou.</string>
     <string name="error_security_validation_failed_generic">Um erro de segurança genérico ocorreu durante a validação.</string>
@@ -262,7 +343,7 @@
     <string name="error_firebase_password_reset">Erro ao enviar email de reset: %1$s</string>
 
 
-    <!-- Eventos e Sucesso -->
+    
     <string name="event_profile_updated_security_key">Chave de segurança do perfil atualizada.</string>
     <string name="login_free_credits_renewed">Créditos gratuitos renovados!</string>
     <string name="event_profile_created">Perfil criado com sucesso!</string>
@@ -274,88 +355,88 @@
     <string name="logtin_password_reset_sent">Email para resetar senha enviado.</string>
     <string name="event_logout_success">Deslogado com sucesso.</string>
 
-    <!-- Outras strings (se necessário) -->
-    <!-- <string name="app_name">EUIA App</string> -->
+    
+    
 
 
 
 
-<!-- Título do diálogo principal de publicação -->
+
 <string name="yhoutube_upload_dialog_title">Publicar Vídeo no YouTube</string>
 
-<!-- Texto do placeholder para a área da thumbnail -->
+
 <string name="youtube_upload_thumbnail_placeholder">Clique para selecionar ou gerar uma thumbnail</string>
 
-<!-- Descrição de conteúdo para a imagem da thumbnail (acessibilidade) -->
+
 <string name="youtube_upload_thumbnail_preview">Pré-visualização da thumbnail</string>
 
-<!-- Labels para os campos de texto -->
+
 <string name="youtube_upload_label_title">Título</string>
 <string name="youtube_upload_label_description">Descrição</string>
 <string name="youtube_upload_label_hashtags">Hashtags (ex: #IA #Video)</string>
 
-<!-- Texto para os botões do diálogo principal -->
+
 <string name="youtube_upload_action_send">Enviar</string>
 <string name="youtube_upload_action_generate">Gerar com IA</string>
 
 
-<!-- =================================================================== -->
-<!-- ================ STRINGS PARA O SELETOR DE THUMBNAIL ============== -->
-<!-- =================================================================== -->
 
-<!-- Título do diálogo de seleção de imagem de cena -->
+
+
+
+
 <string name="youtube_upload_thumbnail_selection_title">Selecione uma Imagem para a Thumbnail</string>
 
-<!-- Mensagem exibida quando não há imagens de cena para selecionar -->
+
 <string name="youtube_upload_thumbnail_selection_no_images">Nenhuma imagem de cena disponível. Gere as imagens na aba "Cenas" primeiro.</string>
 
 
-<!-- =================================================================== -->
-<!-- ================ STRINGS PARA TOASTS E FEEDBACK =================== -->
-<!-- =================================================================== -->
 
-<!-- Toasts do processo de geração de metadados -->
+
+
+
+
 <string name="toast_generating_metadata_started">Iniciando geração de metadados com IA…</string>
 <string name="toast_metadata_generated_no_thumb_prompt">Metadados gerados, mas sem prompt para thumbnail.</string>
 <string name="toast_generating_thumbnail_started">Gerando nova thumbnail com IA…</string>
 <string name="toast_thumbnail_generated_success">Thumbnail gerada com sucesso!</string>
 
-<!-- Toasts do processo de upload final -->
+
 <string name="youtube_upload_toast_initiation">Iniciando upload para o YouTube…</string>
 <string name="youtube_upload_toast_success">Upload concluído! ID do Vídeo: %s</string>
 
 
-<!-- =================================================================== -->
-<!-- ================ STRINGS PARA MENSAGENS DE ERRO =================== -->
-<!-- =================================================================== -->
 
-<!-- Erros na geração de metadados -->
+
+
+
+
 <string name="error_generating_metadata_unknown">Ocorreu um erro desconhecido ao gerar os metadados.</string>
 <string name="error_generating_metadata_toast">Erro ao gerar metadados: %s</string>
 
-<!-- Erros na geração da thumbnail -->
+
 <string name="error_generating_thumbnail_unknown">Ocorreu um erro desconhecido ao gerar a thumbnail.</string>
 <string name="error_generating_thumbnail_toast">Erro ao gerar thumbnail: %s</string>
 
-<!-- Erros no processo de upload -->
+
 <string name="error_upload_unknown">Ocorreu um erro desconhecido durante o upload.</string>
 <string name="youtube_upload_toast_failure">Falha no upload: %s</string>
 <string name="youtube_upload_video_file_not_found_toast">Arquivo de vídeo não encontrado.</string>
 
 
-<!-- =================================================================== -->
-<!-- ================ STRINGS GENÉRICAS (se ainda não existirem) ======= -->
-<!-- =================================================================== -->
 
-<!-- Ações comuns que podem ser reutilizadas -->
+
+
+
+
 <string name="action_ca6gncel">Cancelar</string>
 <string name="action_close">Fechar</string>
 <string name="action_wait">Aguarde...</string>
 
 
-    <!-- ... outras strings que você já tem ... -->
+    
 
-    <!-- Strings para YouTubeUploader -->
+    
     <string name="youtube_upload_default_title">Meu Vídeo Gerado com Euia</string>
     <string name="youtube_upload_default_description">Este vídeo foi criado automaticamente usando o aplicativo Euia! #EuiaApp</string>
     <string name="youtube_upload_no_video_to_share">Nenhum vídeo gerado para compartilhar.</string>
@@ -366,11 +447,11 @@
     <string name="youtube_upload_share_video_via">Compartilhar vídeo via</string>
     <string name="youtube_upload_general_error_starting_activity">Erro ao iniciar o compartilhamento.</string>
 
-    <!-- Adicionado para o botão na tela de vídeo final (se ainda não tiver) -->
+    
     <string name="video_generator_action_upload_youtube">Enviar ao YouTube</string>
-    <!-- ... suas strings existentes ... -->
+    
 
-    <!-- Strings para o novo fluxo de Upload do YouTube (programático) -->
+    
     <string name="youtube_upload_dialog_title">Upload para o YouTube</string>
     <string name="youtube_upload_dialog_status_initiating">Iniciando upload de metadados...</string>
     <string name="youtube_upload_dialog_status_initiated">Upload iniciado! ID do Vídeo: %s. \nAGORA É NECESSÁRIO IMPLEMENTAR O UPLOAD REAL DO ARQUIVO.</string>
@@ -388,11 +469,11 @@
     <string name="notification_permission_denied_feedback">Ok, mas o progresso de tarefas em segundo plano não será exibido.</string>
 
 
-<!-- Canal de Notificação para Análise de Imagem de Referência -->
+
 <string name="notification_channel_name_ref_image">Análise de Imagens</string>
 <string name="notification_channel_description_ref_image">Mostra o progresso da análise de detalhes das imagens de referência.</string>
 
-<!-- Textos da Notificação -->
+
 <string name="notification_title_ref_image_analysis">Analisando Detalhes</string>
 <string name="notification_content_ref_image_starting">Iniciando análise de imagens...</string>
 <string name="notification_content_ref_image_fetching_data">Buscando dados para análise...</string>
@@ -407,18 +488,18 @@
 
  <string name="video_processing_notification_starting">Iniciando Geração cenas</string>
 
-<!-- No seu arquivo res/values/strings.xml -->
 
-    <!-- ... (suas strings existentes aqui) ... -->
+
+    
 
     <string name="status_analyzing_post_production">Analisando cenas para pós-produção...</string>
     <string name="video_generator_title_analyzing">Analisando Cenas</string>
 
-<!-- No seu arquivo res/values/strings.xml -->
 
-    <!-- ... (suas strings existentes aqui) ... -->
 
-    <!-- Strings adicionadas para VideoProjectViewModel e PostProductionWorker -->
+    
+
+    
     <string name="status_processing">Processando...</string>
     <string name="error_post_production_unknown">Erro desconhecido na pós-produção.</string>
     
@@ -431,16 +512,16 @@
     <string name="error_post_production_cancelled">Pós-produção cancelada.</string>
     <string name="scene_no_specific_narration_available">sem narração específica</string>
 
-    <!-- ... (o restante das suas strings) ... -->
+    
 
     <string name="drawer_menu_post_production">Pós-Produção</string>
 
-    <!-- ... (o restante das suas strings) ... -->
+    
 
 
-    <!-- ... (suas strings existentes) ... -->
+    
 
-    <!-- Novas strings para Pós-Produção (PostProductionWorker) -->
+    
     <string name="notification_title_post_production">Pós-Produção de Vídeo</string>
     <string name="notification_channel_name_post">Pós-Produção</string>
     <string name="notification_channel_description_post">Notificações sobre o processo de pós-produção das cenas do vídeo.</string>
@@ -460,7 +541,7 @@
     <string name="toast_post_production_cancelled">Pós-produção de vídeo cancelada.</string>
 
 
-    <!-- Novas strings para VideoGeneratorViewModel -->
+    
     <string name="video_gen_vm_error_no_post_production_data">Dados de pós-produção não encontrados. Gere as cenas de pós-produção primeiro.</string>
 
 
@@ -477,48 +558,48 @@
 <string name="overlay_permission_dialog_confirm_button">Ir para Configurações</string>
 <string name="overlay_permission_dialog_dismiss_button">Agora não</string>
 
-    <!-- ... (suas strings existentes) ... -->
+    
 
-    <!-- =============================================================== -->
-    <!-- NOVAS STRINGS PARA O SERVIÇO E OVERLAY DE GERAÇÃO DE VÍDEO -->
-    <!-- =============================================================== -->
+    
+    
+    
 <string name="overlay_error_invalid_data">Erro: Dados inválidos para geração.</string>
 <string name="overlay_generation_cancelled">Geração de vídeo cancelada.</string>
 <string name="video_gen_vm_toast_generation_started_background">Geração iniciada. Acompanhe o progresso pela notificação.</string>
 
-    <!-- Nome do canal de notificação para o progresso do vídeo -->
+    
     <string name="overlay_channel_name">Progresso da Geração de Vídeo</string>
     
-    <!-- Descrição do canal de notificação -->
+    
     <string name="overlay_channel_description">Mostra o progresso da geração de vídeo em segundo plano.</string>
 
-    <!-- Título da notificação e do overlay -->
+    
     <string name="overlay_generating_video">Gerando seu vídeo...</string>
 
-    <!-- Texto inicial do overlay/notificação -->
+    
     <string name="overlay_starting">Iniciando geração...</string>
 
-    <!-- Texto final de sucesso no overlay/notificação -->
+    
     <string name="overlay_generation_complete">Geração concluída!</string>
     
-    <!-- Texto final de falha no overlay/notificação -->
+    
     <string name="overlay_generation_failed">Geração falhou.</string>
 
 
-    <!-- =============================================================== -->
-    <!-- NOVAS STRINGS PARA O DIÁLOGO DE PERMISSÃO DE OVERLAY -->
-    <!-- =============================================================== -->
+    
+    
+    
 
-    <!-- Título do diálogo de permissão -->
+    
     <string name="overlay_permission_dialog_title">Permissão Necessária</string>
     
-    <!-- Mensagem explicativa no diálogo de permissão -->
+    
     <string name="overlay_permission_dialog_message">Para mostrar o progresso da geração do vídeo sobre outros aplicativos quando você sair, por favor, ative a permissão "Aparecer sobre outros apps" para o EUIA nas configurações.</string>
     
-    <!-- Texto do botão de confirmação no diálogo de permissão -->
+    
     <string name="overlay_permission_dialog_action_go_to_settings">Ir para Configurações</string>
     
-    <!-- Texto do botão de cancelar (string genérica já deve existir, mas para garantir) -->
+    
     
 
 
@@ -526,17 +607,17 @@
 <string name="dialog_title_confirm_generation">Confirmar Geração</string>
         <string name="action_continue">Continuar</string>
 
-    <!-- String para o erro de créditos insuficientes no ViewModel -->
+    
     <string name="error_insufficient_credits_for_batch">Créditos insuficientes para gerar imagens. Necessários: %1$d, Disponíveis: %2$d.</string>
 <string name="error_api_failed_scenes_unknown">Falha na API ao gerar cenas: erro desconhecido.</string>
-<!-- res/values/strings.xml -->
+
 <string name="scene_placeholder_title">Esta cena ainda não tem uma imagem ou video definido.</string>
     <string name="scene_placeholder_instructions">Para proceguir voce precisa:</string>
     <string name="scene_placeholder_action_generate">Gerar imagem com IA</string>
     <string name="scene_placeholder_action_select">Usar uma imagem ou vídeo salvo</string>
-    <!-- ... suas strings existentes ... -->
+    
 
-    <!-- Strings para a Tela Premium -->
+    
     <string name="premium_user_status_title">Status da Conta</string>
     <string name="premium_label_user_type">Tipo de Usuário</string>
     <string name="premium_label_credits">Créditos Disponíveis</string>
@@ -560,14 +641,14 @@
 
 
 
-<!-- res/values/strings.xml -->
 
-    <!-- ... strings existentes ... -->
 
-    <!-- Menu Item -->
+    
+
+    
     <string name="drawer_menu_add_gemini_key">Minha Chave Gemini</string>
 
-    <!-- AddGeminiApiKeyScreen -->
+    
     <string name="add_gemini_key_title">Sua Chave de API do Gemini</string>
     <string name="add_gemini_key_description">Se você possui sua própria chave de API do Google AI Studio, pode inseri-la aqui para usar sua cota pessoal. Deixe em branco para usar as chaves do aplicativo.</string>
     <string name="add_gemini_key_textfield_label">Chave de API do Gemini</string>
@@ -1015,9 +1096,9 @@
 
 
 
-    <!-- Existing strings... -->
+    
 
-    <!-- Novas strings para o ImageProcessingWorker (agora MediaProcessingWorker) -->
+    
     <string name="notification_title_media_processing">EUIA: Processando Mídia</string>
     <string name="notification_content_media_starting_multiple">Iniciando processamento de %1$d mídias...</string>
     <string name="notification_content_media_none_to_process">Nenhuma mídia para processar.</string>
@@ -1035,7 +1116,7 @@
     <string name="status_media_processed_successfully">Processado %1$d mídias com sucesso.</string>
     <string name="error_unexpected_media_processing">Erro inesperado durante o processamento de mídia: %1$s</string>
 
-    <!-- Outras strings que podem ter sido referenciadas ou são úteis para o contexto -->
+    
         
 
 
@@ -1075,11 +1156,11 @@
     
     <string name="about_screen_title">Sobre o App</string>
     <string name="action_navigate_back">Voltar</string>
-    <string name="app_name_full">EUIA App</string> <!-- Ou o nome completo do seu app -->
-    <string name="app_version_placeholder">Versão %1$s</string> <!-- Placeholder para a versão -->
+    <string name="app_name_full">EUIA App</string> 
+    <string name="app_version_placeholder">Versão %1$s</string> 
     <string name="app_short_description">Este aplicativo demonstra a capacidade de criar conteúdo visual dinâmico a partir de descrições textuais utilizando inteligência artificial.</string>
-    <string name="app_developer_name">Desenvolvido por Carlex</string> <!-- Seu nome/empresa -->
-    <string name="app_copyright">© %1$s Carlex. Todos os direitos reservados.</string> <!-- Placeholder para o ano -->
+    <string name="app_developer_name">Desenvolvido por Carlex</string> 
+    <string name="app_copyright">© %1$s Carlex. Todos os direitos reservados.</string> 
 
     
 
@@ -1098,7 +1179,7 @@
 
         <string name="dialog_action_save_and_proceed">Salvar e Prosseguir</string>
     <string name="dialog_action_discard_and_proceed">Descartar e Prosseguir</string>
-    <!-- action_cancel já deve existir -->
+    
 
     <string name="dialog_message_unsaved_changes_context">Você tem alterações não salvas na tela de Contexto. O que deseja fazer?</string>
 
@@ -1161,7 +1242,7 @@
     <string name="status_tap_to_clear_error">Toque para limpar o erro</string>
 
 
-    <!-- Strings Faltantes para AudioInfoContent e AudioViewModel -->
+    
     <string name="audio_info_action_save_prompt">Salvar Prompt</string>
     <string name="audio_info_dialog_save_prompt_title">Salvar Novo Prompt?</string>
     <string name="audio_info_dialog_save_prompt_message">Salvar este novo prompt irá limpar qualquer áudio e cenas de vídeo previamente gerados. Deseja continuar?</string>
@@ -1179,9 +1260,9 @@
     <string name="error_saving_selected_music">Falha ao salvar a música selecionada.</string>
 
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Strings Faltantes para AudioInfoContent e componentes internos -->
+    
     <string name="error_saving_subtitle">Falha ao salvar a legenda.</string>
     <string name="audio_info_action_configure_voice_and_gender">Configurar Voz e Gênero</string>
     <string name="audio_info_action_save_prompt_changes">Salvar Alterações do Prompt</string>
@@ -1189,9 +1270,9 @@
     <string name="audio_info_action_clear_music_selection">Limpar Seleção de Música</string>
     <string name="audio_info_action_select_music_file">Selecionar Arquivo de Música</string>
     <string name="audio_info_dialog_edit_subtitle_content_label">Conteúdo da Legenda</string>
-    <string name="action_confirm">Confirmar</string> <!-- String genérica para botões de confirmação -->
+    <string name="action_confirm">Confirmar</string> 
 
-    <!-- Strings para VideoWorkflowViewModel (Títulos das Abas) -->
+    
     <string name="workflow_stage_title_context">Contexto</string>
     <string name="workflow_stage_title_images">Imagens</string>
     <string name="workflow_stage_title_information">Informações</string>
@@ -1199,16 +1280,16 @@
     <string name="workflow_stage_title_scenes">Cenas</string>
     <string name="workflow_stage_title_finalize">Finalizar</string>
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para ProjectManagementScreen -->
+    
     <string name="project_management_title">Gerenciar Projetos EUIA</string>
     <string name="project_management_fab_new_project_desc">Novo Projeto</string>
 
     <string name="project_management_dialog_delete_title">Excluir Projeto</string>
     <string name="project_management_dialog_delete_message">Tem certeza que deseja excluir o projeto \'%1$s\'? Esta ação não pode ser desfeita e todos os arquivos associados (incluindo mídias) serão apagados permanentemente.</string>
     <string name="project_management_dialog_action_delete">Excluir</string>
-    <!-- R.string.action_cancel já deve existir -->
+    
 
     <string name="project_management_dialog_create_title">Criar Novo Projeto</string>
     <string name="project_management_dialog_create_warning">Os dados do projeto atualmente em edição (se houver) serão limpos das preferências para dar lugar ao novo projeto.</string>
@@ -1222,7 +1303,7 @@
     <string name="project_management_item_icon_desc">Ícone do Projeto</string>
     <string name="project_management_item_delete_desc">Excluir Projeto</string>
 
-    <!-- Strings que podem vir do ViewModel via operationEvent, mas ter um fallback/formato aqui é bom -->
+    
     <string name="project_management_toast_project_loaded">Projeto \'%1$s\' carregado.</string>
     <string name="project_management_toast_project_load_failed">Falha ao carregar projeto \'%1$s\'.</string>
     <string name="project_management_toast_project_deleted">Projeto \'%1$s\' excluído.</string>
@@ -1234,30 +1315,30 @@
 
 
 
-    <!-- ... outras strings ... -->
+    
 
             
     <string name="scene_item_action_edit_prompt">Editar Prompt</string>
     <string name="scene_item_dialog_edit_prompt_title">Editar Prompt da Cena</string>
     <string name="scene_item_placeholder_no_prompt">Nenhum prompt definido. Clique em editar para adicionar.</string>
 
-    <!-- ... outras strings ... -->
+    
 
-    <!-- ... (suas strings existentes) ... -->
+    
 
-    <!-- Novas strings para o menu e telas de autenticação/monetização -->
+    
     <string name="drawer_menu_premium_features">Recursos Premium</string>
     <string name="drawer_menu_logout">Sair</string>
 
-    <!-- Títulos da TopBar para novas telas -->
-    <string name="top_bar_title_premium_offer">Recursos Premium</string><!-- strings.xml -->
+    
+    <string name="top_bar_title_premium_offer">Recursos Premium</string>
 
 
 
 
-    <!-- ... outras strings ... -->
+    
 
-    <!-- Strings para UrlImportWorker (Cancelamento) -->
+    
     <string name="error_phase1_cancelled_early">Importação (Fase 1) cancelada no início.</string>
     <string name="error_phase1_cancelled_after_gemini">Importação (Fase 1) cancelada após chamada à IA.</string>
     <string name="error_import_cancelled_before_phase2">Importação cancelada antes de iniciar a Fase 2.</string>
@@ -1268,9 +1349,9 @@
 
 
 
-    <!-- Existing strings... -->
+    
 
-    <!-- Login Screen -->
+    
     <string name="login_title">Bem-vindo(a) de volta!</string>
     <string name="login_email_label">E-mail</string>
     <string name="login_password_label">Senha</string>
@@ -1287,21 +1368,21 @@
     <string name="content_desc_email_icon">Ícone de e-mail</string>
     <string name="content_desc_password_icon">Ícone de cadeado</string>
 
-    <!-- Loading/Status messages (can be shared) -->
+    
     <string name="loading_login">Entrando...</string>
     <string name="loading_register">Registrando...</string>
     <string name="loading_password_reset">Enviando e-mail de redefinição...</string>
 
-    <!-- Existing strings... -->
+    
 
    <string name="toast_error_opening_ref_image">toast_error_opening_ref_image</string>
 
 <string name="toast_error_ref_image_not_found">toast_error_ref_image_not_found</string>
 
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para ContextInfoContent -->
+    
     <string name="context_info_import_data_title">Gerar ou Importar dados web</string>
     <string name="context_info_import_data_button_desc">Gerar ou Importar dados para o Video</string>
 
@@ -1322,45 +1403,45 @@
     <string name="context_info_section_estimated_duration">Duração Estimada do Vídeo</string>
     <string name="context_info_label_time_seconds">Tempo (segundos)</string>
     <string name="context_info_dropdown_select_time">Selecione</string>
-    <string name="context_info_dropdown_time_unit_seconds">%1$s segundos</string> <!-- Para formatar "30 segundos" -->
+    <string name="context_info_dropdown_time_unit_seconds">%1$s segundos</string> 
 
     <string name="context_info_dialog_import_url_title">Importar Dados da URL</string>
     <string name="context_info_dialog_import_url_label">Titulo / Contexto / URL de Pagina ou Video</string>
     <string name="context_info_dialog_import_url_warning">Atenção: Ao clicar em \'IMPORTAR\', todos os dados do projeto atual (arquivos, narrações, configurações de áudio, detalhes de imagens, etc.) serão limpos para a nova importação.</string>
     <string name="context_info_dialog_action_import">GERAR/IMPORTAR</string>
-    <string name="context_info_dialog_action_cancel">CANCELAR</string> <!-- Pode reutilizar R.string.action_cancel se já existir -->
+    <string name="context_info_dialog_action_cancel">CANCELAR</string> 
     <string name="context_info_snackbar_please_enter_url">Por favor, insira uma URL OU TITULO.</string>
     <string name="context_info_snackbar_context_saved">Contexto da narrativa salvo.</string>
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para VideoInfoScreen / VideoInfoContent -->
+    
     <string name="video_info_toast_error_loading_images">Erro ao carregar lista de imagens.</string>
     <string name="video_info_toast_processing_started">Processamento de imagens iniciado em segundo plano.</string>
     <string name="video_info_toast_processing_already_running">Processamento de imagem já em andamento.</string>
     <string name="video_info_toast_no_images_to_process">Nenhuma imagem selecionada para processar.</string>
     <string name="video_info_label_no_ref_images">Nenhuma imagem de referência selecionada.</string>
     <string name="video_info_toast_image_removed">Imagem removida da lista.</string>
-    <!-- R.string.toast_no_images_selected já existe -->
-    <!-- R.string.content_desc_reference_image já existe -->
-    <!-- R.string.content_desc_image_placeholder já existe -->
-    <!-- R.string.action_remove_image já existe -->
+    
+    
+    
+    
 
-    <!-- Descrições de conteúdo para os novos botões de ação de imagem -->
+    
     <string name="video_info_action_rotate">Girar Imagem</string>
     <string name="video_info_action_remove_background">Remover Fundo da Imagem</string>
     <string name="video_info_action_add_text">Adicionar Texto à Imagem</string>
     <string name="video_info_action_crop">Recortar Imagem</string>
 
-    <!-- Placeholder para descrição da imagem se estiver vazia -->
+    
     <string name="video_info_placeholder_image_description">Sem descrição</string>
 
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para VideoPreferencesScreen -->
+    
     <string name="video_prefs_title">Preferências de Vídeo e Voz</string>
-    <string name="video_prefs_action_back">Voltar</string> <!-- Pode reutilizar R.string.action_navigate_back -->
+    <string name="video_prefs_action_back">Voltar</string> 
 
     <string name="video_prefs_section_preferred_voices">Vozes Preferenciais</string>
     <string name="video_prefs_label_male_voice_default">Voz Masculina Padrão</string>
@@ -1368,7 +1449,7 @@
     <string name="video_prefs_label_selected_voice">Voz Selecionada</string>
     <string name="video_prefs_placeholder_loading_voices">Carregando vozes…</string>
     <string name="video_prefs_placeholder_no_voice_selected">Nenhuma (Toque para carregar/selecionar)</string>
-    <string name="video_prefs_toast_loading_voices">Carregando vozes…</string> <!-- Para o Toast no dropdown -->
+    <string name="video_prefs_toast_loading_voices">Carregando vozes…</string> 
 
     <string name="video_prefs_section_global_voice_settings">Ajustes Globais de Voz (Padrão)</string>
     <string name="video_prefs_label_pitch">Tom (0.5-2.0)</string>
@@ -1380,7 +1461,7 @@
 
     <string name="video_prefs_section_format_duration">Configurações de Formato e Duração</string>
     <string name="video_prefs_label_aspect_ratio">Proporção do Vídeo (Aspect Ratio)</string>
-    <string name="video_prefs_label_selected_aspect_ratio">Selecionado</string> <!-- Label para o TextField do dropdown -->
+    <string name="video_prefs_label_selected_aspect_ratio">Selecionado</string> 
     <string name="video_prefs_placeholder_aspect_ratio_default">Padrão (9:16)</string>
     <string name="video_prefs_label_default_scene_duration">Duração Padrão da Cena (segundos)</string>
     <string name="video_prefs_action_save_duration">Salvar Duração</string>
@@ -1391,30 +1472,30 @@
     <string name="video_prefs_label_enable_transitions">Habilitar Transições entre Cenas</string>
     <string name="video_prefs_label_enable_zoom_pan">Habilitar Efeito Zoom e Pan (Ken Burns)</string> 
 
-    <!-- Strings de erro para carregamento de voz (se não existirem de forma genérica) -->
-    <!-- R.string.error_network_voices já existe -->
-    <!-- R.string.error_fetch_voices_failed já existe -->
+    
+    
+    
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para VideoProjectContent e SceneLinkItem -->
+    
     <string name="scene_item_label_scene_number">Cena: %1$s</string>
     <string name="scene_item_label_product_display_yes">Exibir Produto: Sim</string>
     <string name="scene_item_label_product_display_no">Exibir Produto: Não</string>
     <string name="scene_item_label_time_start">Início: %1$.4fs</string>
     <string name="scene_item_label_time_end">Fim: %1$.4fs</string>
 
-    <!-- R.string.scene_item_label_reference_image já existe -->
-    <!-- R.string.content_desc_reference_image já existe -->
+    
+    
     <string name="scene_item_placeholder_no_ref_image_short">Sem Imagem Ref.</string>
     <string name="scene_item_placeholder_no_ref_image_desc">Sem Imagem de Referência</string>
 
-    <!-- R.string.scene_item_label_generated_image já existe -->
-    <!-- R.string.content_desc_generated_image já existe -->
+    
+    
     <string name="scene_item_status_generating_attempt">Gerando (Tent. %1$d)…</string>
     <string name="scene_item_status_changing_clothes_attempt">Trocando Roupa (Tent. %1$d)…</string>
-    <!-- R.string.content_desc_generated_placeholder já existe -->
-    <!-- R.string.scene_item_label_similarity já existe -->
+    
+    
 
     <string name="scene_item_label_image_generation_prompt">Prompt para Geração da Imagem</string>
     <string name="scene_item_toast_prompt_updated">Prompt atualizado para cena %1$s</string>
@@ -1427,6 +1508,8 @@
     <string name="context_info_imagem_import_context">Importe as imagens e vídeos que servirão de base e inspiração para a IA criar as cenas. Podem ser fotos de produtos, pessoas, estilos de arte ou locais.</string>
     <string name="context_info_imagem_import_text_click">Clique em "Imagem\\Video" abaixo para começar.</string>
  
+   <string name="context_info_project_import_text_click">Clique em "Gerar Cenas" abaixo para começar.</string>
+ 
 
     <string name="context_info_data_import_title">Desbloqueie o Poder dos Detalhes</string>
     <string name="context_info_data_import_context">Nesta etapa, a inteligência artificial analisa suas imagens de referência para extrair características, cores e informações importantes. Estes detalhes são o segredo para uma narrativa e cenas que realmente se conectam com seu público.</string>
@@ -1435,7 +1518,7 @@
 
 
     <string name="scene_item_label_generating_button">Gerando</string>
-    <!-- R.string.scene_item_action_generate já existe (Gerar Imagem) -->
+    
     <string name="scene_item_label_changing_clothes_button">Trocando</string>
     <string name="scene_item_action_change_clothes">Roupa</string>
     <string name="scene_item_desc_change_clothes_icon">Trocar Roupa</string>
@@ -1443,7 +1526,7 @@
     <string name="video_project_dialog_confirm_new_generation_title">Confirmar Nova Geração de Cenas</string>
     <string name="video_project_dialog_confirm_new_generation_message">Existem cenas criadas. Gerar novas cenas irá apagar as atuais e os trabalhos em andamento. Deseja continuar?</string>
     <string name="video_project_dialog_action_generate_new">Gerar Novas</string>
-    <!-- R.string.action_cancel já deve existir -->
+    
 
     <string name="video_project_status_loading_data">A carregar dados do projeto…</string>
     <string name="video_project_status_generating_scene_structure">A gerar estrutura das cenas…</string>
@@ -1457,26 +1540,26 @@
 
 
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para VideoGeneratorContent -->
+    
     <string name="video_generator_title_generating">Gerando vídeo…</string>
     <string name="video_generator_placeholder_no_video">Nenhum vídeo gerado ainda.</string>
     <string name="video_generator_error_invalid_path">Caminho do vídeo inválido ou arquivo não encontrado.</string>
     <string name="video_generator_action_play_video">Reproduzir Vídeo</string>
-    <string name="video_generator_label_file_path">Arquivo: %1$s</string> <!-- Para mostrar parte do caminho -->
+    <string name="video_generator_label_file_path">Arquivo: %1$s</string> 
 
-    <!-- Strings para a função de compartilhamento (se não existirem globalmente) -->
+    
     <string name="share_video_chooser_title">Compartilhar vídeo via</string>
     <string name="share_video_error_file_not_found">Arquivo de vídeo não encontrado para compartilhar.</string>
     <string name="share_video_error_generic">Erro ao compartilhar vídeo.</string>
 
 
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para RefImageInfoContent -->
-    <string name="ref_image_info_detail_label_default">Detalhe</string> <!-- Fallback para nome da chave -->
+    
+    <string name="ref_image_info_detail_label_default">Detalhe</string> 
     <string name="ref_image_info_action_remove_detail_desc">Remover detalhe %1$s</string>
     <string name="ref_image_info_toast_detail_removed_and_saved">Detalhe removido e salvo.</string>
     <string name="ref_image_info_button_add_detail">ADICIONAR Detalhe</string>
@@ -1488,14 +1571,14 @@
     <string name="ref_image_info_toast_attribute_exists">Atributo \'%1$s\' já existe.</string>
     <string name="ref_image_info_toast_attribute_empty">O Atributo não pode estar vazio.</string>
     <string name="ref_image_info_dialog_action_add">ADICIONAR</string>
-    <!-- R.string.action_cancel já deve existir -->
+    
 
     <string name="ref_image_info_dialog_exit_title">Salvar Alterações?</string>
     <string name="ref_image_info_dialog_exit_message">Você tem alterações não salvas. Deseja salvar antes de sair, descartar ou cancelar a saída?</string>
     <string name="ref_image_info_dialog_action_save_and_exit">SALVAR E SAIR</string>
     <string name="ref_image_info_dialog_action_discard_and_exit">DESCARTAR E SAIR</string>
-    <!-- R.string.dialog_action_cancel já deve existir -->
-    <string name="ref_image_info_toast_settings_saved">Configurações salvas!</string> <!-- Pode ser uma string genérica já existente -->
+    
+    <string name="ref_image_info_toast_settings_saved">Configurações salvas!</string> 
 
     <string name="ref_image_info_analyzing_progress_text">Analisando…</string>
     <string name="ref_image_info_toast_error_loading_details">Erro ao carregar detalhes salvos: Formato inválido.</string>
@@ -1504,21 +1587,21 @@
 
 
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para RefImageViewModel (mensagens de erro/status) -->
+    
     <string name="ref_image_vm_error_loading_saved_details">Erro ao carregar detalhes salvos: Formato inválido.</string>
     <string name="ref_image_vm_error_saving_details">Erro ao salvar detalhes: %1$s</string>
     <string name="ref_image_vm_status_analysis_already_running">Análise já em andamento.</string>
     <string name="ref_image_vm_status_analysis_started">Análise iniciada em segundo plano.</string>
 
-    <!-- Strings para erros do RefImageAnalysisWorker que são passadas para o ViewModel -->
+    
     <string name="ref_image_worker_analysis_failed_generic">Análise falhou: %1$s</string>
     <string name="ref_image_worker_analysis_failed_unknown">Análise falhou com erro desconhecido.</string>
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para VideoGeneratorViewModel (mensagens de Toast) -->
+    
     <string name="video_gen_vm_status_already_generating">Geração de vídeo já em andamento.</string>
     <string name="video_gen_vm_error_no_valid_scenes">Nenhuma cena válida para incluir no vídeo.</string>
     <string name="video_gen_vm_error_main_audio_missing">Áudio principal não definido para o vídeo.</string>
@@ -1548,16 +1631,16 @@
 
 <string name="error_subtitle_path_not_set_for_scenes_critical">Caminho da legenda não definido. Geração de cenas abortada.</string>
 
-    <!-- ... (strings existentes) ... -->
+    
 
-    <!-- Para VideoProjectViewModel -->
+    
     <string name="video_project_toast_global_scenes_already_processing">Geração de cenas ou imagens já em andamento.</string>
     <string name="video_project_toast_cannot_generate_scenes_auto">Não foi possível gerar cenas automaticamente: %1$s</string>
-    <string name="video_project_toast_no_scenes_to_confirm">Nenhuma cena para confirmar.</string> <!-- Se confirmAndProceed for chamado sem cenas -->
+    <string name="video_project_toast_no_scenes_to_confirm">Nenhuma cena para confirmar.</string> 
     <string name="video_project_toast_error_generating_scenes_api">Resposta vazia da IA ao tentar gerar cenas.</string>
     <string name="video_project_toast_error_processing_scenes_json">Erro ao processar resposta da IA para cenas (JSON).</string>
     <string name="video_project_toast_error_api_failed_scenes">Erro na IA ao gerar cenas: %1$s</string>
-    <string name="video_project_toast_scene_prompts_generated_successfully">Prompts das cenas gerados com sucesso!</string> <!-- Já existe, verificar texto -->
+    <string name="video_project_toast_scene_prompts_generated_successfully">Prompts das cenas gerados com sucesso!</string> 
 
     <string name="video_project_toast_scene_not_found">Cena não encontrada.</string>
     <string name="video_project_toast_scene_already_generating_or_changing_clothes">Cena %1$s já em processo de geração ou troca de roupa.</string>
@@ -1572,16 +1655,16 @@
 
     <string name="video_project_toast_error_saving_scene_list">Erro ao salvar lista de cenas.</string>
 
-    <!-- Strings de worker que podem ser usadas aqui para feedback (se não forem já genéricas) -->
-    <!-- R.string.error_worker_scene_not_found -->
-    <!-- R.string.error_worker_prompt_missing -->
-    <!-- ... etc ... -->
+    
+    
+    
+    
 
-<!-- strings.xml -->
 
-    <!-- ... Suas strings existentes ... -->
 
-    <!-- Registration Screen -->
+    
+
+    
     <string name="registration_title">Crie sua conta</string>
     <string name="registration_email_label">E-mail</string>
     <string name="registration_password_label">Senha</string>
@@ -1596,25 +1679,25 @@
     <string name="registration_password_mismatch_error">As senhas não coincidem.</string>
     <string name="content_desc_confirm_password_icon">Ícone de confirmar senha</string>
 
-    <!-- ... Suas outras strings ... -->
+    
 
 
-    <!-- ... (suas strings existentes) ... -->
+    
 
-    <!-- String Faltante para RefImageViewModel -->
+    
     <string name="ref_image_default_prompt">Descreva o objeto principal das imagens de referência.</string>
 
-<!-- res/values/strings.xml -->
 
-    <!-- ... suas outras strings ... -->
 
-    <!-- Para Firebase App Distribution Feedback Notification -->
+    
+
+    
     <string name="feedback_notification_text">Toque para enviar feedback</string>
     <string name="feedback_notification_icon_description">Ícone de Feedback</string>
-    <!-- Você precisará de um ícone de notificação, ex: ic_feedback_notification.xml em res/drawable/ -->
-    <!-- Certifique-se de ter um drawable como `ic_notification_icon` ou crie um novo para feedback. -->
+    
+    
 
-    <!-- ... -->
+    
 
 <string name="scene_item_action_replace_generated_with_ref">Usar Referência como Imagem Gerada</string>
 <string name="scene_item_dialog_confirm_replace_generated_title">Confirmar Substituição</string>
@@ -1627,7 +1710,7 @@
 <string name="error_missing_generated_image_for_clothes_change">A imagem gerada da cena é necessária para a troca de roupa.</string>
 
 
-    <!-- ... suas strings existentes ... -->
+    
 
     <string name="content_desc_play_video">Reproduzir vídeo</string>
     <string name="error_opening_video">Erro ao abrir o vídeo.</string>
@@ -1655,7 +1738,7 @@
 <string name="video_project_vm_status_loading_audio_snippet">Carregando áudio da cena...</string>
 
 
-<!-- ... (strings existentes) ... -->
+
 <string name="scene_item_dialog_title_change_ref">Alterar Imagem de Referência</string>
 <string name="scene_item_dialog_title_replace_gen">Usar como Imagem da Cena</string>
 <string name="scene_item_dialog_title_change_clothes">Selecionar Roupa de Referência</string>
@@ -1664,22 +1747,22 @@
 
 
 
-    <!-- AudioInfoContent.kt (Novas strings para UI de Múltiplas Vozes e Modo Chat) -->
+    
     <string name="audio_info_label_narrative_mode">Modo da Narrativa</string>
     <string name="audio_info_mode_dialogue">Diálogo (Múltiplas Vozes)</string>
     <string name="audio_info_mode_single_narrator">Narrador Único</string>
     <string name="audio_info_section_speaker_voices">Vozes dos Personagens</string>
-    <!-- Se "audio_info_section_narrator_voice" for apenas uma adaptação, remova-a daqui -->
-    <!-- <string name="audio_info_section_narrator_voice">Voz do Narrador</string> -->
+    
+    
     <string name="audio_info_label_speaker_1">Personagem 1</string>
     <string name="audio_info_label_speaker_2">Personagem 2</string>
     <string name="audio_info_label_speaker_3_optional">Personagem 3 (Opcional)</string>
-    <!-- Se "audio_info_label_narrator" for apenas uma adaptação, remova-a daqui -->
-    <!-- <string name="audio_info_label_narrator">Narrador</string> -->
-    <string name="audio_info_action_select_voice_for">Voz para %s</string> <!-- Se for uma nova forma de frase -->
+    
+    
+    <string name="audio_info_action_select_voice_for">Voz para %s</string> 
     <string name="audio_info_action_add_voice_for">Adicionar Voz para %s</string>
     <string name="audio_info_action_remove_voice_for">Remover Voz do %s</string>
-    <!-- <string name="audio_info_action_select_voice_generic">Selecionar Voz</string> --> <!-- Pode já existir ou ser adaptável -->
+    
     <string name="audio_info_action_add_speaker_3">Adicionar 3ª Voz</string>
     <string name="audio_info_action_configure_voice_speaker1">Configurar Voz (Personagem 1 / Narrador)</string>
     <string name="audio_info_select_speaker1_first">Defina a voz do Personagem 1 primeiro.</string>
@@ -1692,21 +1775,21 @@
     <string name="audio_info_label_filter_gender">Filtrar Vozes por Gênero:</string>
     <string name="audio_info_action_gender_neutral">Neutro</string>
 
-    <!-- AudioNarrativeWorker.kt (Mensagens de notificação e erro relacionadas ao modo chat) -->
+    
     <string name="notification_content_audio_dialog_starting">Iniciando geração de diálogo...</string>
     <string name="notification_content_audio_generating_dialog">Gerando áudio do diálogo...</string>
     <string name="error_chat_voices_not_set">Vozes para Personagem 1 e 2 são obrigatórias para diálogo.</string>
     <string name="error_no_voice_selected_for_single_narrator">Voz do narrador não selecionada.</string>
     <string name="error_parsing_chat_script">Erro ao processar script do diálogo da IA.</string>
 
-    <!-- UrlImportWorker.kt (Apenas as estritamente novas ou com mudanças significativas de propósito) -->
+    
     <string name="notification_content_url_extracting_precontext_cleaning1">Limpando e extraindo pré-contexto de %s...</string>
-    <!-- Se as outras de UrlImportWorker forem apenas reformulações de mensagens existentes, podem ser omitidas desta lista "estritamente novas". -->
-    <!-- Se "notification_content_url_cleaning_data" for estritamente nova, mantenha-a -->
+    
+    
     <string name="notification_content_url_cleaning_data1">Limpando dados para importação de %s...</string>
 
 
-    <!-- ImageProcessingWorker.kt (Apenas as estritamente novas ou com mudanças significativas de propósito) -->
+    
     <!-- Muitas destas podem ser adaptações de strings existentes, mudando "imagem" para "mídia".
          Incluí apenas as que parecem mais propensas a serem novas adições. -->
     <string name="notification_title_media_processing1">Processando Mídias</string>
@@ -1715,21 +1798,21 @@
     <string name="notification_content_media_none_to_process1">Nenhuma mídia para processar.</string>
     <string name="notification_channel_name_media1">Processamento de Mídia</string>
     <string name="notification_channel_description_media1">Notificações para processamento de imagens e vídeos.</string>
-    <!-- <string name="error_no_media_to_process">Nenhuma mídia para processar.</string> --> <!-- Provavelmente uma adaptação -->
-    <!-- <string name="error_processing_cancelled_by_user">Processamento de mídia cancelado.</string> --> <!-- Provavelmente uma adaptação -->
-    <!-- <string name="error_saving_media_cancelled">Salvamento de mídia cancelado.</string> --> <!-- Provavelmente uma adaptação -->
+    
+    
+    
     <string name="notification_content_media_saving1">Salvando mídias processadas...</string>
-    <!-- <string name="error_serializing_final_media_list">Erro ao serializar lista de mídias.</string> --> <!-- Provavelmente uma adaptação -->
-    <!-- <string name="error_all_media_failed_processing">Falha ao processar todas as %d mídias.</string> --> <!-- Provavelmente uma adaptação -->
-    <!-- <string name="status_media_processed_partial_failure">%1$d de %2$d mídias processadas. %3$d falharam.</string> --> <!-- Provavelmente uma adaptação -->
-    <!-- <string name="status_media_processed_successfully">%d mídias processadas com sucesso.</string> --> <!-- Provavelmente uma adaptação -->
-    <!-- <string name="error_unexpected_media_processing">Erro inesperado no processamento de mídia: %s</string> --> <!-- Provavelmente uma adaptação -->
+    
+    
+    
+    
+    
 
 
 
-    <!-- ... outras strings ... -->
+    
 
-    <!-- Para AudioInfoContent.kt -->
+    
     <string name="audio_info_section_narrator_voice">Voz do Narrador</string>
     <string name="audio_info_label_narrator">Narrador</string>
 
@@ -1741,36 +1824,36 @@
 
     <string name="audio_info_action_select_voice_generic">Selecionar Voz</string>
 
-    <string name="audio_info_label_select_voice">Selecionar Voz</string> <!-- Para o diálogo -->
+    <string name="audio_info_label_select_voice">Selecionar Voz</string> 
 
-    <!-- Strings que já deveriam estar na lista de "novas" da resposta anterior, mas confirme: -->
     
-    <!-- ... outras strings do seu projeto ... -->
+    
+    
 
 
 
-    <!-- ... outras strings ... -->
+    
 
-    <!-- AudioInfoContent.kt -->
+    
     <string name="audio_info_label_narrative_context_file">Arquivo de Contexto da Narrativa (Opcional)</string>
     <string name="audio_info_action_select_context_file_desc">Selecionar arquivo de texto para contexto da narrativa</string>
     <string name="audio_info_action_select_context_file">Selecionar Arquivo (.txt)</string>
     <string name="audio_info_action_clear_context_file_desc">Limpar seleção do arquivo de contexto</string>
     <string name="audio_info_label_selected_file">Arquivo: %s</string>
 <string name="error_dialog_script_not_set_for_scenes">O script do diálogo não foi gerado. Gere o áudio primeiro.</string>
-    <!-- AudioViewModel.kt -->
+    
     <string name="audio_info_toast_context_file_cleared">Seleção do arquivo de contexto removida.</string>
     <string name="audio_info_toast_context_file_selected">Arquivo de contexto \"%s\" selecionado.</string>
     <string name="error_chat_speaker1_voice_mandatory">Voz do Personagem 1 é obrigatória para diálogo.</string>
     <string name="error_chat_speaker2_voice_mandatory">Voz do Personagem 2 é obrigatória para diálogo.</string>
     <string name="error_narrator_voice_not_selected_internal">Voz do narrador não selecionada (interno).</string>
 
-    <!-- AudioNarrativeWorker.kt (algumas podem já estar na lista anterior) -->
-    <!-- Apenas confirmando que estas também estão presentes -->
-    <!-- <string name="error_chat_speaker1_voice_mandatory">Voz do Personagem 1 é obrigatória para diálogo.</string> --> <!-- Repetida, OK -->
-    <!-- <string name="error_chat_speaker2_voice_mandatory">Voz do Personagem 2 é obrigatória para diálogo.</string> --> <!-- Repetida, OK -->
+    
+    
+    
+    
 
-    <!-- Adicione estas se ainda não foram adicionadas de listas anteriores -->
+    
     <string name="error_no_external_storage">Armazenamento externo não disponível.</string>
     <string name="error_failed_to_create_project_dir">Falha ao criar diretório do projeto: %s</string>
     <string name="error_empty_prompt_for_ai">O prompt de instrução para a IA não pode estar vazio.</string>
@@ -1780,7 +1863,7 @@
     <string name="notification_content_audio_subs_corrected">Legenda corrigida.</string>
     <string name="error_processing_ai_json_response_critical">Erro crítico ao processar JSON da IA: %s</string>
 
-    <!-- ... outras strings do seu projeto ... -->
+    
 
     <string name="message_cancelled_by_user">Tarefa cancelada pelo usuário.</string>
         <string name="scene_item_action_cancel_generation">Cancelar</string>
@@ -1788,9 +1871,9 @@
     
     
     
-    <!-- Em res/values/strings.xml -->
+    
 
-<!-- Strings específicas para VideoProcessingWorker (geração/troca de roupa de cena) -->
+
 <string name="scene_id_unknown">ID Desconhecido</string>
 <string name="task_type_processing">Processando</string>
 <string name="video_processing_notification_title">EUIA: Processando Cena</string>
@@ -1812,7 +1895,7 @@
 <string name="nnotification_task_completed_success">Tarefa %1$s para cena %2$s concluída.</string>
 <string name="nyotification_task_failed">Falha na tarefa %1$s para cena %2$s. Erro: %3$s</string>
 <string name="error_task_cancelled_explicitly">Trabalho explicitamente cancelado.</string>
-<!-- message_cancelled_by_user já deve existir ou ser genérica -->
+
 <string name="notification_task_cancelled">Tarefa %1$s para cena %2$s cancelada.</string>
 <string name="error_max_attempts_reached">Máximo de %1$d tentativas de processamento alcançado.</string>
 <string name="error_unexpected_worker_error_details">Erro inesperado no worker: %1$s</string>
@@ -1831,8 +1914,8 @@
 <string name="error_invalid_reference_images_input">Referências de imagem inválidas recebidas pelo worker.</string>
 
 
-<!-- Strings que podem ter sido usadas em ImageProcessingWorker (o de upload inicial) e agora são mais genéricas ou específicas -->
-<!-- Verifique se estas já existem e se precisam de ajuste no seu strings.xml principal -->
+
+
 <!--
     <string name="error_no_media_to_process">Nenhuma mídia para processar.</string>
     <string name="error_processing_cancelled_by_user">Processamento cancelado pelo usuário.</string>
@@ -1854,11 +1937,11 @@
 -->
 
 
-    <!-- ... other strings ... -->
-   <!-- Add other missing strings as needed -->
+    
+   
       <string name="error_preparing_ref_images_for_worker">Error preparing reference images for work processing</string>
 
-        <!-- Strings from VideoProjectContent.kt (novas adicionadas) -->
+        
     <string name="toast_error_opening_generated_media">Erro ao abrir mídia gerada.</string>
     <string name="toast_error_generated_media_not_found">Mídia gerada não encontrada.</string>
     <string name="content_desc_play_video_overlay">Reproduzir vídeo</string>
@@ -1870,9 +1953,9 @@
     
     
     
-    <!-- Strings para VideoInfoScreen e seus componentes internos -->
     
-    <!-- Strings para VideoProcessingWorker (Notificações e Erros) -->
+    
+    
     <string name="video_processing_notification_generating_video_for_scene">Gerando vídeo para cena %s…</string>
     <string name="notification_generating_video_attempt">Gerando vídeo cena %1$s (tentativa %2$d)</string>
     <string name="error_empty_prompt_for_video_gen_worker">O prompt para geração de vídeo está vazio no worker.</string>
@@ -1882,7 +1965,7 @@
     <string name="content_desc_video_thumbnail">Miniatura do vídeo</string>
 
 
-    <!-- Strings para VideoProjectContent e seus diálogos -->
+    
     <string name="scene_item_dialog_generate_video_title">Gerar Vídeo para Cena %s</string>
     <string name="scene_item_dialog_generate_video_warning">A imagem estática atual desta cena (se houver) será usada como base e o resultado será um vídeo. O prompt abaixo guiará a animação.</string>
     <string name="scene_item_label_video_generation_prompt">Prompt para Geração do Vídeo</string>
@@ -1894,29 +1977,29 @@
     <string name="error_clothes_change_figurine_must_be_static">O figurino selecionado para troca de roupa deve ser uma imagem estática.</string>
     <string name="error_no_static_images_for_figurine">Nenhuma imagem estática disponível na lista de referências para usar como figurino.</string>
 
-    <!-- Strings para VideoProjectViewModel -->
+    
     <string name="hvideo_project_vm_error_playing_snippet">Erro ao reproduzir trecho de áudio.</string>
     <string name="hvideo_project_vm_error_ffmpeg_clip_failed">Falha ao recortar trecho de áudio.</string>
 
 
     
-    <!-- String para o status de tentativa de geração de vídeo -->
+    
     <string name="scene_item_status_generating_video_attempt">Gerando vídeo (tentativa %1$d)</string>
 
-    <!-- String para a descrição de conteúdo do ícone de pausar vídeo no overlay -->
+    
     <string name="content_desc_pause_video_overlay">Pausar vídeo</string>
 
-    <!-- String para o erro de prompt vazio ao tentar gerar vídeo -->
+    
     <string name="error_empty_prompt_for_video_gen">O prompt para geração do vídeo não pode estar vazio.</string>
 
 
-    <!-- ... suas strings existentes ... -->
+    
 
-    <!-- Strings para o diálogo de busca de vídeo Pixabay -->
+    
     <string name="pixabay_video_dialog_title">Selecionar Vídeo Online</string>
     <string name="pixabay_video_dialog_no_results">Nenhum vídeo encontrado. Tente um prompt diferente.</string>
 
-    <!-- Descrições de conteúdo para acessibilidade -->
+    
     <string name="scene_item_action_search_video_desc">Buscar vídeo online para esta cena</string>
 
 
@@ -1924,14 +2007,14 @@
 
     <string name="context_info_cancel_import_button_desc">Cancelar importação de URL</string>
 
-    <!-- Para AudioViewModel.kt -->
+    
     <string name="url_import_failed_toast">Falha na importação da URL: %s</string>
     <string name="url_import_already_in_progress">Importação de URL já em andamento.</string>
     <string name="url_import_cancelled_toast">Importação de URL cancelada.</string>
 
     
 
-    <!-- Strings para a Fila de Processamento e Notificações -->
+    
     <string name="error_user_not_authenticated_for_queue">Usuário não autenticado para entrar na fila.</string>
     <string name="error_enqueue_failed">Falha ao entrar na fila (Código: %1$d).</string>
     <string name="error_enqueue_connection_failed">Falha de conexão ao entrar na fila: %1$s</string>
@@ -1946,60 +2029,60 @@
     <string name="status_generating">Gerando...</string>
     <string name="status_in_queue_position">Aguardando na fila (Posição: %1$d)</string>
 
-<!-- No seu arquivo res/values/strings.xml -->
 
-    <!-- ... suas outras strings ... -->
 
-    <!-- String MODIFICADA para o diálogo de confirmação -->
+    
+
+    
     <string name="dialog_messgggage_image_batch_cost">"Gerar %1$d imagens terá um custo de %2$d créditos. \n\nComo alternativa, você pode tentar preencher todas as cenas com vídeos de estoque gratuitos da internet, sem custo."</string>
 
-    <!-- String NOVA para o botão de busca de vídeos -->
+    
     <string name="dialog_actiogggn_search_free_videos">Buscar Vídeos Grátis</string>
 
     <string name="toast_batch_tyyvideo_search_started">Iniciando busca de vídeos para todas as cenas...</string>
 <string name="video_gen_vm_toast_generation_cancelled">Renderização de vídeo cancelada.</string>
-    <!-- ... Suas outras strings existentes ... -->
+    
 
-    <!-- ==================================================== -->
-    <!--          STRINGS PARA O DIÁLOGO DE AJUDA             -->
-    <!-- ==================================================== -->
+    
+    
+    
 
-    <!-- Textos Genéricos do Diálogo de Ajuda -->
+    
     <string name="content_desc_help_button">Ajuda</string>
     <string name="help_dialog_title">Ajuda Rápida</string>
-       <!-- String de status padrão para o diálogo de processamento -->
+       
     <string name="status_processing_default">Processando, por favor aguarde...</string>
     <string name="status_cancelled_by_user">Cancelando, por favor aguarde...</string>
 
-    <!-- Tela: Gerenciamento de Projetos -->
+    
     <string name="help_text_project_management">Esta é a sua central de projetos. Cada card representa um vídeo que você começou a criar.\n\nToque em um projeto para continuar de onde parou, ou use o botão de <b>\'+\'</b> para iniciar uma nova criação do zero.</string>
 
-    <!-- Tela: Preferências -->
+    
     <string name="help_text_settings">Configure suas preferências padrão aqui.\n\nAs opções definidas nesta tela, como as vozes preferidas e a proporção do vídeo, serão usadas como padrão para todos os <b>novos projetos</b> que você criar. Isso economiza tempo e mantém a consistência entre seus vídeos.</string>
 
-    <!-- ==================================================== -->
-    <!--      TEXTOS DE AJUDA PARA O FLUXO DE TRABALHO        -->
-    <!-- ==================================================== -->
+    
+    
+    
 
-    <!-- Aba: Contexto -->
+    
     <string name="help_text_workflow_context">Esta é a base do seu vídeo. O objetivo aqui é dar à IA a "grande ideia" do que você quer criar.\n\nVocê pode preencher os campos manualmente para descrever seu produto ou tema.\n\n<b>Dica:</b> Use o botão de <b>importação (nuvem)</b> e cole uma URL de um produto ou vídeo do YouTube para que a IA preencha tudo para você!</string>
 
-    <!-- Aba: Imagens -->
+    
     <string name="help_text_workflow_images">Nesta etapa, você fornece o material visual para a IA.\n\nAdicione imagens do produto, vídeos curtos de demonstração ou qualquer outra mídia que sirva de referência.\n\nA IA usará essas referências para criar as cenas do seu vídeo ou entender melhor o estilo que você deseja.</string>
 
-    <!-- Aba: Informações -->
+    
     <string name="help_text_workflow_information">Depois de adicionar as imagens, a IA as analisa para extrair informações importantes, como cores, texturas e objetos principais.\n\nEsses detalhes ajudarão a IA a gerar imagens mais consistentes e relevantes depois. Você pode revisar, editar ou adicionar detalhes manualmente para ter ainda mais controle.</string>
 
-    <!-- Aba: Narrativa -->
+    
     <string name="help_text_workflow_narrative">Esta é a alma falada do seu vídeo.\n\nUse o campo de texto para escrever a narração. Se estiver sem ideias, clique em <b>\'Criar Narrativa\'</b> (na barra inferior) para que a IA gere um roteiro completo para você, baseado no contexto que você definiu.\n\nApós ter o texto, clique em <b>\'Gerar Áudio\'</b> para criar a voz.</string>
 
-    <!-- Aba: Cenas -->
+    
     <string name="help_text_workflow_scenes">Aqui a mágica visual acontece.\n\nCom base no áudio gerado, clique em <b>\'Gerar Cenas\'</b> para que a IA divida a narrativa em clipes visuais.\n\nPara cada cena, você pode:\n  • Editar o prompt da imagem\n  • Gerar uma nova imagem com a IA (ícone de <b>varinha mágica</b>)\n  • Gerar um clipe de vídeo curto (ícone de <b>claquete</b>)</string>
 
-    <!-- Aba: Música -->
+    
     <string name="help_text_workflow_music">Dê o toque final ao seu vídeo com uma trilha sonora.\n\nUse o botão para importar um arquivo de música (.mp3, .wav) do seu dispositivo. A música selecionada será mixada em um volume mais baixo, por baixo da sua narração principal, para criar um clima profissional.</string>
 
-    <!-- Aba: Finalizar -->
+    
     <string name="help_text_workflow_finalize">A etapa final! Revise todas as suas cenas e o áudio.\n\nQuando estiver tudo pronto, clique em <b>\'Gravar Vídeo\'</b>. O EUIA irá juntar todas as cenas, o áudio, a música e as legendas em um único arquivo de vídeo. Este processo pode levar alguns minutos.\n\nQuando terminar, você poderá assistir e compartilhar.</string>
 
 

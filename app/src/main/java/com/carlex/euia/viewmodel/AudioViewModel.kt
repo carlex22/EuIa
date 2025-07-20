@@ -4,6 +4,7 @@ package com.carlex.euia.viewmodel
 import android.app.Application
 import android.content.Context
 import android.net.Uri
+import androidx.compose.ui.platform.LocalView
 import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.MimeTypeMap
@@ -42,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
@@ -76,7 +78,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     val voiceSpeaker1: StateFlow<String> = audioDataStoreManager.voiceSpeaker1
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), "")
 
-    val voiceSpeaker2: StateFlow<String> = audioDataStoreManager.voiceSpeaker2
+    val voiceSpeaker2: StateFlow<String?> = audioDataStoreManager.voiceSpeaker2
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), "")
 
     val voiceSpeaker3: StateFlow<String?> = audioDataStoreManager.voiceSpeaker3
@@ -174,13 +176,20 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 // Atualiza o estado de erro global para que o UI possa reagir
                 audioDataStoreManager.setGenerationError(errorMessage) 
-                Log.e(TAG, "Importação de URL falhou com mensagem: $errorMessage")
+                showToastOverlay("Importação de URL falhou: $errorMessage")
             }
         }
     }
-
+    
 
     init {
+       workManager.getWorkInfosByTagLiveData(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT)
+            .observeForever(urlImportWorkObserver)
+        workManager.getWorkInfosByTagLiveData(UrlImportWorker.TAG_URL_IMPORT_WORK_CONTENT_DETAILS)
+            .observeForever(urlImportWorkObserver)
+    }
+    
+    fun loadingFirst(){
         Log.d(TAG, "--- AudioViewModel Init ---")
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -188,64 +197,49 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
                 _sexo.value = initialSexo
                 _emocao.value = audioDataStoreManager.emocao.first()
                 _idade.value = audioDataStoreManager.idade.first()
-
                 val initialVoiceSpeaker1 = audioDataStoreManager.voiceSpeaker1.first()
                 val initialVozLegada = audioDataStoreManager.voz.first()
-                var effectiveInitialVoice1 = initialVoiceSpeaker1
-
-                if (effectiveInitialVoice1.isBlank()) {
-                    effectiveInitialVoice1 = initialVozLegada
-                    if (effectiveInitialVoice1.isBlank()) {
-                        val preferredVoiceFromVideoPrefs = if (initialSexo.equals("Male", ignoreCase = true)) {
+                var effectiveInitialVoice1 = if (initialVoiceSpeaker1.isBlank()) {
+                    if (initialSexo.equals("Male", ignoreCase = true)) {
                             videoPreferencesDataStoreManager.preferredMaleVoice.first()
                         } else {
                             videoPreferencesDataStoreManager.preferredFemaleVoice.first()
                         }
-                        if (preferredVoiceFromVideoPrefs.isNotBlank()) {
-                            effectiveInitialVoice1 = preferredVoiceFromVideoPrefs
-                        }
+                    } else {
+                            initialVoiceSpeaker1
                     }
-                }
-                fetchAvailableVoices(genderForApi = initialSexo, preSelectedVoiceNameCandidate = effectiveInitialVoice1)
-
+                setVoiceSpeaker1(effectiveInitialVoice1)
+                fetchAvailableVoices(genderForApi = initialSexo, preSelectedVoiceNameCandidate = effectiveInitialVoice1, voice  = "speaker1")
             } catch (e: Exception) {
-                Log.e(TAG, "Erro no init ao carregar preferências de áudio", e)
-                fetchAvailableVoices(genderForApi = _sexo.value)
+                showToastOverlay("Erro ao carregar preferências de áudio")
             }
         }
-        
-       workManager.getWorkInfosByTagLiveData(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT)
-            .observeForever(urlImportWorkObserver)
-        workManager.getWorkInfosByTagLiveData(UrlImportWorker.TAG_URL_IMPORT_WORK_CONTENT_DETAILS)
-            .observeForever(urlImportWorkObserver)
     }
 
     fun setVoiceSpeaker1(voiceName: String) {
         viewModelScope.launch {
             audioDataStoreManager.setVoiceSpeaker1(voiceName)
-            if (!isChatNarrative.value) {
-                audioDataStoreManager.setVoz(voiceName)
-            }
+            //audioDataStoreManager.setVoz(voiceName)
         }
     }
 
     fun setVoiceSpeaker2(voiceName: String) {
-        viewModelScope.launch { audioDataStoreManager.setVoiceSpeaker2(voiceName) }
+        viewModelScope.launch { 
+            audioDataStoreManager.setVoiceSpeaker2(voiceName) 
+            setIsChatNarrative(!voiceName.isNullOrBlank())
+        }
     }
 
     fun setVoiceSpeaker3(voiceName: String?) {
-        viewModelScope.launch { audioDataStoreManager.setVoiceSpeaker3(voiceName) }
+        viewModelScope.launch {
+            audioDataStoreManager.setVoiceSpeaker3(voiceName)
+            setIsChatNarrative(voiceName.isNullOrBlank())
+         }
     }
 
     fun setIsChatNarrative(isChat: Boolean) {
         viewModelScope.launch {
             audioDataStoreManager.setIsChatNarrative(isChat)
-            if (!isChat) {
-                audioDataStoreManager.setVoz(voiceSpeaker1.value)
-            } else {
-                // Se mudar para chat, pode ser útil limpar a voz única legada se ela não for mais relevante
-                // audioDataStoreManager.setVoz("") // Opcional
-            }
         }
     }
 
@@ -253,29 +247,21 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (uri == null) {
                 audioDataStoreManager.setNarrativeContextFilePath("")
-                showToast(appContext.getString(R.string.audio_info_toast_context_file_cleared))
+                showToastOverlay(appContext.getString(R.string.audio_info_toast_context_file_cleared))
             } else {
                 val uriString = uri.toString()
                 audioDataStoreManager.setNarrativeContextFilePath(uriString)
                 val fileName = getFileNameFromUri(appContext, uri)
-                showToast(appContext.getString(R.string.audio_info_toast_context_file_selected, fileName))
+                showToastOverlay(appContext.getString(R.string.audio_info_toast_context_file_selected, fileName))
             }
         }
     }
 
     fun setSexo(novoSexo: String) {
-        if (_sexo.value.equals(novoSexo, ignoreCase = true)) return
+       // if (_sexo.value.equals(novoSexo, ignoreCase = true)) return
         _sexo.value = novoSexo
         viewModelScope.launch(Dispatchers.IO) {
             audioDataStoreManager.setSexo(novoSexo)
-            val preferredVoiceForNewGender = if (novoSexo.equals("Male", ignoreCase = true)) {
-                videoPreferencesDataStoreManager.preferredMaleVoice.first()
-            } else {
-                videoPreferencesDataStoreManager.preferredFemaleVoice.first()
-            }
-            audioDataStoreManager.setVoz("")
-            audioDataStoreManager.setVoiceSpeaker1("")
-            fetchAvailableVoices(genderForApi = novoSexo, preSelectedVoiceNameCandidate = preferredVoiceForNewGender)
         }
     }
 
@@ -289,34 +275,57 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setEmocao(novaEmocao: String) {
-        if (_emocao.value == novaEmocao) return
+       // if (_emocao.value == novaEmocao) return
         _emocao.value = novaEmocao
         viewModelScope.launch { audioDataStoreManager.setEmocao(novaEmocao) }
     }
 
     fun setIdade(novaIdade: Int) {
-        if (_idade.value == novaIdade) return
+      //  if (_idade.value == novaIdade) return
         _idade.value = novaIdade
         viewModelScope.launch { audioDataStoreManager.setIdade(novaIdade) }
+    }
+    
+    fun clearVoice(voice: String? = null) {
+        when (voice) {
+            "speaker1" -> setVoiceSpeaker1("")
+            "speaker2" -> {
+                setVoiceSpeaker2("")
+                setIsChatNarrative(false)
+            }
+            "speaker3" -> {
+                setVoiceSpeaker3("") 
+                setIsChatNarrative(false)
+            }
+            else -> { setVoiceSpeaker1("") }
+        }
+        
     }
 
     fun setPrompt(novoPrompt: String) {
          viewModelScope.launch { audioDataStoreManager.setPrompt(novoPrompt) }
     }
+    
+    private val _snackbarMessage = MutableStateFlow<String?>(null) // Usando StateFlow
+    val snackbarMessage: StateFlow<String?> = _snackbarMessage
 
-    private fun showToast(message: String) {
+    fun setSnackbarMessage(message: String) {
+        _snackbarMessage.value = message
+    }
+    
+
+    public fun showToast(message: String) {
+        setSnackbarMessage(message)
+    }
+    
+    
+    public fun showToastOverlay(message: String) {
         viewModelScope.launch(Dispatchers.Main) {
             Toast.makeText(appContext, message, Toast.LENGTH_SHORT).show()
         }
     }
 
-    fun fetchAvailableVoices(genderForApi: String, localeParam: String = "pt-BR", preSelectedVoiceNameCandidate: String? = null) {
-        if (_isLoadingVoices.value) {
-            Log.d(TAG, "fetchAvailableVoices: Solicitado para $genderForApi, mas já carregando.")
-            return
-        }
-        _isLoadingVoices.value = true
-        _voiceLoadingError.value = null
+    fun fetchAvailableVoices(genderForApi: String, localeParam: String = "pt-BR", preSelectedVoiceNameCandidate: String? = null, voice: String) {
         viewModelScope.launch {
             val useGeminiVoices = true
 
@@ -324,7 +333,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
                 GeminiAudio.getAvailableVoices(gender = genderForApi, locale = localeParam)
             } else {
                 Audio.getAvailableVoices(idioma = localeParam, gender = genderForApi).let { stringListResult ->
-                    if (stringListResult.isSuccess) {
+                    if (stringListResult.isSuccess){
                         kotlin.Result.success(
                             stringListResult.getOrThrow().map { voiceName ->
                                 Pair(voiceName, appContext.getString(R.string.voice_style_default))
@@ -335,38 +344,31 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
+            
+            showToastOverlay(preSelectedVoiceNameCandidate!!)
 
             result.onSuccess { voicePairList ->
                 _availableVoices.value = voicePairList
-                var voiceToConsiderForSetting = preSelectedVoiceNameCandidate ?: voiceSpeaker1.value
-
+                var voiceToConsiderForSetting = preSelectedVoiceNameCandidate!!
+                
                 if (voiceToConsiderForSetting.isNotBlank() && voicePairList.any { it.first == voiceToConsiderForSetting }) {
-                    if (voiceSpeaker1.value != voiceToConsiderForSetting) {
-                        setVoiceSpeaker1(voiceToConsiderForSetting)
-                    }
-                } else if (voicePairList.isNotEmpty()) {
-                    if (voiceToConsiderForSetting.isBlank() || !voicePairList.any { it.first == voiceToConsiderForSetting}) {
-                        setVoiceSpeaker1(voicePairList.first().first)
-                    }
-                } else {
-                    if (voiceSpeaker1.value.isNotBlank()){
-                         setVoiceSpeaker1("")
+                    when (voice) {
+                        "speaker1" -> {
+                            setVoiceSpeaker1(voiceToConsiderForSetting)
+                        }
+                        "speaker2" -> {
+                            setVoiceSpeaker2(voiceToConsiderForSetting)
+                        }
+                        "speaker3" -> {
+                            setVoiceSpeaker3(voiceToConsiderForSetting)
+                        }
+                        else -> { setVoiceSpeaker1(voiceToConsiderForSetting) }
                     }
                 }
             }.onFailure {  exception ->
-                 _availableVoices.value = emptyList()
-                 if(voiceSpeaker1.value.isNotBlank()) {
-                    setVoiceSpeaker1("")
-                 }
-                 val errorMsgResource = when (exception) {
-                    is IOException -> R.string.error_network_voices
-                    else -> R.string.error_fetch_voices_failed
-                 }
-                 val errorMsg = appContext.getString(errorMsgResource, exception.localizedMessage ?: appContext.getString(R.string.unknown_error))
-                 _voiceLoadingError.value = errorMsg
-                 Log.e(TAG, "fetchAvailableVoices: Erro: $errorMsg", exception)
+                 //_voiceLoadingError.value = errorMsg
+                 showToastOverlay("Erro ao obter vozes")
             }
-            _isLoadingVoices.value = false
         }
     }
 
@@ -431,8 +433,8 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
             voiceToUseOverride = if (isChatNarrative.value) null else voiceSpeaker1.value,
             isChat = isChatNarrative.value,
             speaker1Voice = voiceSpeaker1.value,
-            speaker2Voice = voiceSpeaker2.value,
-            speaker3Voice = voiceSpeaker3.value
+            speaker2Voice = voiceSpeaker2.value!!,
+            speaker3Voice = voiceSpeaker3.value!!
         )
         pendingPromptToSaveAndGenerate = null
     }
@@ -491,9 +493,9 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
             isNewNarrative = isNew,
             voiceToUseOverride = if (isChatNarrative.value) null else (voiceOverride ?: voiceSpeaker1.value),
             isChat = isChatNarrative.value,
-            speaker1Voice = voiceSpeaker1.value,
-            speaker2Voice = voiceSpeaker2.value,
-            speaker3Voice = voiceSpeaker3.value
+            speaker1Voice = voiceSpeaker1.value ?: "",
+            speaker2Voice = voiceSpeaker2.value ?: "",
+            speaker3Voice = voiceSpeaker3.value ?: ""
         )
         clearPendingExternalTriggerParams()
     }
@@ -551,8 +553,13 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun updateAudioGenerationStatus(isProcessing: Boolean? = null, progressText: String? = null, error: String? = null) {
         isProcessing?.let { audioDataStoreManager.setIsAudioProcessing(it) }
         progressText?.let { audioDataStoreManager.setGenerationProgressText(it) }
-        if (error != null || (progressText != null && error == null)) { // Correção aqui para permitir limpar o erro
-            audioDataStoreManager.setGenerationError(error)
+        if (error != null) { 
+           audioDataStoreManager.setGenerationError(error)
+           setSnackbarMessage(error!!)
+        }
+        if (progressText != null) { 
+           audioDataStoreManager.setGenerationProgressText(progressText)
+           showToastOverlay(progressText!!)
         }
     }
 
@@ -560,19 +567,23 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     fun clearGenerationError() {
          viewModelScope.launch { audioDataStoreManager.setGenerationError(null) }
     }
+    
+    fun clearAudioGenerationStatus() {
+         viewModelScope.launch { audioDataStoreManager.setGenerationProgressText("") }
+    }
 
     private suspend fun deleteProjectSubDirectory(projectDirName: String, subDirToDeleteName: String) {
         if (projectDirName.isBlank() || subDirToDeleteName.isBlank()) {
-            Log.w(TAG, "Tentativa de deletar subdiretório com nome de projeto ou subdiretório em branco. Operação ignorada.")
+            Log.d(TAG, "Tentativa de deletar subdiretório com nome de projeto ou subdiretório em branco. Operação ignorada.")
             return
         }
         suspend fun tryDelete(dir: File) {
             if (dir.exists() && dir.isDirectory) {
                 val success = withContext(Dispatchers.IO) { dir.deleteRecursively() }
                 if (success) {
-                    Log.i(TAG, "Subdiretório '$subDirToDeleteName' em '${dir.parent}' excluído com sucesso.")
+                    Log.d(TAG, "Subdiretório '$subDirToDeleteName' em '${dir.parent}' excluído com sucesso.")
                 } else {
-                    Log.e(TAG, "Falha ao excluir subdiretório '$subDirToDeleteName' em '${dir.parent}'.")
+                    Log.d(TAG, "Falha ao excluir subdiretório '$subDirToDeleteName' em '${dir.parent}'.")
                 }
             } else {
                 Log.d(TAG, "Subdiretório '$subDirToDeleteName' não encontrado em '${dir.parent}' para exclusão.")
@@ -596,7 +607,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
 
      fun startUrlImport(url: String) {
         if (url.isBlank()) {
-            showToast(appContext.getString(R.string.error_url_not_provided_toast))
+            showToastOverlay(appContext.getString(R.string.error_url_not_provided_toast))
             return
         }
         if (_isUrlImporting.value) {
@@ -620,7 +631,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
 
     // Nova função para cancelar a importação da URL
     fun cancelUrlImport() {
-        Log.d(TAG, "Tentando cancelar importação de URL...")
+        showToastOverlay("Cancelando importação de URL...")
         workManager.cancelAllWorkByTag(UrlImportWorker.TAG_URL_IMPORT_WORK_PRE_CONTEXT)
         workManager.cancelAllWorkByTag(UrlImportWorker.TAG_URL_IMPORT_WORK_CONTENT_DETAILS)
         // O _isUrlImporting será resetado pelo urlImportWorkObserver quando os trabalhos forem cancelados/finalizados.
@@ -638,7 +649,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
                         name = it.getString(columnIndex)
                     }
                 }
-            } catch (e: Exception) { Log.w(TAG, "Erro ao obter nome da URI: $uri", e) }
+            } catch (e: Exception) { showToastOverlay("Erro ao obter arquivo: $uri") }
         }
         val resultName = name ?: uri.lastPathSegment ?: "file_${System.currentTimeMillis()}"
         return resultName.replace("[^a-zA-Z0-9._\\-]".toRegex(), "_")
@@ -648,7 +659,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
         return try {
             context.contentResolver.getType(uri)?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
                 ?: uri.lastPathSegment?.substringAfterLast('.', "").takeIf { it?.isNotEmpty() == true }
-        } catch (e: Exception) { Log.w(TAG, "Erro ao obter extensão da URI: $uri", e); null }
+        } catch (e: Exception) { showToastOverlay("Erro ao obter arwuivo URI: $uri"); null }
     }
 
     private fun getProjectSpecificMusicDirectory(context: Context, projectDirName: String): File {
@@ -757,7 +768,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
          return@withContext try {
              val file = File(path)
              if (file.exists() && file.isFile && file.canRead()) file.readText() else null
-         } catch (e: Exception) { Log.e(TAG, "Erro ao ler legenda: $path", e); null }
+         } catch (e: Exception) { showToastOverlay("Erro ao ler arquivo legenda: $path"); null }
      }
 
      suspend fun saveSubtitleContent(path: String, content: String): Boolean = withContext(Dispatchers.IO) {
@@ -767,7 +778,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
              file.parentFile?.mkdirs()
              file.writeText(content)
              true
-         } catch (e: Exception) { Log.e(TAG, "Erro ao salvar legenda: $path", e); false }
+         } catch (e: Exception) { showToastOverlay("Erro ao salvar legenda: $path"); false }
      }
 
     suspend fun readNarrativeContextFileContent(): String? = withContext(Dispatchers.IO) {
@@ -788,7 +799,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     
     // --- CÓDIGO NOVO: Função de cancelamento ---
     fun cancelAudioGeneration() {
-        Log.d(TAG, "Cancelamento da geração de áudio solicitado. Cancelando trabalho com a tag: ${WorkerTags.AUDIO_NARRATIVE}")
+        showToastOverlay("Cancelamento geração de áudio")
         workManager.cancelAllWorkByTag(WorkerTags.AUDIO_NARRATIVE)
         viewModelScope.launch {
             audioDataStoreManager.setIsAudioProcessing(false)

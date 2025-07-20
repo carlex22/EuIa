@@ -15,7 +15,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
-import android.app.NotificationManager // <<< CORREÇÃO AQUI
+import android.app.NotificationManager
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import androidx.core.app.NotificationCompat
@@ -57,8 +57,9 @@ class PixabayVideoSearchWorker(
 
     private val videoProjectDataStore = VideoProjectDataStoreManager(applicationContext)
     private val videoPreferencesDataStore = VideoPreferencesDataStoreManager(applicationContext)
-    private val audioDataStore = AudioDataStoreManager(applicationContext) // Adicionado
     private val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    // <<< NOVO: Instância do WorkManager >>>
+    private val workManager = WorkManager.getInstance(applicationContext)
 
     companion object {
         const val KEY_SCENE_ID = "key_scene_id_for_pixabay_search"
@@ -84,13 +85,11 @@ class PixabayVideoSearchWorker(
 
             updateNotification(applicationContext.getString(R.string.notification_content_pixabay_searching, searchQuery))
 
-            // <<< INÍCIO DA LÓGICA DE BUSCA PARALELA >>>
             val videosDeferred = async { PixabayApiClient.searchVideos(searchQuery) }
             val imagesDeferred = async { PixabayApiClient.searchImages(searchQuery) }
 
             val videoResult = videosDeferred.await()
             val imageResult = imagesDeferred.await()
-            // <<< FIM DA LÓGICA DE BUSCA PARALELA >>>
 
             val unifiedAssetList = mutableListOf<UnifiedAsset>()
             videoResult.getOrNull()?.forEach { video ->
@@ -138,7 +137,6 @@ class PixabayVideoSearchWorker(
 
             Log.i(TAG, "IA escolheu o asset: Tipo=${chosenAsset.type}, URL=${chosenAsset.downloadUrl}")
 
-            // Lógica de download e processamento movida para cá
             val projectDirName = videoPreferencesDataStore.videoProjectDir.first()
             updateNotification(applicationContext.getString(R.string.notification_content_pixabay_queuing_download))
 
@@ -152,7 +150,7 @@ class PixabayVideoSearchWorker(
             if (chosenAsset.type == "Video") {
                 finalThumbPath = generateThumbnail(downloadedFile.absolutePath, projectDirName, "thumb_from_${downloadedFile.nameWithoutExtension}")
             } else {
-                finalThumbPath = finalAssetPath // Para imagens, a thumb é a própria imagem.
+                finalThumbPath = finalAssetPath
             }
 
             if (finalThumbPath == null || !isActive) {
@@ -160,14 +158,13 @@ class PixabayVideoSearchWorker(
                 throw Exception("Falha na geração da thumbnail ou tarefa cancelada.")
             }
 
-            // Geração da pré-visualização (NOVA LÓGICA)
-            updateNotification(applicationContext.getString(R.string.notification_content_preview_generating, sceneId.take(4)))
-            val previewPath = generatePreviewForScene(sceneId, finalAssetPath)
-            if (previewPath == null) {
-                Log.w(TAG, "A geração da pré-visualização falhou para a cena $sceneId, mas o download foi bem-sucedido. Continuando sem prévia.")
-            }
-
-            updateSceneWithDownloadedAsset(sceneId, finalAssetPath, finalThumbPath, previewPath)
+            // <<< INÍCIO DA MUDANÇA PRINCIPAL >>>
+            // Atualiza o DataStore com os caminhos do vídeo e da thumbnail
+            updateSceneWithDownloadedAsset(sceneId, finalAssetPath, finalThumbPath)
+            
+            // Enfileira a geração da pré-visualização em vez de gerá-la aqui
+            enqueueScenePreviewWorker(sceneId)
+            // <<< FIM DA MUDANÇA PRINCIPAL >>>
 
             updateNotification(applicationContext.getString(R.string.notification_content_pixabay_success), isFinished = true)
             return@coroutineScope Result.success()
@@ -179,6 +176,22 @@ class PixabayVideoSearchWorker(
             updateSceneWithError(sceneId, errorMessage)
             return@coroutineScope Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMessage))
         }
+    }
+    
+    private fun enqueueScenePreviewWorker(sceneId: String) {
+        Log.d(TAG, "Enfileirando ScenePreviewWorker para a cena $sceneId após download da Pixabay.")
+        val workRequest = OneTimeWorkRequestBuilder<ScenePreviewWorker>()
+            .setInputData(workDataOf(ScenePreviewWorker.KEY_SCENE_ID to sceneId))
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .addTag("${WorkerTags.SCENE_PREVIEW_WORK}_$sceneId")
+            .addTag(WorkerTags.SCENE_PREVIEW_WORK)
+            .build()
+
+        workManager.enqueueUniqueWork(
+            "SCENE_PREVIEW_QUEUE",
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            workRequest
+        )
     }
 
     private suspend fun downloadFile(url: String, projectDirName: String, baseName: String, type: String): File? = withContext(Dispatchers.IO) {
@@ -212,11 +225,11 @@ class PixabayVideoSearchWorker(
     private suspend fun generateThumbnail(videoPath: String, projectDirName: String, thumbBaseName: String): String? = withContext(Dispatchers.IO) {
         var retriever: MediaMetadataRetriever? = null
         var thumbnailBitmap: Bitmap? = null
-        try {
+        return@withContext try {
             retriever = MediaMetadataRetriever()
             retriever.setDataSource(videoPath)
             thumbnailBitmap = retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-
+            
             if (thumbnailBitmap != null) {
                 BitmapUtils.saveBitmapToFile(
                     applicationContext, thumbnailBitmap, projectDirName,
@@ -235,108 +248,7 @@ class PixabayVideoSearchWorker(
         }
     }
 
-    // --- FUNÇÕES DE PRÉ-VISUALIZAÇÃO ADICIONADAS ---
-    private suspend fun generatePreviewForScene(sceneId: String, downloadedAssetPath: String): String? {
-        Log.i(TAG, "Iniciando geração de prévia para a cena $sceneId usando o asset: $downloadedAssetPath")
-        var audioSnippetPath: String? = null
-        try {
-            val scene = videoProjectDataStore.sceneLinkDataList.first().find { it.id == sceneId }
-                ?: throw IllegalStateException("Cena $sceneId não encontrada no DataStore para gerar prévia.")
-
-            val mainAudioPath = audioDataStore.audioPath.first()
-            if (mainAudioPath.isBlank()) throw IllegalStateException("Áudio principal não encontrado.")
-
-            audioSnippetPath = createAudioSnippetForPreview(mainAudioPath, scene)
-                ?: throw IOException("Falha ao criar trecho de áudio para prévia.")
-
-            val projectDirName = videoPreferencesDataStore.videoProjectDir.first()
-            val baseProjectDir = ProjectPersistenceManager.getProjectDirectory(applicationContext, projectDirName)
-            val previewsDir = File(baseProjectDir, "scene_previews")
-            previewsDir.mkdirs()
-
-            
-            val sceneWithAsset = scene.copy(
-                imagemGeradaPath = downloadedAssetPath,
-                tempoFim = if (videoPreferencesDataStore.enableSceneTransitions.first()) {
-                    scene.tempoFim!! + 0.5
-                } else {
-                    scene.tempoFim!!
-                }
-            )
- 
- 
-            val hash = generateScenePreviewHash(sceneWithAsset, videoPreferencesDataStore)
-            val previewFile = File(previewsDir, "scene_${scene.cena}_$hash.mp4")
-
-            if (previewFile.exists()) {
-                Log.d(TAG, "Prévia já existe para a cena $sceneId, pulando a geração.")
-                return previewFile.absolutePath
-            }
-            
-            
-            
-            
-
-            val success = VideoEditorComTransicoes.gerarPreviaDeCenaUnica(
-                context = applicationContext,
-                scene = sceneWithAsset,
-                audioSnippetPath = audioSnippetPath,
-                outputPreviewPath = previewFile.absolutePath,
-                videoPreferences = videoPreferencesDataStore,
-                logCallback = { Log.v("$TAG-FFmpegPreview", it) }
-            )
-
-            return if (success) previewFile.absolutePath else null
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao gerar prévia para a cena $sceneId", e)
-            return null
-        } finally {
-            audioSnippetPath?.let { File(it).delete() }
-        }
-    }
-
-    private suspend fun createAudioSnippetForPreview(mainAudioPath: String, scene: SceneLinkData): String? = withContext(Dispatchers.IO) {
-        val tempDir = File(applicationContext.cacheDir, "audio_snippets_pixabay_worker")
-        tempDir.mkdirs()
-        val outputFile = File.createTempFile("snippet_pix_${scene.id}_", ".mp3", tempDir)
-
-        val startTime = scene.tempoInicio ?: 0.0
-        val endTime = scene.tempoFim ?: 0.0
-        val duration = (endTime - startTime).coerceAtLeast(0.1)
-
-        val command = "-y -i \"$mainAudioPath\" -ss $startTime -t $duration -c:a libmp3lame -q:a 4 \"${outputFile.absolutePath}\""
-        val session = FFmpegKit.execute(command)
-
-        if (ReturnCode.isSuccess(session.returnCode)) {
-            outputFile.absolutePath
-        } else {
-            Log.e(TAG, "Falha ao cortar áudio para prévia (pixabay worker): ${session.allLogsAsString}")
-            null
-        }
-    }
-
-    private fun generateScenePreviewHash(scene: SceneLinkData, prefs: VideoPreferencesDataStoreManager): String {
-        val stringToHash = buildString {
-            append(scene.cena)
-            append(scene.imagemGeradaPath)
-            append(scene.tempoInicio)
-            append(scene.tempoFim)
-            append(runBlocking { prefs.enableZoomPan.first() })
-            append(runBlocking { prefs.videoHdMotion.first() })
-            append(runBlocking { prefs.videoLargura.first() })
-            append(runBlocking { prefs.videoAltura.first() })
-            append(runBlocking { prefs.videoFps.first() })
-        }
-
-        val bytes = stringToHash.toByteArray()
-        val md = MessageDigest.getInstance("MD5")
-        val digest = md.digest(bytes)
-
-        return digest.fold("") { str, it -> str + "%02x".format(it) }
-    }
-    // --- FIM DAS FUNÇÕES DE PRÉ-VISUALIZAÇÃO ---
-
-    private suspend fun updateSceneWithDownloadedAsset(sceneId: String, assetPath: String, thumbPath: String, previewPath: String?) {
+    private suspend fun updateSceneWithDownloadedAsset(sceneId: String, assetPath: String, thumbPath: String) {
         val currentList = videoProjectDataStore.sceneLinkDataList.first()
         val newList = currentList.map {
             if (it.id == sceneId) {
@@ -345,7 +257,7 @@ class PixabayVideoSearchWorker(
                     generationErrorMessage = null,
                     imagemGeradaPath = assetPath,
                     pathThumb = thumbPath,
-                    videoPreviewPath = previewPath ?: it.videoPreviewPath
+                    videoPreviewPath = null // Limpa a prévia antiga, pois será gerada novamente
                 )
             } else {
                 it

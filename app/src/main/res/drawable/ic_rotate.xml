@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/drawable/ic_rotate.xml -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+  <path
+      android:fillColor="@android:color/white"
+      android:pathData="M7.47,20.49 C9.49,21.5 11.89,21.93 14.12,21.65 C19.33,21.07 23.13,16.46 22.56,11.25 C22.1,7.16 19.39,3.78 15.63,2.83 L14.63,4.6 C17.5,5.36 19.53,7.99 19.92,11.01 C20.36,14.61 17.92,17.94 14.32,18.38 C12.43,18.59 10.66,18.23 9.17,17.38 L11,15.55 H4.45 V22.1 L7.47,20.49Z"/>
+</vector>

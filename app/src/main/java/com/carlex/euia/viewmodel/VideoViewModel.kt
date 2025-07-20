@@ -2,9 +2,9 @@
 package com.carlex.euia.viewmodel
 
 import android.app.Application
-// import android.content.Context // Não é mais necessário aqui se apenas Application for usado
-import android.net.Uri // Mantido para processImages
+import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.carlex.euia.data.ImagemReferencia
@@ -17,202 +17,187 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import androidx.work.*
-import com.carlex.euia.utils.WorkerTags // <<<< Adicionado para consistência
+import com.carlex.euia.utils.WorkerTags
 import com.carlex.euia.worker.ImageProcessingWorker
-// import java.util.UUID // Não usado diretamente aqui
-import java.io.File // Importado para exclusão de arquivo
+import java.io.File
 import androidx.lifecycle.Observer
+import kotlinx.coroutines.withContext
 
-// Define TAG for logging
 private const val TAG = "VideoViewModel"
-// <<<< Removida constante duplicada, usaremos a do WorkerTags
 
 class VideoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val dataStoreManager = VideoDataStoreManager(application)
     private val workManager = WorkManager.getInstance(application)
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    val context = application
 
     val imagensReferenciaList: StateFlow<List<ImagemReferencia>> =
         dataStoreManager.imagensReferenciaJson
-            .map { json ->
+            .map { jsonString ->
                 try {
-                    Log.d(TAG, "Deserializando imagensReferenciaJson. Comprimento JSON: ${json.length}")
-                    if (json.isNotBlank() && json != "[]") {
-                        val list = Json.decodeFromString(ListSerializer(ImagemReferencia.serializer()), json)
-                        Log.d(TAG, "Desserializadas ${list.size} imagens do DataStore.")
-                        list
+                    if (jsonString.isNotBlank() && jsonString != "[]") {
+                        Json.decodeFromString(ListSerializer(ImagemReferencia.serializer()), jsonString)
                     } else {
-                        Log.d(TAG, "imagensReferenciaJson está vazio ou é um array vazio. Retornando lista vazia.")
                         emptyList()
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Erro ao desserializar imagensReferenciaJson para List<ImagemReferencia>", e)
-                    viewModelScope.launch { _toastMessage.emit("Erro ao carregar lista de imagens.") }
+                    Log.e(TAG, "Erro ao desserializar imagensReferenciaJson: $e")
                     emptyList()
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
-    // <<<< Alterado para usar o Flow do DataStoreManager diretamente
     val isAnyImageProcessing: StateFlow<Boolean> = dataStoreManager.isProcessingImages
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
 
-    private val _toastMessage = MutableSharedFlow<String>()
+     val _toastMessage = MutableSharedFlow<String>()
     val toastMessage: SharedFlow<String> = _toastMessage.asSharedFlow()
 
     private val workInfoObserver = Observer<List<WorkInfo>> { workInfos ->
-        Log.d(TAG, "Lista WorkInfo atualizada para tag ${WorkerTags.IMAGE_PROCESSING_WORK}. Contagem: ${workInfos.size}")
-        val isProcessing = workInfos.any {
-            it.state == WorkInfo.State.ENQUEUED ||
-            it.state == WorkInfo.State.RUNNING ||
-            it.state == WorkInfo.State.BLOCKED
-        }
-        
-        // <<<< Lógica de atualização do DataStore movida para o worker ou para o ponto de enfileiramento/conclusão
-        if (!isProcessing) {
-            viewModelScope.launch {
-                dataStoreManager.setIsProcessingImages(false)
-            }
+        val isProcessing = workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+        if (!isProcessing && isAnyImageProcessing.value) {
+            viewModelScope.launch { dataStoreManager.setIsProcessingImages(false) }
         }
     }
+    
+    
+    private val _snackbarMessage = MutableStateFlow<String?>(null) // Usando StateFlow
+    val snackbarMessage: StateFlow<String?> = _snackbarMessage
+
+    fun setSnackbarMessage(message: String) {
+        _snackbarMessage.value = message
+    }
+    
+
+    public fun showToast(message: String) {
+        setSnackbarMessage(message)
+    }
+    
+    
+    public fun showToastOverlay(message: String) {
+        viewModelScope.launch(Dispatchers.Main) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+    
 
     init {
-        Log.d(TAG, "VideoViewModel init. Observando work tag ${WorkerTags.IMAGE_PROCESSING_WORK}.")
         workManager.getWorkInfosByTagLiveData(WorkerTags.IMAGE_PROCESSING_WORK)
             .observeForever(workInfoObserver)
     }
 
     @OptIn(ExperimentalSerializationApi::class)
     private suspend fun saveImagensReferenciaList(updatedList: List<ImagemReferencia>) {
-         Log.d(TAG, "Tentando salvar lista de imagens no DataStore. Tamanho da lista: ${updatedList.size}")
-         val imagesJson = try {
-            Json.encodeToString(ListSerializer(ImagemReferencia.serializer()), updatedList)
-         } catch (e: Exception) {
-             Log.e(TAG, "Erro ao codificar lista de imagens atualizada para JSON", e)
-             _toastMessage.emit("Erro ao salvar a lista de imagens.")
-             return
-         }
-         dataStoreManager.setImagensReferenciaJson(imagesJson)
-         Log.d(TAG, "Lista de imagens salva no DataStore. Tamanho: ${updatedList.size}")
+        val imagesJson = Json.encodeToString(ListSerializer(ImagemReferencia.serializer()), updatedList)
+        dataStoreManager.setImagensReferenciaJson(imagesJson)
     }
 
     fun processImages(uris: List<Uri>) {
-        Log.d(TAG, "processImages chamado com ${uris.size} URIs. Enfileirando tarefa com tag ${WorkerTags.IMAGE_PROCESSING_WORK}.")
-        if (isAnyImageProcessing.value) { // <<<< Usa o StateFlow
-             Log.d(TAG, "Processamento de imagem já em andamento. Ignorando nova requisição.")
-             viewModelScope.launch { _toastMessage.emit("Processamento de imagem já em andamento.") }
-             return
-        }
-        if (uris.isEmpty()) {
-            Log.w(TAG, "processImages chamado com lista de URIs vazia.")
-            viewModelScope.launch { _toastMessage.emit("Nenhuma imagem selecionada para processar.") }
+        if (isAnyImageProcessing.value) {
+            viewModelScope.launch { _toastMessage.emit("Processamento de imagem já em andamento.") }
             return
         }
-        
         viewModelScope.launch {
-            // <<<< Define a flag como true ANTES de enfileirar
-            dataStoreManager.setIsProcessingImages(true) 
-            
+            dataStoreManager.setIsProcessingImages(true)
             val uriStrings = uris.map { it.toString() }.toTypedArray()
-            val inputData = Data.Builder()
-                .putStringArray(ImageProcessingWorker.KEY_MEDIA_URIS, uriStrings)
+            val workRequest = OneTimeWorkRequestBuilder<ImageProcessingWorker>()
+                .setInputData(workDataOf(ImageProcessingWorker.KEY_MEDIA_URIS to uriStrings))
+                .addTag(WorkerTags.IMAGE_PROCESSING_WORK)
                 .build()
-            val imageProcessingRequest = OneTimeWorkRequestBuilder<ImageProcessingWorker>()
-                .setInputData(inputData)
-                .addTag(WorkerTags.IMAGE_PROCESSING_WORK) // <<<< Usa a constante
-                .build()
-            workManager.enqueue(imageProcessingRequest)
-            Log.d(TAG, "Tarefa do WorkManager enfileirada com ID: ${imageProcessingRequest.id} e tag: ${WorkerTags.IMAGE_PROCESSING_WORK}")
-            _toastMessage.emit("Processamento de imagens iniciado em segundo plano.")
+            workManager.enqueue(workRequest)
+            _toastMessage.emit("Processamento de imagens iniciado.")
         }
-        
-        
-        viewModelScope.launch {
-            dataStoreManager.setIsProcessingImages(false)
-        }
-        
+    }
+    
+    public fun mostrarToast(mensagem: String) {
+        Toast.makeText(context, mensagem, Toast.LENGTH_SHORT).show()
     }
 
-     @OptIn(ExperimentalSerializationApi::class)
     fun removeImage(pathToRemove: String) {
-         Log.d(TAG, "removeImage chamado para o caminho: $pathToRemove")
-         viewModelScope.launch(Dispatchers.IO) { // Usar Dispatchers.IO para operações de arquivo
-              val currentList = imagensReferenciaList.first() // Pega o valor atual do StateFlow
-              val updatedList = currentList.filterNot { it.path == pathToRemove }
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentList = imagensReferenciaList.first()
+            val updatedList = currentList.filterNot { it.path == pathToRemove }
+            saveImagensReferenciaList(updatedList)
 
-              Log.d(TAG, "Removendo item com caminho $pathToRemove. Novo tamanho da lista: ${updatedList.size}")
-              saveImagensReferenciaList(updatedList)
-
-              // --- INÍCIO: LÓGICA DE EXCLUSÃO DO ARQUIVO ---
-              if (pathToRemove.isNotBlank()) {
-                  try {
-                      val fileToDelete = File(pathToRemove)
-                      if (fileToDelete.exists()) {
-                          if (fileToDelete.delete()) {
-                              Log.i(TAG, "Arquivo de imagem excluído com sucesso: $pathToRemove")
-                              // Opcional: Emitir toast de sucesso na exclusão do arquivo
-                              // launch(Dispatchers.Main) { _toastMessage.emit("Arquivo de imagem excluído.") }
-                          } else {
-                              Log.w(TAG, "Falha ao excluir arquivo de imagem: $pathToRemove (delete() retornou false)")
-                              // Opcional: Emitir toast de falha na exclusão do arquivo
-                              // launch(Dispatchers.Main) { _toastMessage.emit("Falha ao excluir arquivo da imagem.") }
-                          }
-                      } else {
-                          Log.w(TAG, "Arquivo de imagem não encontrado para exclusão: $pathToRemove")
-                      }
-                  } catch (e: SecurityException) {
-                      Log.e(TAG, "Erro de segurança ao tentar excluir arquivo: $pathToRemove", e)
-                      // Opcional: Emitir toast sobre erro de permissão
-                      // launch(Dispatchers.Main) { _toastMessage.emit("Erro de permissão ao excluir arquivo.") }
-                  } catch (e: Exception) {
-                      Log.e(TAG, "Erro ao excluir arquivo de imagem: $pathToRemove", e)
-                      // Opcional: Emitir toast sobre erro genérico na exclusão
-                      // launch(Dispatchers.Main) { _toastMessage.emit("Erro ao excluir arquivo da imagem.") }
-                  }
-              } else {
-                  Log.w(TAG, "Caminho para remoção está vazio, nenhum arquivo para excluir.")
-              }
-              // --- FIM: LÓGICA DE EXCLUSÃO DO ARQUIVO ---
-
-              // Mostrar toast no Main thread sobre a remoção da lista (já existia)
-              launch(Dispatchers.Main) {
+            try {
+                val fileToDelete = File(pathToRemove)
+                
+                // Extrai nome sem extensão e diretório pai
+                val fileNameWithoutExt = fileToDelete.nameWithoutExtension
+                val parentDir = fileToDelete.parent
+                
+                // Novo nome com sufixo "thumb" e extensão .webp
+                val thumbFileName = "thumb_${fileNameWithoutExt}.webp"
+                
+                // Caminho completo do novo arquivo
+                val fileToDeleteY = File(parentDir, thumbFileName)
+                
+                
+                if (fileToDeleteY.exists()) fileToDeleteY.delete()
+                if (fileToDelete.exists()) fileToDelete.delete()
+            } catch (e: Exception) {
+                Log.e(TAG, "Falha ao remover arquivo de imagem: $pathToRemove", e)
+            }
+            
+            withContext(Dispatchers.Main) {
                 _toastMessage.emit("Imagem removida da lista.")
-              }
-         }
+            }
+        }
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     fun updateImageDescription(pathToUpdate: String, newDescription: String) {
-        Log.d(TAG, "updateImageDescription chamado para: $pathToUpdate com descrição: ${newDescription.take(50)}...")
         viewModelScope.launch {
             val currentList = imagensReferenciaList.first()
             val updatedList = currentList.map { item ->
-                if (item.path == pathToUpdate) {
-                    item.copy(descricao = newDescription)
-                } else {
-                    item
-                }
+                if (item.path == pathToUpdate) item.copy(descricao = newDescription) else item
             }
-            Log.d(TAG, "Atualizando descrição para $pathToUpdate. Salvando lista atualizada.")
             saveImagensReferenciaList(updatedList)
-            Log.d(TAG, "Descrição da imagem atualizada e lista salva para: $pathToUpdate.")
         }
     }
+    
+    // <<< INÍCIO DA FUNÇÃO QUE ESTAVA FALTANDO >>>
+    /**
+     * Atualiza um item da lista de imagens de referência com o novo caminho
+     * do arquivo editado e exclui o arquivo antigo.
+     * @param originalPath O caminho original da imagem que foi enviada para edição.
+     * @param newEditedPath O caminho da nova imagem salva pelo editor.
+     */
+    fun onImageEdited(originalPath: String, newEditedPath: String) {
+        viewModelScope.launch {
+            val currentList = imagensReferenciaList.first()
+            val updatedList = currentList.map {
+                if (it.path == originalPath) {
+                    // Atualiza o caminho para o novo arquivo editado
+                    it.copy(path = newEditedPath)
+                } else {
+                    it
+                }
+            }
+            // Salva a lista com o caminho atualizado
+            saveImagensReferenciaList(updatedList)
 
-    @OptIn(ExperimentalSerializationApi::class)
-    fun saveAllSettings() {
-         Log.d(TAG, "saveAllSettings chamado")
-         viewModelScope.launch {
-             Log.d(TAG, "Configurações como título e música agora são gerenciadas por seus respectivos ViewModels.")
-             Log.d(TAG, "Todas as configurações salvas no DataStore pelo ViewModel.")
-             viewModelScope.launch { _toastMessage.emit("Configurações salvas!") }
-         }
+            // Limpa o arquivo antigo para não ocupar espaço desnecessário
+            launch(Dispatchers.IO) {
+                try {
+                    val oldFile = File(originalPath)
+                    if (oldFile.exists()) {
+                        oldFile.delete()
+                        Log.i(TAG, "Arquivo original de imagem editada foi removido: $originalPath")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Falha ao remover arquivo de imagem original após edição", e)
+                }
+            }
+            _toastMessage.emit("Imagem editada com sucesso!")
+        }
     }
+    // <<< FIM DA FUNÇÃO QUE ESTAVA FALTANDO >>>
 
-     override fun onCleared() {
-         super.onCleared()
-         Log.d(TAG, "VideoViewModel onCleared(). Removendo observador do WorkManager.")
-         workManager.getWorkInfosByTagLiveData(WorkerTags.IMAGE_PROCESSING_WORK)
-             .removeObserver(workInfoObserver)
-     }
+    override fun onCleared() {
+        super.onCleared()
+        workManager.getWorkInfosByTagLiveData(WorkerTags.IMAGE_PROCESSING_WORK)
+            .removeObserver(workInfoObserver)
+    }
 }

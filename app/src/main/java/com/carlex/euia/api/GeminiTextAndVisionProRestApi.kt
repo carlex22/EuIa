@@ -3,6 +3,7 @@
 package com.carlex.euia.api
 
 import android.app.Application
+import com.carlex.euia.data.*
 import android.content.Context
 import android.graphics.Bitmap // Ainda pode ser necessário para outras funções, mas não mais para compressão direta
 import android.graphics.BitmapFactory
@@ -13,7 +14,7 @@ import com.carlex.euia.BuildConfig
 import com.carlex.euia.managers.GerenciadorDeChavesApi
 import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
 import com.carlex.euia.viewmodel.AuthViewModel
-import com.carlex.euia.viewmodel.TaskType
+import com.carlex.euia.viewmodel.*
 import com.google.firebase.firestore.FirebaseFirestore
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,7 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.Body
 import retrofit2.http.POST
+import com.carlex.euia.utils.*
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Streaming
@@ -177,12 +179,25 @@ object GeminiTextAndVisionProRestApi {
                         
                         // <<<<< ALTERAÇÃO AQUI: Passamos os caminhos ajustados diretamente >>>>>
                         val adjustedImagePaths = ajustarCaminhosDeImagem(imagens) 
-                        val textoArquivoLido = arquivoTexto?.let { lerArquivoTexto(it) }
+                        val videoPreferencesDataStoreManager = VideoPreferencesDataStoreManager(applicationContext)
+                        
+                        var textoArquivoLido = arquivoTexto?.let { lerArquivoTexto(it) }
 
+                        val ppp = videoPreferencesDataStoreManager.videoProjectDir.first()
+                        val projectDirToCheck = ProjectPersistenceManager.getProjectDirectory(applicationContext, ppp)
+                        val projectStateFile = File(projectDirToCheck, "euia_project_data.json")
+                        if (projectStateFile.exists()) {
+                            textoArquivoLido = arquivoTexto?.let { lerArquivoTexto(it) }
+                        }
+                        
+                        
+                        var perguntafim = "Voce esta ajundando uma equipe multitarefa rssposavel pela criacao dis videos de maiores sucesso na interner, em anexo voce recebeu um json fom todas as informacoes sobre este projeto, estude, depois conprender o projeto sua tarefa sera: ---> $pergunta"
+                        
+                        
                         val result = performRestCall(
                             modelName = model!!,
                             apiKey = chaveAtual,
-                            prompt = pergunta,
+                            prompt = perguntafim,
                             imagePaths = adjustedImagePaths, // <<<< AGORA PASSAMOS List<String>
                             additionalText = textoArquivoLido,
                             youtubeUrl = youtubeUrl
@@ -266,6 +281,7 @@ object GeminiTextAndVisionProRestApi {
                     "webp" -> "image/webp"
                     "jpg", "jpeg" -> "image/jpeg"
                     "png" -> "image/png"
+                    "mp4" -> "video/*"
                     // Adicione outros tipos se necessário ou use um fallback mais genérico
                     else -> {
                         Log.w(TAG, "Formato de imagem desconhecido para ${file.name}. Usando image/jpeg como fallback.")
@@ -367,9 +383,12 @@ object GeminiTextAndVisionProRestApi {
     */
 
     private fun lerArquivoTexto(caminhoArquivo: String): String? =
-        try { File(caminhoArquivo).readText() } 
-        catch (e: Exception) {
-            Log.e(TAG, "Erro ao ler arquivo de texto para API: $caminhoArquivo", e)
+        if (File(caminhoArquivo).exists()) {
+            try { File(caminhoArquivo).readText() } 
+            catch (e: Exception) {
+                Log.e(TAG, "Erro ao ler arquivo de texto para API: $caminhoArquivo", e)
+                null
+            }
             null
-        }
+        } else {null}
 }

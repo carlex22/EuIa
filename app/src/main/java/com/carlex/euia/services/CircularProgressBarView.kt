@@ -9,70 +9,78 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
+import kotlinx.coroutines.*
 
-/**
- * Uma View customizada para exibir um progresso circular ao redor de um texto percentual.
- */
 class CircularProgressBarView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    // Paint objects for drawing
+    // ... (as outras propriedades e o init permanecem os mesmos) ...
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND // Para pontas arredondadas do arco
+        strokeCap = Paint.Cap.ROUND
     }
     private val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND // Para pontas arredondadas do arco
+        strokeCap = Paint.Cap.ROUND
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD
     }
-
-    // Retângulo para definir os limites do arco de progresso
     private val rectF = RectF()
+    private var animationJob: Job? = null
+    private var startAngle = 270f
 
-    // Propriedades mutáveis para o progresso e aparência
     var progress: Int = 0
         set(value) {
-            field = value.coerceIn(0, 100) // Garante que o valor esteja entre 0 e 100
-            invalidate() // Solicita um redesenho da View
+            field = value.coerceIn(0, 100)
+            invalidate()
         }
         
-        
-     var msg: String= ""
+    var msg: String= ""
         set(value) {
-            field = value // Garante que o valor esteja entre 0 e 100
-            invalidate() // Solicita um redesenho da View
-        }   
+            field = value
+            invalidate()
+        }
 
-    // <<< INÍCIO DA CORREÇÃO: Renomeando as propriedades >>>
-    var pbProgressColor: Int = Color.WHITE // Renomeado de progressColor
+    // <<< INÍCIO DA MUDANÇA >>>
+    var isIndeterminate: Boolean = false
+        set(value) {
+            field = value
+            if (value) {
+                startIndeterminateAnimation()
+            } else {
+                stopIndeterminateAnimation()
+            }
+            invalidate() // Redesenha a view
+        }
+    // <<< FIM DA MUDANÇA >>>
+
+    var pbProgressColor: Int = Color.WHITE
         set(value) {
             field = value
             progressPaint.color = field
             invalidate()
         }
 
-    var pbBackgroundColor: Int = Color.DKGRAY // Renomeado de backgroundColor
+    var pbBackgroundColor: Int = Color.DKGRAY
         set(value) {
             field = value
             backgroundPaint.color = field
             invalidate()
         }
 
-    var pbTextColor: Int = Color.WHITE // Renomeado de textColor
+    var pbTextColor: Int = Color.WHITE
         set(value) {
             field = value
             textPaint.color = field
             invalidate()
         }
 
-    var pbStrokeWidth: Float = dpToPx(8).toFloat() // Renomeado de strokeWidth
+    var pbStrokeWidth: Float = dpToPx(8).toFloat()
         set(value) {
             field = value
             backgroundPaint.strokeWidth = field
@@ -80,57 +88,76 @@ class CircularProgressBarView @JvmOverloads constructor(
             invalidate()
         }
 
-    var pbTextSize: Float = dpToPx(10).toFloat() // Renomeado de textSize
+    var pbTextSize: Float = dpToPx(14).toFloat()
         set(value) {
             field = value
             textPaint.textSize = field
             invalidate()
         }
-    // <<< FIM DA CORREÇÃO >>>
 
     init {
-        // Configurações iniciais (usando os novos nomes das propriedades)
-        pbProgressColor = Color.parseColor("#FFA000") // Laranja/Âmbar
-        pbBackgroundColor = Color.parseColor("#80FFFFFF") // Branco semi-transparente para o fundo do arco
+        pbProgressColor = Color.parseColor("#99eeFFFF")
+        pbBackgroundColor = Color.parseColor("#80FFFFFF")
         pbTextColor = Color.WHITE
-        pbStrokeWidth = dpToPx(8).toFloat()
-        pbTextSize = dpToPx(14).toFloat() // Ajuste o tamanho do texto %
+        pbStrokeWidth = dpToPx(3).toFloat()
+        pbTextSize = dpToPx(14).toFloat()
     }
+    
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
-    /** Helper para converter DP para Pixels */
-    private fun dpToPx(dp: Int): Int {
-        return (dp * resources.displayMetrics.density).toInt()
-    }
-
-    /** Define o tamanho da View (um quadrado, para o círculo) */
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val desiredSize = dpToPx(60) // Tamanho fixo para o círculo (ex: 120dp)
+        val desiredSize = dpToPx(40)
         setMeasuredDimension(desiredSize, desiredSize)
     }
 
-    /** Chamado quando o tamanho da View muda, para recalcular o retângulo do arco */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        val halfStroke = pbStrokeWidth / 2f // <<< Usando o novo nome >>>
-        // Ajusta o retângulo para que o arco desenhe dentro dos limites da View
+        val halfStroke = pbStrokeWidth / 2f
         rectF.set(halfStroke, halfStroke, w - halfStroke, h - halfStroke)
     }
+    
+    // <<< INÍCIO DAS NOVAS FUNÇÕES DE ANIMAÇÃO >>>
+    private fun startIndeterminateAnimation() {
+        animationJob?.cancel() // Cancela qualquer animação anterior
+        animationJob = CoroutineScope(Dispatchers.Main).launch {
+            while (isActive) {
+                startAngle = (startAngle + 10) % 360 // Aumenta o ângulo inicial para girar
+                invalidate() // Pede para redesenhar a view a cada frame
+                delay(16) // Aproximadamente 60fps
+            }
+        }
+    }
 
-    /** Lógica de desenho principal */
+    private fun stopIndeterminateAnimation() {
+        animationJob?.cancel()
+        animationJob = null
+        startAngle = 270f // Reseta o ângulo para a posição inicial
+        invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        stopIndeterminateAnimation() // Garante que a coroutine pare quando a view é removida
+    }
+    // <<< FIM DAS NOVAS FUNÇÕES DE ANIMAÇÃO >>>
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
-        // Desenha o círculo de fundo (trilho do progresso)
         canvas.drawArc(rectF, 0f, 360f, false, backgroundPaint)
 
-        // Desenha o arco de progresso (começa do topo, 270 graus)
-        val angle = 360 * progress / 100f
-        canvas.drawArc(rectF, 270f, angle, false, progressPaint)
+        // <<< INÍCIO DA LÓGICA DE DESENHO ATUALIZADA >>>
+        if (isIndeterminate) {
+            // Desenha um arco de tamanho fixo (ex: 90 graus) que gira
+            canvas.drawArc(rectF, startAngle, 90f, false, progressPaint)
+        } else {
+            // Desenha o arco de progresso normal, como antes
+            val angle = 360 * progress / 100f
+            canvas.drawArc(rectF, 270f, angle, false, progressPaint)
+        }
+        // <<< FIM DA LÓGICA DE DESENHO ATUALIZADA >>>
 
-        // Desenha o texto percentual no centro
-        val text = "$msg"
+        val text = if (isIndeterminate || progress <= 0) msg else "$progress%"
         val xPos = width / 2f
-        // Calcula a posição Y para centralizar verticalmente o texto
         val yPos = (height / 2f) - ((textPaint.descent() + textPaint.ascent()) / 2f)
         canvas.drawText(text, xPos, yPos, textPaint)
     }

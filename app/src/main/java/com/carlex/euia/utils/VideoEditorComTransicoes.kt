@@ -146,6 +146,7 @@ object VideoEditorComTransicoes {
         val subDura= mutableListOf<Double>()
         val subDura1= mutableListOf<Double>()
         
+        
         for (i in finalMediaPaths.indices step BATCH_SIZE) {
             if (!isActive) throw CancellationException("Processo cancelado durante o processamento de lotes.")
             batchNumber = (i / BATCH_SIZE) + 1
@@ -279,11 +280,11 @@ object VideoEditorComTransicoes {
         }
 
         // Se houver apenas um clipe, simplesmente copie-o para o destino para economizar processamento.
-        if (clipPaths.size == 1) {
+      /*  if (clipPaths.size == 1) {
             logCallback("Apenas um clipe fornecido. Copiando para o destino...")
             val command = "-y -i \"${clipPaths.first()}\" -c copy \"$outputPath\""
             return Pair(outputPath, durations.sum())
-        }
+        }*/
         
         if (subDura.size >0)
             durations = subDura
@@ -340,7 +341,7 @@ object VideoEditorComTransicoes {
         // 3. Montar o comando final
         cmd.append("-filter_complex \"${filterComplex}\" ")
         cmd.append("-map \"$videoStreamFinal\" ")
-        cmd.append("-an ") // Ignora o áudio dos clipes de entrada
+       // cmd.append("-an ") // Ignora o áudio dos clipes de entrada
         cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
         cmd.append("-movflags +faststart ")
         cmd.append("\"$outputPath\"")
@@ -443,7 +444,7 @@ object VideoEditorComTransicoes {
             
             if (isVideoInput) {
                 val duracaoLeituraVideo = duracaoDestaCena - tempoDeTransicaoEfetivo
-                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" -an ", duracaoLeituraVideo, path))
+                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" ", duracaoLeituraVideo, path))
             } else {
                 val duracaoInputImagem = duracaoDestaCena -  tempoDeTransicaoEfetivo
                 cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoInputImagem, path))
@@ -623,7 +624,7 @@ object VideoEditorComTransicoes {
             val isVideoInput = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
             val duracaoLeitura = duracaoCenas[index] + if (index < mediaPaths.lastIndex) tempoDeTransicaoEfetivo else 0.0
             if (isVideoInput) {
-                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" -an ", duracaoLeitura, path))
+                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" ", duracaoLeitura, path))
             } else {
                 cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoLeitura, path))
             }

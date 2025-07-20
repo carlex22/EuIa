@@ -341,16 +341,27 @@ class ImageProcessingWorker(
             }
             Log.d(TAG_WORKER, "Thumbnail extracted. Size: ${thumbnailBitmap.width}x${thumbnailBitmap.height}")
 
-            // --- LÓGICA DE SALVAR AS DUAS VERSÕES DA THUMBNAIL ---
-            val originalFileNameBase = getFileNameFromUri(appContext, uri)?.substringBeforeLast('.') ?: "video_${UUID.randomUUID().toString().substring(0,8)}"
+
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
 
+
+            // --- LÓGICA DE SALVAR AS DUAS VERSÕES DA THUMBNAIL ---
+            val originalFileNameBase = getFileNameFromUri(appContext, uri)!!
+            
+            val origName = "${originalFileNameBase?.substringBeforeLast(".")}_${timestamp}"
+            
+            val directory = getAppSpecificMediaDir(appContext, projectDirName, "ref_images") 
+            if (!directory.exists()) {
+                directory.mkdirs()
+            }
+
+            
             // 1. Salvar a imagem limpa (img_...)
             savedCleanThumbnailPath = saveSpecificVideoThumbnailToStorage(
                 context = appContext,
                 bitmapToSave = thumbnailBitmap, // Bitmap original extraído
                 projectDirName = projectDirName,
-                baseNameForFile = "img_${originalFileNameBase}_${timestamp}", // Prefixo img_
+                baseNameForFile = "thumb_${origName}", // Prefixo img_
                 larguraPreferida = larguraPreferida,
                 alturaPreferida = alturaPreferida,
                 drawPlayIcon = false // Não desenha o ícone
@@ -363,31 +374,7 @@ class ImageProcessingWorker(
             Log.d(TAG_WORKER, "Clean video thumbnail (img_...) saved: $savedCleanThumbnailPath")
 
 
-            // 2. Salvar a imagem com ícone (thumb_...)
-            // Reutiliza o thumbnailBitmap original para adicionar o ícone
-           /*savedIconThumbnailPath = saveSpecificVideoThumbnailToStorage(
-                context = appContext,
-                bitmapToSave = thumbnailBitmap, // Bitmap original extraído
-                projectDirName = projectDirName,
-                baseNameForFile = "thumb_${originalFileNameBase}_${timestamp}", // Prefixo thumb_
-                larguraPreferida = larguraPreferida,
-                alturaPreferida = alturaPreferida,
-                drawPlayIcon = true // Desenha o ícone
-            )
-            // --- FIM DA LÓGICA DE SALVAR AS DUAS VERSÕES ---
-
-
-            if (!coroutineContext.isActive || savedIconThumbnailPath == null) {
-                Log.w(TAG_WORKER, "Video processing cancelled or icon thumbnail save failed for URI: $uri.")
-                // Limpar savedCleanThumbnailPath se a segunda falhar? Depende da sua lógica de consistência.
-                File(savedCleanThumbnailPath!!).delete() // Exemplo: limpar se a com ícone falhar
-                return@withContext null
-            }
-
-            // Salvar o arquivo de vídeo original, usando o nome base da thumbnail com ícone para manter relação
-            val iconThumbnailFile = File(savedIconThumbnailPath)*/
-            savedVideoPath = saveVideoFileToStorage(appContext, uri, projectDirName, originalFileNameBase)
-
+            savedVideoPath = saveVideoFileToStorage(appContext, uri, projectDirName, origName!!)
 
             if (!coroutineContext.isActive || savedVideoPath == null) {
                 Log.w(TAG_WORKER, "Video processing cancelled or video file save failed for URI: $uri.")
@@ -416,9 +403,9 @@ class ImageProcessingWorker(
 
            // Log.d(TAG_WORKER, "analisarImagemComGemini returned for video thumbnail. Desc: ${analysisResult.description.take(50)}, People: ${analysisResult.containsPeople}")
             val imagem = ImagemReferencia(
-                path = savedCleanThumbnailPath, // O 'path' principal é a thumb com ícone
+                path = savedVideoPath, // O 'path' principal é a thumb com ícone
                 descricao = "",
-                pathVideo = savedVideoPath,
+                pathThumb = savedCleanThumbnailPath,
                 videoDurationSeconds = videoDurationSeconds,
                 containsPeople = true
             )
@@ -580,20 +567,21 @@ class ImageProcessingWorker(
                 finalSaveDirName = "ref_images_default"
             }
 
-            val directory = File(baseDir, finalSaveDirName)
-            if (!directory.exists() && !directory.mkdirs()) {
-                Log.e(TAG_WORKER, "saveImageToStorage: Failed to create directory: ${directory.absolutePath}")
-                if (!finalBitmapToSave.isRecycled) finalBitmapToSave.recycle()
-                return null
+            
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
+
+            // --- LÓGICA DE SALVAR AS DUAS VERSÕES DA THUMBNAIL ---
+            val originalFileNameBase = getFileNameFromUri(appContext, uri)!!
+            
+            val origName = "${originalFileNameBase?.substringBeforeLast(".")}_${timestamp}"
+            
+            val directory = getAppSpecificMediaDir(appContext, projectDirName, "ref_images") 
+            if (!directory.exists()) {
+                directory.mkdirs()
             }
 
 
-            val originalName = getFileNameFromUri(context, uri) ?: "image_${UUID.randomUUID()}"
-            val sanitizedName = originalName.replace(Regex("[/\\\\:*?\"<>|\\s]"), "_")
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
-            val fileExtension = "webp"
-            val fileName = "${sanitizedName}_${timestamp}.$fileExtension"
-            val file = File(directory, fileName)
+            val file = File(directory, "$origName.webp")
 
             try {
                 FileOutputStream(file).use { outputStream ->
@@ -642,7 +630,7 @@ class ImageProcessingWorker(
      * @param context Contexto da aplicação.
      * @param bitmapToSave O bitmap original a ser processado e salvo.
      * @param projectDirName Nome do diretório do projeto.
-     * @param baseNameForFile Nome base para o arquivo (sem timestamp, uuid ou extensão).
+     * @param baseNameForFile Nome base para o arquivo (sem {}stamp, uuid ou extensão).
      * @param larguraPreferida Largura preferida para redimensionamento.
      * @param alturaPreferida Altura preferida para redimensionamento.
      * @param drawPlayIcon Boolean indicando se o ícone de play deve ser desenhado.
@@ -744,14 +732,16 @@ class ImageProcessingWorker(
                 Log.e(TAG_WORKER, "saveVideoFileToStorage: Failed to open input stream for video URI: $videoUri")
                 return null
             }
+            
+            
+            
 
             val directory = getAppSpecificMediaDir(context, projectDirName, "ref_images") // Salva na mesma pasta de referência
-            if (!directory.exists() && !directory.mkdirs()) {
-                 Log.e(TAG_WORKER, "saveVideoFileToStorage: Diretório pai inválido ou não pôde ser criado: ${directory.absolutePath}")
-                 return null
+            if (!directory.exists()) {
+                directory.mkdirs()
             }
 
-            val originalExtension = getFileExtensionFromUri(context, videoUri) ?: "mp4"
+            val originalExtension = "mp4"
             // O nome do arquivo de vídeo usará o baseName (que já inclui o prefixo thumb_ e o timestamp)
             val videoFileName = "$baseNameForVideo.$originalExtension"
             val videoFile = File(directory, videoFileName)

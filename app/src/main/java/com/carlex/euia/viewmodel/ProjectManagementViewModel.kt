@@ -8,11 +8,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.navigation.NavGraph.Companion.findStartDestination // Import correto
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import com.carlex.euia.AppDestinations
 import com.carlex.euia.data.*
-import com.carlex.euia.sanitizeDirName // Import da função top-level (assumindo que está no pacote com.carlex.euia)
+import com.carlex.euia.sanitizeDirName
 import com.carlex.euia.ui.selectedWorkflowTabIndex
 import com.carlex.euia.utils.ProjectPersistenceManager
 import kotlinx.coroutines.flow.*
@@ -52,23 +52,39 @@ class ProjectManagementViewModel(
         }
     }
 
+    // <<< FUNÇÃO MODIFICADA E CORRIGIDA >>>
     fun openProject(projectName: String, navController: NavHostController) {
         viewModelScope.launch {
             _isLoading.value = true
-            val success = ProjectPersistenceManager.loadProjectState(context, projectName)
-            _isLoading.value = false
-            if (success) {
-                _operationEvent.emit("Projeto '$projectName' carregado.")
-                selectedWorkflowTabIndex = 0 
-                navController.navigate(AppDestinations.VIDEO_CREATION_WORKFLOW) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        // inclusive = true // Descomente se quiser remover a tela de gerenciamento do backstack
-                    }
-                    launchSingleTop = true
-                }
+            
+            // 1. Verifica qual projeto está ativo atualmente no DataStore
+            val currentActiveProject = videoPreferencesDataStoreManager.videoProjectDir.first()
+
+            // 2. Compara com o projeto que o usuário clicou
+            if (currentActiveProject == projectName) {
+                Log.i("ProjectVM", "Projeto '$projectName' já está ativo. Apenas navegando para o workflow.")
+              //  _operationEvent.emit("Projeto '$projectName' já está carregado.")
+                // Apenas navega, sem recarregar nada
             } else {
-                _operationEvent.emit("Falha ao carregar projeto '$projectName'.")
+                Log.i("ProjectVM", "Abrindo um novo projeto: '$projectName'. Projeto antigo: '$currentActiveProject'.")
+                val success = ProjectPersistenceManager.loadProjectState(context, projectName)
+                if (success) {
+                 //   _operationEvent.emit("Projeto '$projectName' carregado.")
+                } else {
+                    _isLoading.value = false
+                  //  _operationEvent.emit("Falha ao carregar projeto '$projectName'.")
+                    return@launch // Interrompe a execução se o carregamento falhar
+                }
             }
+
+            // 3. A navegação acontece em ambos os casos (seja para o projeto já aberto ou para o recém-carregado)
+            selectedWorkflowTabIndex = 0 
+            navController.navigate(AppDestinations.VIDEO_CREATION_WORKFLOW) {
+                popUpTo(navController.graph.findStartDestination().id)
+                launchSingleTop = true
+            }
+            
+            _isLoading.value = false
         }
     }
 
@@ -91,7 +107,7 @@ class ProjectManagementViewModel(
             viewModelScope.launch { _operationEvent.emit("O nome do projeto não pode estar vazio.") }
             return
         }
-        val sanitizedProjectName = sanitizeDirName(rawProjectName) // Usando a função importada
+        val sanitizedProjectName = sanitizeDirName(rawProjectName)
         if (sanitizedProjectName.isBlank() || sanitizedProjectName == "default_project_if_blank") {
             viewModelScope.launch { _operationEvent.emit("Nome de projeto inválido ou reservado.") }
             return
@@ -111,10 +127,8 @@ class ProjectManagementViewModel(
                 Log.i("ProjectVM", "Limpando DataStores para novo projeto: $sanitizedProjectName")
                 audioDataStoreManager.clearAllAudioPreferences()
                 refImageDataStoreManager.clearAllRefImagePreferences()
-                videoProjectDataStoreManager.clearProjectState() // Limpa dados de cenas e outros estados do projeto
+                videoProjectDataStoreManager.clearProjectState()
                 videoDataStoreManager.clearAllSettings()
-                
-                // CORREÇÃO: Limpando o estado do VideoGeneratorDataStoreManager
                 videoGeneratorDataStoreManager.clearGeneratorState()
                 
                 videoPreferencesDataStoreManager.setVideoProjectDir(sanitizedProjectName)
@@ -127,9 +141,7 @@ class ProjectManagementViewModel(
                 _operationEvent.emit("Novo projeto '$sanitizedProjectName' iniciado.")
                 selectedWorkflowTabIndex = 0
                 navController.navigate(AppDestinations.VIDEO_CREATION_WORKFLOW) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        // inclusive = true 
-                    }
+                    popUpTo(navController.graph.findStartDestination().id)
                     launchSingleTop = true
                 }
             } catch (e: Exception) {
@@ -140,25 +152,6 @@ class ProjectManagementViewModel(
         }
     }
 }
-
-/*// Factory (mantido como antes, mas certifique-se que SceneDataStoreManager foi removido se não for usado)
-class ProjectManagementViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ProjectManagementViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ProjectManagementViewModel(
-                application,
-                VideoPreferencesDataStoreManager(application.applicationContext),
-                AudioDataStoreManager(application.applicationContext),
-                RefImageDataStoreManager(application.applicationContext),
-                VideoDataStoreManager(application.applicationContext),
-                VideoGeneratorDataStoreManager(application.applicationContext),
-                VideoProjectDataStoreManager(application.applicationContext)
-            ) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class for ProjectManagementViewModelFactory")
-    }
-}*/
 
 class ProjectManagementViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

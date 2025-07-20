@@ -16,6 +16,13 @@
     <string name="music_current_selection">Seleção Atual: %1$s</string>
 
 
+
+<string name="scene_item_dialog_no_assets_available">Nenhum vídeo ou imagem encontrado no projeto.</string>
+    <string name="scene_item_dialog_title_select_asset">Selecionar Asset para a Cena</string>
+    <string name="content_desc_video_indicator">Indicador de Vídeo</string>
+    <string name="scene_item_toast_asset_replaced">Asset da cena substituído.</string>
+
+
     <!-- Strings para a tela de seleção de música -->
     <string name="music_import_new_file">Importar Novo Arquivo de Música</string>
     <string name="music_no_files_found">Nenhuma música na sua biblioteca compartilhada.\nImporte um arquivo para começar.</string>

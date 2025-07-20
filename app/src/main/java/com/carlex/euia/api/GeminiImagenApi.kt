@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap // Mantido para outras funções, mas não para compressão direta
 import android.net.Uri
+import com.carlex.euia.data.*
 import android.os.Build
 import android.util.Base64
 import android.util.Log
@@ -14,8 +15,8 @@ import com.carlex.euia.data.VideoDataStoreManager
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.carlex.euia.managers.GerenciadorDeChavesApi
 import com.carlex.euia.managers.NenhumaChaveApiDisponivelException
-import com.carlex.euia.utils.BitmapUtils // Mantido para ajustarCaminhoThumbnail
-import com.carlex.euia.viewmodel.AuthViewModel
+import com.carlex.euia.utils.* // Mantido para ajustarCaminhoThumbnail
+import com.carlex.euia.viewmodel.*
 import com.carlex.euia.viewmodel.TaskType
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -91,8 +92,8 @@ data class ImgApiError(
 
 // --- Interface de Serviço Retrofit --- (INALTEIRADA)
 internal interface ImgGeminiApiService {
-      @POST("v1beta/models/gemini-2.0-flash-exp:generateContent")
-      //@POST("v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent")
+     @POST("v1beta/models/gemini-2.0-flash-exp:generateContent")
+     // @POST("v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent")
         suspend fun generateContent(
         @Query("key") apiKey: String,
         @Body requestBody: ImgGeminiRequest
@@ -127,8 +128,8 @@ object GeminiImageApi{
     private const val DEFAULT_WIDTH = 720 
     private const val DEFAULT_HEIGHT = 1280
 
-    private val API_TEMPERATURE: Float? = 0.6f
-    private val API_TOP_K: Int? = 64
+    private val API_TEMPERATURE: Float? = 2.0f
+    private val API_TOP_K: Int? = 15
     private val API_TOP_P: Float? = 0.9f
     private val API_CANDIDATE_COUNT: Int? = 1
 
@@ -137,6 +138,8 @@ object GeminiImageApi{
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val gerenciadorDeChaves: GerenciadorDeChavesApi by lazy { GerenciadorDeChavesApi(firestore) }
 
+    
+        
     suspend fun gerarImagem(
         cena: String,
         prompt: String,
@@ -145,7 +148,9 @@ object GeminiImageApi{
     ): Result<String> {
         val authViewModel = AuthViewModel(context.applicationContext as Application)
         var creditsDeducted = false
-
+        
+        var perguntafim = "Voce esta ajundando uma equipe multitarefa resposavel pela criacao dos videos de maiores sucesso na interner, em anexo voce recebeu um json com todas as informacoes sobre este projeto, estude, depois comprender o projeto sua tarefa sera fazer: ---> $prompt"
+       
         return withContext(Dispatchers.IO) {
             try {
                 // ETAPA 1: VERIFICAR E DEDUZIR CRÉDITOS ANTES DE QUALQUER COISA
@@ -244,13 +249,13 @@ object GeminiImageApi{
 
         var imagensEfetivas = imagensParaUpload
         if (imagensParaUpload.isEmpty()) {
-           val videoDataStoreManager = VideoDataStoreManager(context)
+          /* val videoDataStoreManager = VideoDataStoreManager(context)
             val globalImagesJson = videoDataStoreManager.imagensReferenciaJson.first()
             if (globalImagesJson.isNotBlank() && globalImagesJson != "[]") {
                 try {
                     imagensEfetivas = kotlinJsonParser.decodeFromString(ListSerializer(ImagemReferencia.serializer()), globalImagesJson)
                 } catch (e: Exception) { Log.e(TAG, "Falha ao desserializar lista global.", e) }
-            }
+            }*/
         }
         
         val partsList = mutableListOf<ImgPart>()
@@ -292,53 +297,23 @@ object GeminiImageApi{
     }
 
     private suspend fun buildComplexPrompt(basePrompt: String, imagens: List<ImagemReferencia>, context: Context): String {
-        val promptLimpo = basePrompt.replace("\"", "")
-        val allImageContextText = StringBuilder()
-        if (imagens.isNotEmpty()) {
-            allImageContextText.appendLine("\n\n--- Contexto Adicional das Imagens de Referência ---")
-            imagens.forEachIndexed { index, imagemRef ->
-                val pathToLoadDesc = ajustarCaminhoThumbnail(imagemRef.path)
-                allImageContextText.appendLine("Imagem de Referência ${index + 1} (Arquivo base: ${File(pathToLoadDesc).name}):")
-                if (imagemRef.descricao.isNotBlank() && imagemRef.descricao != "(Pessoas: Não)" && imagemRef.descricao != "(Pessoas: Sim)") {
-                    allImageContextText.appendLine("  Descrição: \"${imagemRef.descricao}\"")
-                } else {
-                    allImageContextText.appendLine("  Descrição: null")
-                }
-                if (imagemRef.pathVideo != null) {
-                    allImageContextText.appendLine("  Tipo Original: Vídeo (usando frame como referência visual)")
-                    imagemRef.videoDurationSeconds?.let { duration ->
-                        allImageContextText.appendLine("  Duração do Vídeo Original: $duration segundos")
-                    }
-                } else {
-                    allImageContextText.appendLine("  Tipo Original: Imagem Estática")
-                }
-                allImageContextText.appendLine("  Contém Pessoas (na referência original): ${if (imagemRef.containsPeople) "Sim" else "Não"}")
-                allImageContextText.appendLine()
-            }
-            allImageContextText.appendLine("--- Fim do Contexto Adicional ---")
-        }
-
-        val finalPromptComContextoDasImagens = if (allImageContextText.toString().lines().count { it.isNotBlank() } > 2) {
-            promptLimpo //+ allImageContextText.toString() // Comentei esta linha em outra revisão, mantenha o que você preferir para o prompt
-        } else {
-            promptLimpo
-        }
-
+        var promptLimpo = basePrompt.replace("\"", "")
+        var allImageContextText = StringBuilder()
+        
+        allImageContextText.append(promptLimpo!!)
+        
         val refImageDataStoreManager = RefImageDataStoreManager(context)
         val refObjetoDetalhesJson = refImageDataStoreManager.refObjetoDetalhesJson.first()
-        
-        return buildString {
-            append(finalPromptComContextoDasImagens)
-            if (refObjetoDetalhesJson.isNotBlank() && refObjetoDetalhesJson != "{}") {
-                appendLine()
-                appendLine()
-               // append("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES DE OBJETOS OU ROUPAS DA IMAGEN ---") // Comentei esta linha em outra revisão, mantenha o que você preferir
-                appendLine()
-                append(refObjetoDetalhesJson)
-                appendLine()
-               // append("--- FIM DAS INFORMAÇÕES ADICIONAIS ---") // Comentei esta linha em outra revisão, mantenha o que você preferir
-            }
-        }
+
+
+        allImageContextText.appendLine()
+                .appendLine()
+                .append("--- INFORMAÇÕES MUITO IMPORTANTE DETALHES Sobre o projeto ---") // Comentei esta linha em outra revisão, mantenha o que você preferir
+                .appendLine()
+                .append(refObjetoDetalhesJson)
+                .appendLine()
+                .append("--- FIM DAS INFORMAÇÕES ADICIONAIS ---") // Comentei esta linha em outra revisão, mantenha o que você preferir
+        return allImageContextText.toString()
     }
     
     private fun ajustarCaminhoThumbnail(path: String): String {

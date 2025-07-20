@@ -58,6 +58,17 @@
         </provider>
 
 
+        <activity
+            android:name=".ui.ImageEditorActivity"
+            android:label="@string/title_activity_image_editor"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" /> 
+            
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

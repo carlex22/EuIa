@@ -24,28 +24,26 @@ import com.carlex.euia.utils.NotificationUtils
 import com.carlex.euia.utils.CircularProgressBarView
 import kotlin.math.abs
 
+
+
 class OverlayService : Service() {
 
     private val TAG = "OverlayService"
     private lateinit var windowManager: WindowManager
     private lateinit var overlayView: View
-    private lateinit var messageTextView: TextView
-    private lateinit var circularProgressBar: CircularProgressBarView // <<< NOVO: Sua View customizada >>>
+    private lateinit var circularProgressBar: CircularProgressBarView
     private lateinit var trashView: View
     
     var isOverlayShowing = false
     private var isTrash = false
     
-    // Variáveis para arrastar o overlay
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var initialX = 0
     private var initialY = 0
     private var isDragging = false
 
-    // **Variáveis de conteúdo do overlay**
     private var overlayMessageText = ""
-    private var overlayMessagePercent = "" // Manter para consistência de dados, mas não será exibido por um TextView separado
     private var overlayProgressBar = 0
 
     companion object {
@@ -67,26 +65,21 @@ class OverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val message = intent?.getStringExtra(EXTRA_OVERLAY_MESSAGE) ?: ""
-        val progressValue = intent?.getStringExtra(EXTRA_OVERLAY_PROGRESSO)?.toIntOrNull() ?: 0
-        val porcentagem = "$message" // Isso será usado internamente pela CircularProgressBarView
+        val progressValue = intent?.getStringExtra(EXTRA_OVERLAY_PROGRESSO)?.toIntOrNull() ?: -1 // Mudei para -1 para clareza
 
         when (intent?.action) {
             ACTION_SHOW_OVERLAY -> {
                 if (!isOverlayShowing && !isTrash) {
                     overlayMessageText = message
-                    if (progressValue>0)
                     overlayProgressBar = progressValue
-                    overlayMessagePercent = message // Atribuído, mas não usado por TextView separado
-                    Log.d(TAG, "ACTION_SHOW_OVERLAY overlayProgressBar: $overlayProgressBar")
+                    Log.d(TAG, "ACTION_SHOW_OVERLAY progressValue: $overlayProgressBar")
                     showOverlay()
                     isOverlayShowing = true
-                    isTrash = false
                     startForeground(OVERLAY_NOTIFICATION_ID, createForegroundNotification(message))
                 }
             }
             ACTION_HIDE_OVERLAY -> {
                 if (isOverlayShowing) {
-                    Log.d(TAG, "ACTION_HIDE_OVERLAY")
                     hideOverlay()
                     isOverlayShowing = false
                     isTrash = false
@@ -98,19 +91,56 @@ class OverlayService : Service() {
                 if (!isTrash && isOverlayShowing) {
                     Log.d(TAG, "ACTION_UPDATE_MESSAGE: $message, Progress: $progressValue")
                     overlayMessageText = message
-                    if (progressValue>-1)
                     overlayProgressBar = progressValue
-                    overlayMessagePercent = message
                     updateOverlayContent()
-                } else {
-                    Log.d(TAG, "ACTION_UPDATE_MESSAGE ignored: isTrash=$isTrash or !isOverlayShowing=$isOverlayShowing")
                 }
             }
         }
 
         return START_STICKY
     }
+    
+    // ... (onDestroy, onBind, createTrashView, etc. permanecem os mesmos) ...
 
+    private fun createOverlayView() {
+        // ... (o layout LinearLayout permanece o mesmo) ...
+        val mainLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+
+        circularProgressBar = CircularProgressBarView(this).apply {
+            // A configuração inicial agora acontece dentro do updateOverlayContent
+        }
+        mainLayout.addView(circularProgressBar)
+
+        overlayView = mainLayout.apply {
+            background = createRoundedBackgroundForOverlay()
+            setPadding(dpToPx(3), dpToPx(3), dpToPx(3), dpToPx(3))
+        }
+        overlayView.setOnTouchListener { _, event -> handleTouchEvent(event) }
+    }
+
+    // ... (outras funções auxiliares como dpToPx, showOverlay, hideOverlay, handleTouchEvent, etc. permanecem as mesmas) ...
+    // Vou omiti-las aqui para focar na mudança principal.
+
+    private fun updateOverlayContent() {
+        // <<< INÍCIO DA MUDANÇA PRINCIPAL >>>
+        circularProgressBar.msg = overlayMessageText
+
+        if (overlayProgressBar <= 0) {
+            // Se o progresso for 0 ou negativo, ativa o modo indeterminado
+            circularProgressBar.isIndeterminate = true
+            // Quando indeterminado, o valor do progresso não importa
+        } else {
+            // Se o progresso for positivo, desativa o modo indeterminado e define o valor
+            circularProgressBar.isIndeterminate = false
+            circularProgressBar.progress = overlayProgressBar
+        }
+        // <<< FIM DA MUDANÇA PRINCIPAL >>>
+    }
+    
+    // O resto do OverlayService.kt continua igual...
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "OverlayService onDestroy")
@@ -129,86 +159,26 @@ class OverlayService : Service() {
         stopForeground(true)
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
-
-    private fun createOverlayView() {
-        val mainLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            // Sem padding aqui, o padding será aplicado ao contêiner principal do overlayView
-            gravity = Gravity.CENTER_HORIZONTAL // Centraliza os elementos filhos horizontalmente
-            // O background será aplicado ao 'overlayView' no final
-        }
-
-        // TextView para a mensagem principal (ex: "Importando dados da URL...")
-        /*messageTextView = TextView(this).apply {
-            text = overlayMessageText
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER_HORIZONTAL
-            // Adiciona um fundo para a mensagem principal para legibilidade
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dpToPx(8).toFloat()
-                setColor(Color.parseColor("#80000000")) // Preto semi-transparente
-            }
-            setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
-            visibility = View.GONE // Inicialmente escondido, aparece se houver mensagem
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = dpToPx(8) // Espaço abaixo da mensagem
-            }
-        }
-        mainLayout.addView(messageTextView)*/
-
-        // Sua nova CircularProgressBarView
-        circularProgressBar = CircularProgressBarView(this).apply {
-            progress = overlayProgressBar // Define o progresso inicial
-            // As cores e largura da linha são configuradas no init da própria classe CircularProgressBarView
-            // ou podem ser definidas aqui se você quiser sobrescrever os defaults dela.
-        }
-        mainLayout.addView(circularProgressBar)
-
-        // O percentTextView e o ProgressBar linear foram removidos.
-
-        overlayView = mainLayout.apply {
-            // Fundo principal para todo o overlay, para dar a forma redonda/oval e ser arrastável
-            background = createRoundedBackgroundForOverlay() // Corrigido para usar a nova função
-            setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8)) // Padding em torno dos elementos internos
-        }
-
-        overlayView.setOnTouchListener { _, event ->
-            handleTouchEvent(event)
-        }
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createTrashView() {
         val trashImageView = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56)) // Aumentado ligeiramente para facilitar o toque
+            layoutParams = LinearLayout.LayoutParams(dpToPx(47), dpToPx(47))
             setImageResource(android.R.drawable.ic_menu_delete)
-            background = createCircularBackground() // Reutiliza a função existente para o círculo da lixeira
-            setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8))
-            alpha = 0.7f
+            background = createCircularBackground()
+            setPadding(dpToPx(3), dpToPx(3), dpToPx(3), dpToPx(3))
+            alpha = 0.5f
         }
         trashView = trashImageView
     }
 
-    // <<< NOVA FUNÇÃO: Fundo para o overlay principal (oval/redondo) >>>
     private fun createRoundedBackgroundForOverlay(): GradientDrawable {
         return GradientDrawable().apply {
-            shape = GradientDrawable.OVAL // Pode ser OVAL ou RECTANGLE com cornerRadius bem grande para um "pill" shape
-            setColor(Color.parseColor("#CC000000")) // Fundo preto semi-transparente para o container
-            // Removendo cornerRadius para OVAL shape, pois ele não é usado para OVAL.
-            // Para ter um pill shape, seria shape = GradientDrawable.RECTANGLE e um cornerRadius alto.
-            // Para redondo perfeito, apenas OVAL é suficiente, sem cornerRadius.
+            shape = GradientDrawable.OVAL
+            setColor(Color.parseColor("#CC000000"))
         }
     }
 
-    // A função original `createRoundedBackground` que fazia o canto arredondado foi removida.
-    // A `createCircularBackground` ainda é usada para a lixeira.
     private fun createCircularBackground(): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -216,14 +186,12 @@ class OverlayService : Service() {
         }
     }
 
-    private fun dpToPx(dp: Int): Int {
-        return (dp * resources.displayMetrics.density).toInt()
-    }
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
     private fun showOverlay() {
         val layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT, // Adapta-se ao conteúdo
-            WindowManager.LayoutParams.WRAP_CONTENT, // Adapta-se ao conteúdo
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -234,12 +202,12 @@ class OverlayService : Service() {
         )
         
         layoutParams.gravity = Gravity.TOP or Gravity.START
-        layoutParams.x = 100 // Posição inicial X
-        layoutParams.y = 100 // Posição inicial Y
+        layoutParams.x = 100
+        layoutParams.y = 100
         
         try {
             windowManager.addView(overlayView, layoutParams)
-            updateOverlayContent() // Garante que o conteúdo inicial seja atualizado
+            updateOverlayContent()
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao adicionar overlay", e)
         }
@@ -256,13 +224,6 @@ class OverlayService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao remover overlay", e)
         }
-    }
-
-    private fun updateOverlayContent() {
-        // CORREÇÃO AQUI: Substituir `appContext` por `this`
-        circularProgressBar.msg = overlayMessageText
-        if (overlayProgressBar>0)
-        circularProgressBar.progress = overlayProgressBar // Atualiza o progresso na nova View
     }
 
     private fun handleTouchEvent(event: MotionEvent): Boolean {
@@ -364,13 +325,11 @@ class OverlayService : Service() {
         val location = IntArray(2)
         trashView.getLocationOnScreen(location)
         val trashX = location[0]
-        // CORREÇÃO: Acesso correto ao y da localização na tela
-        val trashY = location[1] // Era location[0], o que seria o X novamente
+        val trashY = location[1]
         val trashWidth = trashView.width
         val trashHeight = trashView.height
         
-        return x >= trashX && x <= trashX + trashWidth && 
-               y >= trashY && y <= trashY + trashHeight
+        return x >= trashX && x <= trashX + trashWidth && y >= trashY && y <= trashY + trashHeight
     }
 
     private fun createForegroundNotification(message: String): Notification {

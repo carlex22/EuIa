@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,8 @@ private val FemaleIconColorAudio = Color(0xFF800080) // Roxo
 private val MaleIconColorAudio = Color(0xFF00008B)   // Azul Escuro
 private val NeutralIconColorAudio = Color.Gray      // Cinza para Neutro
 private const val TAG_AUDIO_CONTENT = "AudioInfoContent"
+
+var msg = "x"
 
 private fun playAudioLocal(
     context: Context,
@@ -101,14 +104,14 @@ fun AudioInfoContent(
     audioViewModel: AudioViewModel = viewModel()
 ) {
     val currentSexo by audioViewModel.sexo.collectAsState()
-    val voiceSpeaker1 by audioViewModel.voiceSpeaker1.collectAsState()
-    val voiceSpeaker2 by audioViewModel.voiceSpeaker2.collectAsState()
-    val voiceSpeaker3 by audioViewModel.voiceSpeaker3.collectAsState()
-    val isChatNarrative by audioViewModel.isChatNarrative.collectAsState() // Ainda é coletado para lógica condicional
-    val narrativeContextFilePath by audioViewModel.narrativeContextFilePath.collectAsState()
+    val voiceSpeaker1 by audioViewModel.voiceSpeaker1.collectAsState() 
+    val voiceSpeaker2 by audioViewModel.voiceSpeaker2.collectAsState() 
+    val voiceSpeaker3 by audioViewModel.voiceSpeaker3.collectAsState() 
+    val isChatNarrative by audioViewModel.isChatNarrative.collectAsState() 
+    val narrativeContextFilePath by audioViewModel.narrativeContextFilePath.collectAsState() 
 
-    val currentAudioPath by audioViewModel.audioPath.collectAsState()
-    val currentLegendaPath by audioViewModel.legendaPath.collectAsState()
+    val currentAudioPath by audioViewModel.audioPath.collectAsState() 
+    val currentLegendaPath by audioViewModel.legendaPath.collectAsState() 
     val availableVoicePairs by audioViewModel.availableVoices.collectAsState()
     val isLoadingVoices by audioViewModel.isLoadingVoices.collectAsState()
     val voiceLoadingError by audioViewModel.voiceLoadingError.collectAsState()
@@ -138,13 +141,24 @@ fun AudioInfoContent(
             audioViewModel.setNarrativeContextFile(uri)
         }
     )
-
-    LaunchedEffect(generationError) {
-        generationError?.let { errorMsg ->
-            snackbarHostState.showSnackbar(errorMsg, duration = SnackbarDuration.Long)
-            audioViewModel.clearGenerationError()
-        }
+    
+    
+    LaunchedEffect(Unit) {
+        audioViewModel.loadingFirst()
     }
+    
+    val snackbarMessage by audioViewModel.snackbarMessage.collectAsState() // Observa a mensagem
+    
+    
+    LaunchedEffect(snackbarMessage) {
+         if (!snackbarMessage.isNullOrBlank()){
+            scope.launch { 
+                snackbarHostState.showSnackbar(snackbarMessage!!, duration = SnackbarDuration.Short)
+                audioViewModel.setSnackbarMessage("")
+            }
+         }
+    }
+    
 
     val musicPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -165,119 +179,15 @@ fun AudioInfoContent(
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // --- REMOÇÃO DO SWITCH DE MODO DE NARRATIVA DAQUI ---
-            // A Row que continha o Text "Modo de Narrativa" e o Switch foi removida.
-            // A lógica de `isChatNarrative` ainda é usada abaixo para UI condicional.
-
-            Text(
-                text = if (isChatNarrative) stringResource(R.string.audio_info_section_speaker_voices) else stringResource(R.string.audio_info_section_narrator_voice),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp) // Ajustado padding top
-            )
-
-            SpeakerVoiceSelector(
-                speakerLabel = if(isChatNarrative) stringResource(R.string.audio_info_label_speaker_1) else stringResource(R.string.audio_info_label_narrator),
-                selectedVoiceName = voiceSpeaker1,
-                availableVoices = availableVoicePairs,
-                isLoadingVoices = isLoadingVoices,
-                onSelectVoiceClicked = { showVoiceSelectionDialogFor = "speaker1" },
-                isUiEnabled = isUiEnabled
-            )
-
-            if (isChatNarrative) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SpeakerVoiceSelector(
-                    speakerLabel = stringResource(R.string.audio_info_label_speaker_2),
-                    selectedVoiceName = voiceSpeaker2,
-                    availableVoices = availableVoicePairs,
-                    isLoadingVoices = isLoadingVoices,
-                    onSelectVoiceClicked = {
-                        if (voiceSpeaker1.isNotBlank()) showVoiceSelectionDialogFor = "speaker2"
-                        else scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.audio_info_select_speaker1_first)) }
-                    },
-                    isUiEnabled = isUiEnabled && voiceSpeaker1.isNotBlank(),
-                    canBeRemoved = false
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                /* if (voiceSpeaker2.isNotBlank()) {
-                    SpeakerVoiceSelector(
-                        speakerLabel = stringResource(R.string.audio_info_label_speaker_3_optional),
-                        selectedVoiceName = voiceSpeaker3 ?: "",
-                        availableVoices = availableVoicePairs,
-                        isLoadingVoices = isLoadingVoices,
-                        onSelectVoiceClicked = { showVoiceSelectionDialogFor = "speaker3" },
-                        onRemoveVoiceClicked = { audioViewModel.setVoiceSpeaker3(null) },
-                        isUiEnabled = isUiEnabled,
-                        canBeRemoved = !voiceSpeaker3.isNullOrBlank()
-                    )
-                } else if (voiceSpeaker1.isNotBlank()){
-                     OutlinedButton(
-                        onClick = {
-                             showVoiceSelectionDialogFor = "speaker3"
-                        },
-                        enabled = isUiEnabled && voiceSpeaker2.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth().padding(top=8.dp)
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.audio_info_action_add_speaker_3))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.audio_info_action_add_speaker_3))
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))*/
-                Divider()
-
-                Text(
-                    text = stringResource(R.string.audio_info_label_narrative_context_file),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = { contextFilePickerLauncher.launch("*/*") },
-                        enabled = isUiEnabled,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Filled.AttachFile, contentDescription = stringResource(R.string.audio_info_action_select_context_file_desc))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.audio_info_action_select_context_file))
-                    }
-                    if (narrativeContextFilePath.isNotBlank()) {
-                        IconButton(
-                            onClick = { audioViewModel.setNarrativeContextFile(null) },
-                            enabled = isUiEnabled
-                        ) {
-                            Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.audio_info_action_clear_context_file_desc))
-                        }
-                    } else {
-                         Spacer(Modifier.size(48.dp))
-                    }
-                }
-                if (narrativeContextFilePath.isNotBlank()) {
-                    val fileName = getDisplayFileNameLocal(context, narrativeContextFilePath, audioViewModel)
-                    Text(
-                        text = stringResource(R.string.audio_info_label_selected_file, fileName),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp, start = 8.dp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Divider()
-            }
-
             Spacer(modifier = Modifier.height(16.dp))
+
 
             if (isAudioProcessing || generationError != null) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 200.dp)
+                        .weight(1f) 
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                         .background(
                             color = when {
                                 isAudioProcessing -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -316,7 +226,7 @@ fun AudioInfoContent(
                     )
                     if (generationError != null) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(stringResource(R.string.status_tap_to_clear_error), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.status_tap_to_clear_error), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             } else {
@@ -324,8 +234,9 @@ fun AudioInfoContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f) 
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                   
                 ) {
                     OutlinedTextField(
                         value = localPrompt,
@@ -335,9 +246,11 @@ fun AudioInfoContent(
                         enabled = isUiEnabled,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(16.dp)
-                            .padding(bottom = 60.dp)
+                            .padding(bottom = 60.dp),
+                        
                     )
+
+                    
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -346,10 +259,25 @@ fun AudioInfoContent(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val canGenerate = isUiEnabled && localPrompt.isNotBlank() &&
-                                          ( (isChatNarrative && voiceSpeaker1.isNotBlank() && voiceSpeaker2.isNotBlank()) ||
-                                            (!isChatNarrative && voiceSpeaker1.isNotBlank()) )
+                        val canGenerate = 
+                            isUiEnabled && localPrompt.isNullOrBlank() &&
+                            ((isChatNarrative && voiceSpeaker1.isNullOrBlank() && voiceSpeaker2.isNullOrBlank()) ||
+                             (!isChatNarrative && voiceSpeaker1.isNullOrBlank()))
 
+                        
+                        
+                        IconButton(onClick = { showVoiceSelectionDialogFor = "speaker1" }, enabled = isUiEnabled, modifier = Modifier.size(48.dp)) {
+                            Icon(painter = painterResource(id = R.drawable.ic_fala), stringResource(R.string.audio_info_action_configure_voice_speaker1), tint = if (isUiEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                        
+                        IconButton(
+                            onClick = { showVoiceSelectionDialogFor = "speaker2" }, 
+                            enabled = isUiEnabled, modifier = Modifier.size(48.dp)) 
+                        {
+                            Icon(painter = painterResource(id = R.drawable.ic_fala), stringResource(R.drawable.ic_notification_icon), 
+                            tint = if (isChatNarrative) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                        
                         IconButton(
                             onClick = {
                                 if (promptHasChanged) {
@@ -362,7 +290,7 @@ fun AudioInfoContent(
                                     )
                                 } else {
                                     val errorMsg = if(localPrompt.isBlank()) context.getString(R.string.audio_error_prompt_empty)
-                                                   else if (isChatNarrative && (voiceSpeaker1.isBlank() || voiceSpeaker2.isBlank())) context.getString(R.string.audio_error_chat_voices_missing)
+                                                   else if (isChatNarrative && (voiceSpeaker1.isBlank() || voiceSpeaker2!!.isBlank())) context.getString(R.string.audio_error_chat_voices_missing)
                                                    else context.getString(R.string.audio_error_narrator_voice_missing)
                                     scope.launch { snackbarHostState.showSnackbar(message = errorMsg, duration = SnackbarDuration.Short) }
                                 }
@@ -376,11 +304,9 @@ fun AudioInfoContent(
                                 tint = if (isUiEnabled && (promptHasChanged || canGenerate)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                             )
                         }
-                        IconButton(onClick = { showVoiceSelectionDialogFor = "speaker1" }, enabled = isUiEnabled, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Filled.SettingsVoice, stringResource(R.string.audio_info_action_configure_voice_speaker1), tint = if (isUiEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                        }
+                        
                         IconButton(onClick = { playAudioLocal(context, currentAudioPath, snackbarHostState, scope) }, enabled = isUiEnabled && currentAudioPath.isNotEmpty(), modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Filled.PlayArrow, stringResource(R.string.audio_info_action_play_generated_audio), tint = if (isUiEnabled && currentAudioPath.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Icon(Icons.Filled.PlayArrow, stringResource(R.string.audio_info_action_play_generated_audio), tint = if (isChatNarrative && currentAudioPath.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         }
                         IconButton(
                             onClick = {
@@ -401,32 +327,10 @@ fun AudioInfoContent(
                     }
                 }
             }
+
             Spacer(modifier = Modifier.height(16.dp))
-           /* Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.audio_info_label_background_music), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 8.dp))
-                Text(
-                    text = getDisplayFileNameLocal(context, currentMusicPath, audioViewModel) ?: stringResource(R.string.audio_info_label_no_music),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (currentMusicPath.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                )
-                IconButton(onClick = { playAudioLocal(context, currentMusicPath, snackbarHostState, scope) }, enabled = isUiEnabled && currentMusicPath.isNotEmpty(), modifier = Modifier.padding(horizontal = 2.dp)) {
-                    Icon(Icons.Filled.PlayArrow, stringResource(R.string.audio_info_action_play_selected_music), tint = if (isUiEnabled && currentMusicPath.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
-                }
-                IconButton(onClick = { audioViewModel.setVideoMusicPath("") }, enabled = isUiEnabled && currentMusicPath.isNotEmpty(), modifier = Modifier.padding(horizontal = 2.dp)) {
-                    Icon(Icons.Filled.Clear, stringResource(R.string.audio_info_action_clear_music))
-                }
-                IconButton(onClick = { musicPickerLauncher.launch("audio/*") }, enabled = isUiEnabled, modifier = Modifier.padding(horizontal = 2.dp)) {
-                    Icon(Icons.Filled.MusicNote, stringResource(R.string.audio_info_action_select_music))
-                }
-            }*/
-            Spacer(modifier = Modifier.height(16.dp))*/
         }
+
 
         SnackbarHost(
             hostState = snackbarHostState,
@@ -464,18 +368,22 @@ fun AudioInfoContent(
                 }
             }
         }
+        
+        
 
         showVoiceSelectionDialogFor?.let { speakerKey ->
+            
             val currentSpeakerVoice = when(speakerKey) {
-                "speaker1" -> voiceSpeaker1
-                "speaker2" -> voiceSpeaker2
-                "speaker3" -> voiceSpeaker3 ?: ""
-                else -> voiceSpeaker1
+                "speaker1" -> voiceSpeaker1 
+                "speaker2" -> voiceSpeaker2 
+                "speaker3" -> voiceSpeaker3 
+                else -> "xx"
             }
+            
             VoiceSelectionDialogInternal(
                 onDismissRequest = { showVoiceSelectionDialogFor = null },
                 currentSexo = currentSexo,
-                currentVozName = currentSpeakerVoice,
+                currentVozName = currentSpeakerVoice!!,
                 availableVoicePairs = availableVoicePairs,
                 isLoadingVoices = isLoadingVoices,
                 voiceLoadingError = voiceLoadingError,
@@ -490,6 +398,13 @@ fun AudioInfoContent(
                         "speaker3" -> audioViewModel.setVoiceSpeaker3(voiceName)
                     }
                 },
+                onVozClear = { voiceName ->
+                     when(speakerKey) {
+                        "speaker1" -> audioViewModel.setVoiceSpeaker1("")
+                        "speaker2" -> audioViewModel.setVoiceSpeaker2("")
+                        "speaker3" -> audioViewModel.setVoiceSpeaker3("")
+                    }
+                },
                 onConfirmSelectionClicked = {
                     val previouslySelectedKey = showVoiceSelectionDialogFor
                     showVoiceSelectionDialogFor = null
@@ -501,9 +416,10 @@ fun AudioInfoContent(
                         else -> ""
                     }
                     if (!newlySelectedVoice.isNullOrBlank()) {
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.audio_info_voice_selected_for_speaker, newlySelectedVoice, previouslySelectedKey ?: ""), duration = SnackbarDuration.Long) }
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.audio_info_voice_selected_for_speaker, newlySelectedVoice, previouslySelectedKey ?: ""), duration = SnackbarDuration.Short) }
                     }
-                }
+                },
+                audioViewModel = audioViewModel
             )
         }
 
@@ -595,6 +511,9 @@ private fun SpeakerVoiceSelector(
     }
 }
 
+
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VoiceSelectionDialogInternal(
@@ -607,7 +526,10 @@ private fun VoiceSelectionDialogInternal(
     isUiEnabled: Boolean,
     onSexoSelected: (String) -> Unit,
     onVozSelected: (String) -> Unit,
-    onConfirmSelectionClicked: () -> Unit
+    onVozClear: (String) -> Unit,
+    onConfirmSelectionClicked: () -> Unit,
+    audioViewModel: AudioViewModel = viewModel()
+    
 ) {
     var dialogVozDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -633,6 +555,12 @@ private fun VoiceSelectionDialogInternal(
                     }
                     IconButton(onClick = { onSexoSelected("Neutral") }, enabled = isUiEnabled) {
                         Icon(Icons.Filled.AccessibilityNew, stringResource(R.string.audio_info_action_gender_neutral), tint = if (currentSexo.equals("Neutral", ignoreCase = true)) NeutralIconColorAudio else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+                    IconButton(onClick = { 
+                        onVozClear(currentVozName) 
+                        onDismissRequest()
+                    }, enabled = isUiEnabled) {
+                        Icon(Icons.Filled.Clear, stringResource(R.string.audio_info_action_gender_neutral), tint = if (currentSexo.equals("", ignoreCase = true)) NeutralIconColorAudio else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
                 Divider()
@@ -685,7 +613,7 @@ private fun VoiceSelectionDialogInternal(
                         } else {
                             availableVoicePairs.forEach { voicePair ->
                                 DropdownMenuItem(
-                                    text = { Text("${voicePair.first} (${voicePair.second.take(30)}${if (voicePair.second.length > 30) "..." else ""})") },
+                                        text = { Text("${voicePair.first} (${voicePair.second.take(30)}${if (voicePair.second.length > 30) "..." else ""})") },
                                     onClick = {
                                         onVozSelected(voicePair.first)
                                         dialogVozDropdownExpanded = false
@@ -697,6 +625,8 @@ private fun VoiceSelectionDialogInternal(
                         }
                     }
                 }
+                
+                
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     horizontalArrangement = Arrangement.End,
@@ -708,6 +638,7 @@ private fun VoiceSelectionDialogInternal(
                         Text(stringResource(R.string.audio_info_dialog_action_confirm_voice))
                     }
                 }
+                
             }
         }
     }

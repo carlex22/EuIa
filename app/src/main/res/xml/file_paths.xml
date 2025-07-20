@@ -4,4 +4,6 @@
     <external-files-path name="external_files" path="." />
     <cache-path name="internal_cache" path="." />
     <files-path name="internal_files" path="." />
+    <external-files-path name="my_images" path="." />
+    <cache-path name="my_cache" path="." />
 </paths>

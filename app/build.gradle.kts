@@ -288,6 +288,8 @@ implementation("com.google.android.play:integrity:1.4.0")
     implementation(libs.androidx.compose.materialIconsExtended)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
+    
+    implementation("androidx.compose.material3:material3-window-size-class:1.1.2")
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.viewmodel)
@@ -296,6 +298,20 @@ implementation("com.google.android.play:integrity:1.4.0")
     implementation(libs.androidx.lifecycle.viewmodelCompose)
     implementation(libs.androidx.lifecycle.process)
 
+
+
+    
+   // implementation("ja.burhanrashid52:photoeditor:1.1.1")
+   // implementation("ja.burhanrashid52:photoeditor:1.1.0")
+
+// https://mvnrepository.com/artifact/com.burhanrashid52/photoeditor
+implementation("com.burhanrashid52:photoeditor:3.0.2")
+
+
+    // Biblioteca de recorte (crop) de imagens - versão para AndroidX
+    implementation("com.github.yalantis:ucrop:2.2.8-native")
+    
+    
     // WorkManager
     implementation(libs.androidx.work.runtime)
 

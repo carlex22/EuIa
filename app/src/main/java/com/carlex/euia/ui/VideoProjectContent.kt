@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,6 +38,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
@@ -49,93 +51,135 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.carlex.euia.R
-import com.carlex.euia.api.PixabayVideo
 import com.carlex.euia.data.ImagemReferencia
+import com.carlex.euia.data.ProjectAsset
 import com.carlex.euia.data.SceneLinkData
+import com.carlex.euia.viewmodel.PixabayAsset
+import com.carlex.euia.viewmodel.PixabayAssetType
 import com.carlex.euia.viewmodel.VideoProjectViewModel
 import java.io.File
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.launch
 
 
 private const val TAG_CONTENT = "VideoProjectContent"
 
 @Composable
-private fun PixabaySearchDialog(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onSearchClick: () -> Unit,
-    onDismiss: () -> Unit,
-    onVideoSelected: (PixabayVideo) -> Unit,
-    searchResults: List<PixabayVideo>,
-    isSearching: Boolean
+private fun MediaExplorerDialog(
+    sceneId: String,
+    projectViewModel: VideoProjectViewModel
 ) {
+    val query by projectViewModel.pixabaySearchQuery.collectAsState()
+    val searchResults by projectViewModel.pixabayUnifiedResults.collectAsState()
+    val isSearching by projectViewModel.isSearchingPixabay.collectAsState()
+
+    var selectedAssetForPreview by remember { mutableStateOf<PixabayAsset?>(null) }
     val focusManager = LocalFocusManager.current
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.pixabay_search_dialog_title)) },
+        onDismissRequest = { projectViewModel.onDismissPixabaySearchDialog() },
+        title = { Text(stringResource(R.string.media_explorer_title)) },
         text = {
-            Column(modifier = Modifier.heightIn(max = 500.dp)) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    label = { Text(stringResource(R.string.pixabay_search_field_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = {
-                        focusManager.clearFocus()
-                        onSearchClick()
-                    }),
-                    trailingIcon = {
-                        IconButton(onClick = onSearchClick, enabled = !isSearching) {
-                            Icon(Icons.Default.Search, stringResource(R.string.pixabay_search_action_desc))
-                        }
-                    }
-                )
-                Spacer(Modifier.height(16.dp))
-                if (isSearching) {
-                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (searchResults.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.pixabay_search_no_results), textAlign = TextAlign.Center)
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(searchResults, key = { it.id }) { video ->
-                            Card(
-                                modifier = Modifier
-                                    .aspectRatio(9f / 16f)
-                                    .clickable { onVideoSelected(video) },
-                                elevation = CardDefaults.cardElevation(2.dp)
+            Column(modifier = Modifier.heightIn(max = 600.dp)) {
+                if (selectedAssetForPreview == null) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { projectViewModel.onPixabaySearchQueryChanged(it) },
+                        label = { Text(stringResource(R.string.pixabay_search_field_label)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            focusManager.clearFocus()
+                            projectViewModel.searchPixabayAssets()
+                        })
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
+
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (selectedAssetForPreview != null) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (selectedAssetForPreview!!.type == PixabayAssetType.VIDEO) {
+                                var isPlaying by remember { mutableStateOf(true) }
+                                VideoPlayerInternal(
+                                    videoPath = selectedAssetForPreview!!.downloadUrl,
+                                    isPlaying = isPlaying,
+                                    onPlaybackStateChange = { isPlaying = it },
+                                    invalidPathErrorText = "Erro ao carregar prévia"
+                                )
+                            } else {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(selectedAssetForPreview!!.downloadUrl)
+                                        .crossfade(true).build(),
+                                    contentDescription = stringResource(R.string.media_explorer_preview_title),
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                            IconButton(
+                                onClick = { selectedAssetForPreview = null },
+                                modifier = Modifier.align(Alignment.TopStart)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    AsyncImage(
-                                        model = video.videoFiles.small.thumbnail,
-                                        contentDescription = video.tags,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                    Icon(
-                                        Icons.Default.PlayCircleOutline,
-                                        contentDescription = null,
-                                        tint = Color.White.copy(alpha = 0.8f),
-                                        modifier = Modifier.size(48.dp)
-                                    )
+                                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.media_explorer_back_to_grid_desc))
+                            }
+                            Button(
+                                onClick = {
+                                    projectViewModel.onPixabayAssetSelected(sceneId, selectedAssetForPreview!!)
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 16.dp)
+                            ) {
+                                Text(stringResource(R.string.media_explorer_use_this))
+                            }
+                        }
+                    } else {
+                        if (isSearching) {
+                            CircularProgressIndicator()
+                        } else if (searchResults.isEmpty()) {
+                            Text(stringResource(R.string.pixabay_search_no_results), textAlign = TextAlign.Center)
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(searchResults, key = { it.id }) { asset ->
+                                    Card(
+                                        modifier = Modifier
+                                            .aspectRatio(9f / 16f)
+                                            .clickable { selectedAssetForPreview = asset },
+                                        elevation = CardDefaults.cardElevation(2.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            AsyncImage(
+                                                model = asset.thumbnailUrl,
+                                                contentDescription = asset.tags,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                            if (asset.type == PixabayAssetType.VIDEO) {
+                                                Icon(
+                                                    Icons.Default.PlayCircleOutline,
+                                                    contentDescription = null,
+                                                    tint = Color.White.copy(alpha = 0.8f),
+                                                    modifier = Modifier.size(48.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -144,51 +188,76 @@ private fun PixabaySearchDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            if (selectedAssetForPreview == null) {
+                Button(onClick = {
+                    focusManager.clearFocus()
+                    projectViewModel.searchPixabayAssets()
+                }, enabled = !isSearching) {
+                    Text(stringResource(id = R.string.pixabay_search_action_desc))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { projectViewModel.onDismissPixabaySearchDialog() }) {
                 Text(stringResource(R.string.action_close))
             }
         }
     )
 }
 
-
 @Composable
-private fun ReferenceImageSelectionDialog(
+private fun AssetSelectionDialog(
     onDismissRequest: () -> Unit,
-    availableReferenceImages: List<ImagemReferencia>,
-    onReferenceImageSelected: (ImagemReferencia) -> Unit,
+    availableAssets: List<ProjectAsset>,
+    onAssetSelected: (ProjectAsset) -> Unit,
     dialogTitle: String
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(dialogTitle) },
         text = {
-            if (availableReferenceImages.isEmpty()) {
-                Text(stringResource(R.string.scene_item_dialog_no_ref_images_available))
+            if (availableAssets.isEmpty()) {
+                Text(stringResource(R.string.scene_item_dialog_no_assets_available))
             } else {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    items(availableReferenceImages, key = { it.path }) { refImage ->
+                    items(availableAssets, key = { it.finalAssetPath }) { asset ->
                         Card(
                             modifier = Modifier
-                                .size(100.dp, 150.dp)
-                                .clickable { onReferenceImageSelected(refImage) },
+                                .aspectRatio(9f / 16f)
+                                .clickable { onAssetSelected(asset) },
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(File(refImage.path))
-                                    .crossfade(true)
-                                    .placeholder(R.drawable.ic_placeholder_image)
-                                    .error(R.drawable.ic_broken_image)
-                                    .build(),
-                                contentDescription = refImage.descricao,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                var img = asset.finalAssetPath
+                                if (asset.isVideo)
+                                    img = asset.thumbnailPath
+                                
+                                AsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(File(img))
+                                        .crossfade(true)
+                                        .placeholder(R.drawable.ic_placeholder_image)
+                                        .error(R.drawable.ic_broken_image)
+                                        .build(),
+                                    contentDescription = asset.displayName,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                if (asset.isVideo) {
+                                    Icon(
+                                        Icons.Filled.PlayCircleFilled,
+                                        contentDescription = stringResource(R.string.content_desc_video_indicator),
+                                        tint = Color.White.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(32.dp).background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -276,20 +345,18 @@ private fun SceneLinkItem(
     allProjectReferenceImages: List<ImagemReferencia>,
     currentlyPlayingSceneId: String?,
     isGeneratingPreviewForScene: String?,
-    
+    availableProjectAssets: List<ProjectAsset>,
     onGenerateImageWithConfirmation: (sceneId: String, prompt: String) -> Unit
 ) {
     val context = LocalContext.current
     var promptStateInDialog by remember(sceneLinkData.promptGeracao) { mutableStateOf(TextFieldValue(sceneLinkData.promptGeracao ?: "")) }
     var showPromptEditDialog by remember { mutableStateOf(false) }
-    var refImageDialogTitle by remember { mutableStateOf("") }
-    var showGenericRefImageSelectionDialog by remember { mutableStateOf(false) }
-    var onRefImageSelectedAction by remember { mutableStateOf<(ImagemReferencia) -> Unit>({}) }
+    var showAssetSelectionDialog by remember { mutableStateOf(false) }
+    var showRefImageSelectionDialog by remember { mutableStateOf(false) }
+
 
     var selectedNewRefImageForChange by remember { mutableStateOf<ImagemReferencia?>(null) }
     var showConfirmChangeRefImageDialog by remember { mutableStateOf(false) }
-    var refImageToReplaceGeneratedWith by remember { mutableStateOf<ImagemReferencia?>(null) }
-    var showConfirmReplaceGeneratedWithRefDialog by remember { mutableStateOf(false) }
     var refImageForClothesChange by remember { mutableStateOf<ImagemReferencia?>(null) }
     var showConfirmChangeClothesWithRefDialog by remember { mutableStateOf(false) }
 
@@ -312,8 +379,6 @@ private fun SceneLinkItem(
     val originalReferenceImageDetails = allProjectReferenceImages.find { it.path == sceneLinkData.imagemReferenciaPath }
     val refImageIsVideo = originalReferenceImageDetails?.pathVideo != null
     val refImageContainsPeople = originalReferenceImageDetails?.containsPeople ?: false
-
-    val isVideoPlayingThisScene = isCurrentlyPlayingThisScene 
 
     Box(
         modifier = Modifier
@@ -366,12 +431,9 @@ private fun SceneLinkItem(
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(3.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        val isGeneratingImage = sceneLinkData.isGenerating
-                        val isChangingClothes = sceneLinkData.isChangingClothes
-                        val isGeneratingVideo = sceneLinkData.isGeneratingVideo
-                        val isGeneratingAnything = isGeneratingImage || isChangingClothes || isGeneratingVideo
+                        val isGeneratingAsset = sceneLinkData.isGenerating || sceneLinkData.isChangingClothes || sceneLinkData.isGeneratingVideo
 
-                        if (isCurrentlyPlayingThisScene && sceneLinkData.videoPreviewPath != null) {
+                        if (isCurrentlyPlayingThisScene && !sceneLinkData.videoPreviewPath.isNullOrBlank()) {
                             VideoPlayerInternal(
                                 videoPath = sceneLinkData.videoPreviewPath!!,
                                 isPlaying = true,
@@ -382,130 +444,111 @@ private fun SceneLinkItem(
                                 },
                                 invalidPathErrorText = stringResource(id = R.string.error_loading_preview)
                             )
+                        } else if (!sceneLinkData.pathThumb.isNullOrBlank()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context).data(File(sceneLinkData.pathThumb!!)).crossfade(true).placeholder(R.drawable.ic_placeholder_image).error(R.drawable.ic_broken_image).build(),
+                                contentDescription = stringResource(R.string.content_desc_generated_image),
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
                         } else {
-                            when {
-                                isGeneratingAnything -> {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                        CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 2.dp)
-                                        val statusText = when {
-                                            isGeneratingImage -> stringResource(R.string.scene_item_status_generating_attempt, sceneLinkData.generationAttempt)
-                                            isChangingClothes -> stringResource(R.string.scene_item_status_changing_clothes_attempt, sceneLinkData.clothesChangeAttempt)
-                                            else -> stringResource(R.string.scene_item_status_generating_video_attempt, sceneLinkData.generationAttempt)
-                                        }
-                                        Text(statusText, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        if (sceneLinkData.generationAttempt > 1 && !sceneLinkData.generationErrorMessage.isNullOrBlank()) {
-                                            Text(text = stringResource(R.string.scene_item_error_previous_attempt, sceneLinkData.generationErrorMessage!!), color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp))
-                                        }
-                                    }
-                                }
-                                !sceneLinkData.pathThumb.isNullOrBlank() -> {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(File(sceneLinkData.pathThumb!!)).crossfade(true).placeholder(R.drawable.ic_placeholder_image).error(R.drawable.ic_broken_image).build(),
-                                            contentDescription = stringResource(R.string.content_desc_generated_image),
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                }
-                                else -> {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(16.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        if (!sceneLinkData.generationErrorMessage.isNullOrBlank()) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
-                                                    .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
-                                                    .padding(8.dp)
-                                                    .clickable { projectViewModel.clearSceneGenerationError(sceneLinkData.id) },
-                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Error,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onErrorContainer
-                                                )
-                                                Text(
-                                                    text = sceneLinkData.generationErrorMessage!!,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    textAlign = TextAlign.Center,
-                                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                                )
-                                                Text(
-                                                    text = stringResource(R.string.status_tap_to_clear_error),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                            Spacer(Modifier.height(16.dp))
-                                        }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                if (!sceneLinkData.generationErrorMessage.isNullOrBlank() && !isGeneratingAsset) {
+                                     Column(
+                                         modifier = Modifier
+                                             .fillMaxWidth()
+                                             .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                                             .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
+                                             .padding(8.dp)
+                                             .clickable { projectViewModel.clearGlobalSceneError() }, // <<< MUDANÇA: Chamada corrigida
+                                         horizontalAlignment = Alignment.CenterHorizontally,
+                                         verticalArrangement = Arrangement.spacedBy(4.dp)
+                                     ) {
+                                         Icon(
+                                             imageVector = Icons.Default.Error,
+                                             contentDescription = null,
+                                             tint = MaterialTheme.colorScheme.onErrorContainer
+                                         )
+                                         Text(
+                                             text = sceneLinkData.generationErrorMessage!!,
+                                             style = MaterialTheme.typography.bodySmall,
+                                             textAlign = TextAlign.Center,
+                                             color = MaterialTheme.colorScheme.onErrorContainer
+                                         )
+                                         Text(
+                                             text = stringResource(R.string.status_tap_to_clear_error),
+                                             style = MaterialTheme.typography.labelSmall,
+                                             color = MaterialTheme.colorScheme.primary
+                                         )
+                                     }
+                                     Spacer(Modifier.height(16.dp))
+                                 }
 
-                                        Text(
-                                            text = stringResource(R.string.scene_placeholder_title),
-                                            style = MaterialTheme.typography.titleSmall,
-                                            textAlign = TextAlign.Center,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.height(16.dp))
-                                        Text(
-                                            text = stringResource(R.string.scene_placeholder_instructions),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            textAlign = TextAlign.Center,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.height(12.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.AutoFixHigh,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp),
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                            Text(
-                                                text = " " + stringResource(R.string.scene_placeholder_action_generate),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                        Spacer(Modifier.height(8.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.FolderOpen,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp),
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                            Text(
-                                                text = " " + stringResource(R.string.scene_placeholder_action_select),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
+                                Text(
+                                    text = stringResource(R.string.scene_placeholder_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    text = stringResource(R.string.scene_placeholder_instructions),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.AutoFixHigh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = " " + stringResource(R.string.scene_placeholder_action_generate),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.FolderOpen,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = " " + stringResource(R.string.scene_placeholder_action_select),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                             }
                         }
 
 
-                        if (!sceneLinkData.imagemGeradaPath.isNullOrBlank() && !sceneLinkData.generationErrorMessage.isNullOrBlank() && !isGeneratingAnything) {
-                            Text(
-                                text = stringResource(R.string.scene_item_error_prefix, sceneLinkData.generationErrorMessage!!),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelSmall,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 4.dp, start = 4.dp, end = 4.dp)
-                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                                    .clickable { projectViewModel.clearSceneGenerationError(sceneLinkData.id) }
-                            )
-                        }
+                        if (!sceneLinkData.imagemGeradaPath.isNullOrBlank() && !sceneLinkData.generationErrorMessage.isNullOrBlank() && !isGeneratingAsset) {
+                             Text(
+                                 text = stringResource(R.string.scene_item_error_prefix, sceneLinkData.generationErrorMessage!!),
+                                 color = MaterialTheme.colorScheme.error,
+                                 style = MaterialTheme.typography.labelSmall,
+                                 textAlign = TextAlign.Center,
+                                 modifier = Modifier
+                                     .align(Alignment.TopCenter)
+                                     .padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                                     .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                                     .padding(horizontal = 4.dp, vertical = 2.dp)
+                                     .clickable { projectViewModel.clearGlobalSceneError() } // <<< MUDANÇA: Chamada corrigida
+                             )
+                         }
 
 
                         Box(
@@ -520,7 +563,7 @@ private fun SceneLinkItem(
                                     if (allProjectReferenceImages.isNotEmpty()) {
                                         projectViewModel.triggerSelectReferenceImageForScene(sceneLinkData.id)
                                     } else {
-                                        Toast.makeText(context, R.string.scene_item_dialog_no_ref_images_available, Toast.LENGTH_SHORT).show()
+                                        projectViewModel.postSnackbarMessage(context.getString(R.string.scene_item_dialog_no_ref_images_available))
                                     }
                                 }
                         ) {
@@ -557,11 +600,76 @@ private fun SceneLinkItem(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val iconButtonSize = 36.dp
-                    val iconSize = 20.dp
-                    val generalActionsEnabled = !sceneLinkData.isGenerating && !sceneLinkData.isChangingClothes && !sceneLinkData.isGeneratingVideo && !isGeneratingPreviewForThisScene
-                    val playAudioButtonEnabled = generalActionsEnabled && sceneLinkData.videoPreviewPath != null && sceneLinkData.tempoInicio != null && sceneLinkData.tempoFim != null && sceneLinkData.tempoFim > sceneLinkData.tempoInicio
-                    val replaceGenEnabled = generalActionsEnabled && allProjectReferenceImages.isNotEmpty()
+                    val iconButtonSize = 40.dp
+                    val iconSize = 22.dp
+                    val generalActionsEnabled = !sceneLinkData.isGenerating && !sceneLinkData.isChangingClothes && !sceneLinkData.isGeneratingVideo
+                    
+                    val isPreviewReady = !sceneLinkData.videoPreviewPath.isNullOrBlank()
+                    val isProcessing = sceneLinkData.previewQueuePosition == 0
+                    val que = "${sceneLinkData.previewQueuePosition}".toIntOrNull() ?: 99
+                    val inQuee = if (que > 0) true else false 
+                    
+                    val isPlayButtonClickable = (isPreviewReady) 
+
+                    IconButton(
+                        onClick = { projectViewModel.onPlayPausePreviewClicked(sceneLinkData) },
+                        modifier = Modifier.size(iconButtonSize),
+                        enabled = isPlayButtonClickable
+                    ) {
+                        when {
+                            isProcessing -> {
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(iconSize), strokeWidth = 2.dp, color = primaryActionIconTint)
+                                    Text(
+                                        text = sceneLinkData.previewQueuePosition.toString()!!,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            
+                            inQuee -> {
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(iconSize), strokeWidth = 2.dp, color = primaryActionIconTint)
+                                    Text(
+                                        text = sceneLinkData.previewQueuePosition.toString()!!,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            
+                            isCurrentlyPlayingThisScene -> {
+                                Icon(
+                                    imageVector = Icons.Default.StopCircle,
+                                    contentDescription = stringResource(R.string.scene_item_action_stop_audio),
+                                    modifier = Modifier.size(iconSize),
+                                    tint = primaryActionIconTint
+                                )
+                            }
+                            isPreviewReady -> {
+                                Icon(
+                                    imageVector = Icons.Default.PlayCircleOutline,
+                                    contentDescription = stringResource(R.string.scene_item_action_play_audio_snippet),
+                                    modifier = Modifier.size(iconSize),
+                                    tint = primaryActionIconTint
+                                )
+                            }
+                            else -> {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "⏳",
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    val replaceGenEnabled = generalActionsEnabled && availableProjectAssets.isNotEmpty()
                     val generateImageButtonEnabled = generalActionsEnabled && (sceneLinkData.promptGeracao?.isNotBlank() == true)
 
                     val changeClothesEnabled = generalActionsEnabled &&
@@ -578,54 +686,9 @@ private fun SceneLinkItem(
                                                !sceneLinkData.imagemGeradaPath.isNullOrBlank()
 
                     IconButton(
-                        onClick = { projectViewModel.onPlayPausePreviewClicked(sceneLinkData) },
-                        modifier = Modifier.size(iconButtonSize),
-                        enabled = playAudioButtonEnabled
-                    ) {
-                        val currentPlayIconTint = if (playAudioButtonEnabled) primaryActionIconTint else disabledIconTint
-                    
-                        when {
-                            !playAudioButtonEnabled -> {
-                                // Exibe CircularProgressIndicator quando o botão está desabilitado
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(iconSize),
-                                    strokeWidth = 2.dp,
-                                    color = currentPlayIconTint
-                                )
-                            }
-                            isGeneratingPreviewForThisScene -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(iconSize),
-                                    strokeWidth = 2.dp,
-                                    color = primaryActionIconTint
-                                )
-                            }
-                            isCurrentlyPlayingThisScene -> {
-                                Icon(
-                                    imageVector = Icons.Filled.StopCircle,
-                                    contentDescription = stringResource(R.string.scene_item_action_stop_audio),
-                                    modifier = Modifier.size(iconSize),
-                                    tint = primaryActionIconTint
-                                )
-                            }
-                            else -> {
-                                Icon(
-                                    imageVector = Icons.Filled.PlayCircleOutline,
-                                    contentDescription = stringResource(R.string.scene_item_action_play_audio_snippet),
-                                    modifier = Modifier.size(iconSize),
-                                    tint = currentPlayIconTint
-                                )
-                            }
-                        }
-                    }
-
-                    IconButton(
                         onClick = {
-                            if (allProjectReferenceImages.isNotEmpty()) {
-                                refImageDialogTitle = context.getString(R.string.scene_item_dialog_title_replace_gen)
-                                onRefImageSelectedAction = { newRefImg -> refImageToReplaceGeneratedWith = newRefImg; showGenericRefImageSelectionDialog = false; showConfirmReplaceGeneratedWithRefDialog = true }
-                                showGenericRefImageSelectionDialog = true
-                            } else { Toast.makeText(context, R.string.scene_item_dialog_no_ref_images_available, Toast.LENGTH_SHORT).show() }
+                            projectViewModel.loadProjectAssets()
+                            showAssetSelectionDialog = true
                         },
                         enabled = replaceGenEnabled,
                         modifier = Modifier.size(iconButtonSize)
@@ -654,18 +717,8 @@ private fun SceneLinkItem(
                     IconButton(
                         onClick = {
                             if (allProjectReferenceImages.any { it.pathVideo == null }) {
-                                refImageDialogTitle = context.getString(R.string.scene_item_dialog_title_change_clothes)
-                                onRefImageSelectedAction = { selectedRef ->
-                                    if (selectedRef.pathVideo == null) {
-                                        refImageForClothesChange = selectedRef
-                                        showGenericRefImageSelectionDialog = false
-                                        showConfirmChangeClothesWithRefDialog = true
-                                    } else {
-                                        Toast.makeText(context, R.string.error_clothes_change_figurine_must_be_static, Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                                showGenericRefImageSelectionDialog = true
-                            } else { Toast.makeText(context, R.string.error_no_static_images_for_figurine, Toast.LENGTH_SHORT).show() }
+                                showAssetSelectionDialog = true
+                            } else { projectViewModel.postSnackbarMessage(context.getString(R.string.error_no_static_images_for_figurine)) }
                         },
                         enabled = changeClothesEnabled,
                         modifier = Modifier.size(iconButtonSize)
@@ -709,7 +762,7 @@ private fun SceneLinkItem(
                         }
                     }
                     IconButton(
-                        onClick = { projectViewModel.findAndSetStockVideoForScene(sceneLinkData.id) },
+                        onClick = { projectViewModel.onShowPixabaySearchDialog(sceneLinkData.id) },
                         enabled = generalActionsEnabled && !sceneLinkData.promptVideo.isNullOrBlank(),
                         modifier = Modifier.size(iconButtonSize)
                     ) {
@@ -725,21 +778,147 @@ private fun SceneLinkItem(
             SprocketHolesRow()
         }
     }
-
-    if (showGenericRefImageSelectionDialog) {
-        val staticFigurines = allProjectReferenceImages.filter { it.pathVideo == null }
-        ReferenceImageSelectionDialog(
-            onDismissRequest = { showGenericRefImageSelectionDialog = false },
-            availableReferenceImages = staticFigurines,
-            onReferenceImageSelected = onRefImageSelectedAction,
-            dialogTitle = refImageDialogTitle
+    
+    // <<< INÍCIO DA CORREÇÃO: Bloco de Diálogos foi corrigido e reestruturado >>>
+    if (showAssetSelectionDialog) {
+        AssetSelectionDialog(
+            onDismissRequest = { showAssetSelectionDialog = false },
+            availableAssets = availableProjectAssets,
+            onAssetSelected = { selectedAsset ->
+                projectViewModel.replaceGeneratedImageWithReference(sceneLinkData.id, selectedAsset)
+                showAssetSelectionDialog = false
+            },
+            dialogTitle = stringResource(R.string.scene_item_dialog_title_select_asset)
         )
     }
-    if (showPromptEditDialog) { AlertDialog(onDismissRequest = { promptStateInDialog = TextFieldValue(sceneLinkData.promptGeracao ?: ""); showPromptEditDialog = false }, title = { Text(stringResource(R.string.scene_item_dialog_edit_prompt_title)) }, text = { Column { OutlinedTextField(value = promptStateInDialog, onValueChange = { promptStateInDialog = it }, label = { Text(stringResource(R.string.scene_item_label_image_generation_prompt)) }, modifier = Modifier.fillMaxWidth(), singleLine = false, maxLines = 8, textStyle = MaterialTheme.typography.bodyLarge, enabled = !sceneLinkData.isGenerating && !sceneLinkData.isChangingClothes && !sceneLinkData.isGeneratingVideo ) } }, confirmButton = { Button( onClick = { projectViewModel.updateScenePrompt(sceneLinkData.id, promptStateInDialog.text); Toast.makeText(context, context.getString(R.string.scene_item_toast_prompt_updated, sceneLinkData.cena ?: sceneLinkData.id.take(4)), Toast.LENGTH_SHORT).show(); showPromptEditDialog = false }, enabled = (promptStateInDialog.text != (sceneLinkData.promptGeracao ?: "")) && promptStateInDialog.text.isNotBlank() ) { Text(stringResource(R.string.action_save)) } }, dismissButton = { OutlinedButton(onClick = { promptStateInDialog = TextFieldValue(sceneLinkData.promptGeracao ?: ""); showPromptEditDialog = false }) { Text(stringResource(R.string.action_cancel)) } } ) }
-    if (showConfirmChangeRefImageDialog && selectedNewRefImageForChange != null) { AlertDialog(onDismissRequest = { showConfirmChangeRefImageDialog = false; selectedNewRefImageForChange = null }, title = { Text(stringResource(R.string.scene_item_dialog_confirm_change_ref_image_title)) }, text = { Text(stringResource(R.string.scene_item_dialog_confirm_change_ref_image_message)) }, confirmButton = { Button(onClick = { projectViewModel.updateSceneReferenceImage(sceneLinkData.id, selectedNewRefImageForChange!!); Toast.makeText(context, R.string.scene_item_toast_ref_image_changed, Toast.LENGTH_SHORT).show(); showConfirmChangeRefImageDialog = false; selectedNewRefImageForChange = null }) { Text(stringResource(R.string.action_confirm)) } }, dismissButton = { OutlinedButton(onClick = { showConfirmChangeRefImageDialog = false; selectedNewRefImageForChange = null }) { Text(stringResource(R.string.action_cancel)) } } ) }
-    if (showConfirmChangeClothesWithRefDialog && refImageForClothesChange != null) { AlertDialog(onDismissRequest = { showConfirmChangeClothesWithRefDialog = false; refImageForClothesChange = null }, title = { Text(stringResource(R.string.scene_item_dialog_confirm_change_clothes_with_ref_title)) }, text = { Text(stringResource(R.string.scene_item_dialog_confirm_change_clothes_with_ref_message)) }, confirmButton = { Button(onClick = { projectViewModel.changeClothesForSceneWithSpecificReference(sceneId = sceneLinkData.id, chosenReferenceImagePath = refImageForClothesChange!!.path ); val sceneIdentifier = sceneLinkData.cena ?: sceneLinkData.id.take(4); Toast.makeText(context, context.getString(R.string.scene_item_toast_clothes_change_queued_with_ref, sceneIdentifier), Toast.LENGTH_SHORT).show(); showConfirmChangeClothesWithRefDialog = false; refImageForClothesChange = null }) { Text(stringResource(R.string.action_confirm)) } }, dismissButton = { OutlinedButton(onClick = { showConfirmChangeClothesWithRefDialog = false; refImageForClothesChange = null }) { Text(stringResource(R.string.action_cancel)) } } ) }
-    if (showConfirmReplaceGeneratedWithRefDialog && refImageToReplaceGeneratedWith != null) { AlertDialog(onDismissRequest = { showConfirmReplaceGeneratedWithRefDialog = false; refImageToReplaceGeneratedWith = null }, title = { Text(stringResource(R.string.scene_item_dialog_confirm_replace_generated_title)) }, text = { Text(stringResource(R.string.scene_item_dialog_confirm_replace_generated_message)) }, confirmButton = { Button(onClick = { projectViewModel.replaceGeneratedImageWithReference(sceneLinkData.id, refImageToReplaceGeneratedWith!!); Toast.makeText(context, R.string.scene_item_toast_generated_image_replaced, Toast.LENGTH_SHORT).show(); showConfirmReplaceGeneratedWithRefDialog = false; refImageToReplaceGeneratedWith = null }) { Text(stringResource(R.string.action_confirm)) } }, dismissButton = { OutlinedButton(onClick = { showConfirmReplaceGeneratedWithRefDialog = false; refImageToReplaceGeneratedWith = null }) { Text(stringResource(R.string.action_cancel)) } } ) }
+    
+    if (showPromptEditDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                promptStateInDialog = TextFieldValue(sceneLinkData.promptGeracao ?: "")
+                showPromptEditDialog = false
+            },
+            title = { Text(stringResource(R.string.scene_item_dialog_edit_prompt_title)) },
+            text = {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (allProjectReferenceImages.isNotEmpty()) {
+                                    showRefImageSelectionDialog = true
+                                } else {
+                                    projectViewModel.postSnackbarMessage(context.getString(R.string.scene_item_dialog_no_ref_images_available))
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (sceneLinkData.imagemReferenciaPath.isNotBlank()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context).data(File(sceneLinkData.imagemReferenciaPath)).crossfade(true).build(),
+                                contentDescription = stringResource(R.string.content_desc_reference_image),
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = stringResource(R.string.scene_item_action_select_ref_image_desc))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = promptStateInDialog,
+                        onValueChange = { promptStateInDialog = it },
+                        label = { Text(stringResource(R.string.scene_item_label_image_generation_prompt)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        maxLines = 8,
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        enabled = !sceneLinkData.isGenerating && !sceneLinkData.isChangingClothes && !sceneLinkData.isGeneratingVideo
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        projectViewModel.updateScenePrompt(sceneLinkData.id, promptStateInDialog.text)
+                        onGenerateImageWithConfirmation(sceneLinkData.id, promptStateInDialog.text)
+                        showPromptEditDialog = false
+                    },
+                    enabled = (promptStateInDialog.text != (sceneLinkData.promptGeracao ?: "")) && promptStateInDialog.text.isNotBlank()
+                ) { Text(stringResource(R.string.action_save_and_generate)) }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = {
+                    promptStateInDialog = TextFieldValue(sceneLinkData.promptGeracao ?: "")
+                    showPromptEditDialog = false
+                }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
 
+    if (showRefImageSelectionDialog) {
+        AssetSelectionDialog(
+            onDismissRequest = { showRefImageSelectionDialog = false },
+            availableAssets = allProjectReferenceImages.map {
+                ProjectAsset(
+                    displayName = File(it.path).name,
+                    finalAssetPath = it.pathVideo ?: it.path,
+                    thumbnailPath = it.path,
+                    isVideo = it.pathVideo != null
+                )
+            },
+            onAssetSelected = { selectedAsset ->
+                val selectedRefImage = allProjectReferenceImages.find { ref -> ref.path == selectedAsset.thumbnailPath }
+                if (selectedRefImage != null) {
+                    projectViewModel.updateSceneReferenceImage(sceneLinkData.id, selectedRefImage)
+                }
+                showRefImageSelectionDialog = false
+            },
+            dialogTitle = stringResource(R.string.scene_item_dialog_title_select_ref_image)
+        )
+    }
+    
+    if (showConfirmChangeRefImageDialog && selectedNewRefImageForChange != null) {
+        AlertDialog(
+            onDismissRequest = { showConfirmChangeRefImageDialog = false; selectedNewRefImageForChange = null },
+            title = { Text(stringResource(R.string.scene_item_dialog_confirm_change_ref_image_title)) },
+            text = { Text(stringResource(R.string.scene_item_dialog_confirm_change_ref_image_message)) },
+            confirmButton = {
+                Button(onClick = {
+                    projectViewModel.updateSceneReferenceImage(sceneLinkData.id, selectedNewRefImageForChange!!)
+                    projectViewModel.postSnackbarMessage(context.getString(R.string.scene_item_toast_ref_image_changed))
+                    showConfirmChangeRefImageDialog = false
+                    selectedNewRefImageForChange = null
+                }) { Text(stringResource(R.string.action_confirm)) }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showConfirmChangeRefImageDialog = false; selectedNewRefImageForChange = null }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
+
+    if (showConfirmChangeClothesWithRefDialog && refImageForClothesChange != null) {
+        AlertDialog(
+            onDismissRequest = { showConfirmChangeClothesWithRefDialog = false; refImageForClothesChange = null },
+            title = { Text(stringResource(R.string.scene_item_dialog_confirm_change_clothes_with_ref_title)) },
+            text = { Text(stringResource(R.string.scene_item_dialog_confirm_change_clothes_with_ref_message)) },
+            confirmButton = {
+                Button(onClick = {
+                    projectViewModel.changeClothesForSceneWithSpecificReference(sceneId = sceneLinkData.id, chosenReferenceImagePath = refImageForClothesChange!!.path)
+                    val sceneIdentifier = sceneLinkData.cena ?: sceneLinkData.id.take(4)
+                    projectViewModel.postSnackbarMessage(context.getString(R.string.scene_item_toast_clothes_change_queued_with_ref, sceneIdentifier))
+                    showConfirmChangeClothesWithRefDialog = false
+                    refImageForClothesChange = null
+                }) { Text(stringResource(R.string.action_confirm)) }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showConfirmChangeClothesWithRefDialog = false; refImageForClothesChange = null }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
+    
     if (showVideoPromptDialog) {
         AlertDialog(
             onDismissRequest = { showVideoPromptDialog = false },
@@ -755,9 +934,7 @@ private fun SceneLinkItem(
                         value = editableVideoPromptState,
                         onValueChange = { editableVideoPromptState = it },
                         label = { Text(stringResource(R.string.scene_item_label_video_generation_prompt)) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 100.dp, max = 200.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
                         singleLine = false,
                         textStyle = MaterialTheme.typography.bodyMedium
                     )
@@ -777,10 +954,10 @@ private fun SceneLinkItem(
                                 )
                                 showVideoPromptDialog = false
                             } else {
-                                Toast.makeText(context, R.string.error_no_base_image_for_video, Toast.LENGTH_LONG).show()
+                                projectViewModel.postSnackbarMessage(context.getString(R.string.error_no_base_image_for_video))
                             }
                         } else {
-                            Toast.makeText(context, R.string.error_empty_prompt_for_video_gen, Toast.LENGTH_SHORT).show()
+                            projectViewModel.postSnackbarMessage(context.getString(R.string.error_empty_prompt_for_video_gen))
                         }
                     },
                     enabled = editableVideoPromptState.text.isNotBlank()
@@ -795,6 +972,7 @@ private fun SceneLinkItem(
             }
         )
     }
+    // <<< FIM DA CORREÇÃO >>>
 }
 
 @Composable
@@ -806,7 +984,9 @@ private fun VideoPlayerInternal(
 ) {
     val context = LocalContext.current
     val videoUri = remember(videoPath) {
-        if (videoPath.isNotBlank()) {
+        if (videoPath.startsWith("http")) {
+            Uri.parse(videoPath)
+        } else if (videoPath.isNotBlank()) {
             val file = File(videoPath)
             if (file.exists() && file.isFile) {
                 try {
@@ -847,7 +1027,7 @@ private fun VideoPlayerInternal(
                         } else {
                              onPlaybackStateChange(false)
                         }
-                        mediaPlayer.isLooping = false
+                        mediaPlayer.isLooping = true // <<< MUDANÇA: Loop para prévias >>>
                     }
                     setOnCompletionListener {
                         Log.d(TAG_CONTENT, "VideoPlayer (Scene): Reprodução completa. URI: $videoUri")
@@ -893,28 +1073,34 @@ fun VideoProjectContent(
     val isGeneratingPreviewForScene by projectViewModel.isGeneratingPreviewForSceneId.collectAsState()
     val sceneIdToRecreateImage by projectViewModel.sceneIdToRecreateImage.collectAsState()
     val promptForRecreateImage by projectViewModel.promptForRecreateImage.collectAsState()
-    val currentSceneIdForDialogRefChange by projectViewModel.sceneIdForReferenceChangeDialog.collectAsState()
 
     val showImageBatchCostDialog by projectViewModel.showImageBatchCostConfirmationDialog.collectAsState()
     val imageBatchCost by projectViewModel.pendingImageBatchCost.collectAsState()
     val imageBatchCount by projectViewModel.pendingImageBatchCount.collectAsState()
 
     val globalSceneError by projectViewModel.globalSceneError.collectAsState()
+    
+    val sceneIdForMediaExplorer by projectViewModel.showPixabaySearchDialogForSceneId.collectAsState()
+    
+    val availableProjectAssets by projectViewModel.availableProjectAssets.collectAsState()
 
-    val sceneIdForPixabaySearch by projectViewModel.showPixabaySearchDialogForSceneId.collectAsState()
-    val searchQuery by projectViewModel.pixabaySearchQuery.collectAsState()
-    val searchResults by projectViewModel.pixabaySearchResults.collectAsState()
-    val isSearching by projectViewModel.isSearchingPixabay.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarMessage by projectViewModel.snackbarMessage.collectAsState()
+    val scope = rememberCoroutineScope()
 
-    sceneIdForPixabaySearch?.let { sceneId ->
-        PixabaySearchDialog(
-            query = searchQuery,
-            onQueryChange = { projectViewModel.onPixabaySearchQueryChanged(it) },
-            onSearchClick = { projectViewModel.searchPixabayVideos() },
-            onDismiss = { projectViewModel.onDismissPixabaySearchDialog() },
-            onVideoSelected = { video -> projectViewModel.onPixabayVideoSelected(sceneId, video) },
-            searchResults = searchResults,
-            isSearching = isSearching
+    LaunchedEffect(snackbarMessage) {
+        if (!snackbarMessage.isNullOrBlank()) {
+            scope.launch {
+                snackbarHostState.showSnackbar(snackbarMessage!!)
+                projectViewModel.onSnackbarMessageShown()
+            }
+        }
+    }
+
+    sceneIdForMediaExplorer?.let { sceneId ->
+        MediaExplorerDialog(
+            sceneId = sceneId,
+            projectViewModel = projectViewModel
         )
     }
 
@@ -954,30 +1140,6 @@ fun VideoProjectContent(
         )
     }
 
-    currentSceneIdForDialogRefChange?.let { sceneId ->
-        var tempSelectedRefImageForChange by remember { mutableStateOf<ImagemReferencia?>(null) }
-        var showConfirmForThisSpecificChange by remember { mutableStateOf(false) }
-
-        if (!showConfirmForThisSpecificChange && projectViewModel.sceneIdForReferenceChangeDialog.collectAsState().value == sceneId) {
-            ReferenceImageSelectionDialog(
-                onDismissRequest = { projectViewModel.dismissReferenceImageSelectionDialog() },
-                availableReferenceImages = allProjectReferenceImages,
-                onReferenceImageSelected = { newRefImg -> tempSelectedRefImageForChange = newRefImg; showConfirmForThisSpecificChange = true },
-                dialogTitle = stringResource(R.string.scene_item_dialog_title_change_ref_for_scene, sceneId.take(4))
-            )
-        }
-
-        if (showConfirmForThisSpecificChange && tempSelectedRefImageForChange != null) {
-            AlertDialog(
-                onDismissRequest = { showConfirmForThisSpecificChange = false; tempSelectedRefImageForChange = null; projectViewModel.dismissReferenceImageSelectionDialog() },
-                title = { Text(stringResource(R.string.scene_item_dialog_confirm_change_ref_image_title)) },
-                text = { Text(stringResource(R.string.scene_item_dialog_confirm_change_ref_image_message)) },
-                confirmButton = { Button(onClick = { projectViewModel.updateSceneReferenceImage(sceneId, tempSelectedRefImageForChange!!); Toast.makeText(context, R.string.scene_item_toast_ref_image_changed, Toast.LENGTH_SHORT).show(); showConfirmForThisSpecificChange = false; tempSelectedRefImageForChange = null; projectViewModel.dismissReferenceImageSelectionDialog() }) { Text(stringResource(R.string.action_confirm)) } },
-                dismissButton = { OutlinedButton(onClick = { showConfirmForThisSpecificChange = false; tempSelectedRefImageForChange = null; projectViewModel.dismissReferenceImageSelectionDialog() }) { Text(stringResource(R.string.action_cancel)) } }
-            )
-        }
-    }
-
     if (showConfirmationDialog) {
         AlertDialog(
             onDismissRequest = { projectViewModel.cancelSceneGenerationDialog() },
@@ -987,80 +1149,118 @@ fun VideoProjectContent(
             dismissButton = { OutlinedButton(onClick = { projectViewModel.cancelSceneGenerationDialog() }) { Text(stringResource(R.string.action_cancel)) } }
         )
     }
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (!isUiReady) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(); Spacer(modifier = Modifier.height(8.dp)); Text(stringResource(R.string.video_project_status_loading_data)) }
-            }
-        } else {
-            if (isProcessingGlobalScenes && sceneLinkDataList.isEmpty()) {
+            if (!isUiReady) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(); Spacer(modifier = Modifier.height(8.dp)); Text(stringResource(R.string.video_project_status_generating_scene_structure)) }
-                }
-            }
-            else if (sceneLinkDataList.isNotEmpty()) {
-                LazyRow(modifier = Modifier.fillMaxSize()) {
-                    items(sceneLinkDataList, key = { it.id }) { sceneLinkData ->
-                        SceneLinkItem(
-                            sceneLinkData = sceneLinkData,
-                            projectViewModel = projectViewModel,
-                            allProjectReferenceImages = allProjectReferenceImages,
-                            currentlyPlayingSceneId = currentlyPlayingSceneId,
-                            isGeneratingPreviewForScene = isGeneratingPreviewForScene,
-                            
-                            onGenerateImageWithConfirmation = { sceneIdVal, promptVal -> projectViewModel.requestImageGenerationWithConfirmation(sceneIdVal, promptVal) }
-                        )
-                    }
-                }
-            } else if (globalSceneError != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
-                            .padding(16.dp)
-                            .clickable { projectViewModel.clearGlobalSceneError() },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Error,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Text(
-                            text = globalSceneError!!,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            text = stringResource(R.string.status_tap_to_clear_error),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(); Spacer(modifier = Modifier.height(8.dp)); Text(stringResource(R.string.video_project_status_loading_data)) }
                 }
             } else {
-                Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Icon(Icons.Filled.MovieFilter, contentDescription = stringResource(R.string.video_project_icon_desc_no_scenes), modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(text = stringResource(R.string.video_project_placeholder_no_scenes_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                        Text(text = stringResource(R.string.video_project_placeholder_no_scenes_instructions), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                if (isProcessingGlobalScenes && sceneLinkDataList.isEmpty()) {
+                    Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                                .padding(16.dp)
+                        ) {
+                        Box(modifier = Modifier
+                                .fillMaxSize()
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(); Spacer(modifier = Modifier.height(8.dp)); Text(stringResource(R.string.video_project_status_generating_scene_structure)) }
+                        }
                     }
+                }
+                else if (sceneLinkDataList.isNotEmpty()) {
+                    LazyRow(modifier = Modifier.fillMaxSize()) {
+                        items(sceneLinkDataList, key = { it.id }) { sceneLinkData ->
+                            SceneLinkItem(
+                                sceneLinkData = sceneLinkData,
+                                projectViewModel = projectViewModel,
+                                allProjectReferenceImages = allProjectReferenceImages,
+                                currentlyPlayingSceneId = currentlyPlayingSceneId,
+                                isGeneratingPreviewForScene = isGeneratingPreviewForScene,
+                                availableProjectAssets = availableProjectAssets,
+                                onGenerateImageWithConfirmation = { sceneIdVal, promptVal -> projectViewModel.requestImageGenerationWithConfirmation(sceneIdVal, promptVal) }
+                            )
+                        }
+                    }
+                } else if (globalSceneError != null) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(8.dp))
+                                .padding(16.dp)
+                                .clickable { projectViewModel.clearGlobalSceneError() },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text(
+                                text = globalSceneError!!,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                text = stringResource(R.string.status_tap_to_clear_error),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                } else {
+                
+                    Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                                .padding(16.dp)
+                        ) {
+                            Box(modifier = Modifier
+                                .fillMaxSize()
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ){
+                                    Icon(Icons.Filled.MovieFilter, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                                    Text(stringResource(R.string.video_project_placeholder_no_scenes_title), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+                                    Text(stringResource(R.string.video_project_placeholder_no_scenes_instructions), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(stringResource(R.string.context_info_project_import_text_click), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            
+                        }
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
+    
+    
+    
+    
+    
 }
