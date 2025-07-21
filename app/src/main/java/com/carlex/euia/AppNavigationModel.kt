@@ -22,8 +22,7 @@ object AppDestinations {
     const val IMPORT_DATA_URL_ROUTE = "import_data_url"
     const val VIDEO_CREATION_WORKFLOW = "video_creation_workflow"
     const val PROJECT_MANAGEMENT_ROUTE = "project_management"
-
-        
+    
     // Novas rotas para autenticação e monetização
     const val LOGIN_ROUTE = "login_route" 
     const val REGISTER_ROUTE = "register_route" 

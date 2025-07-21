@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+
+<string name="music_current_selection_label">Música selecionada</string>
+<string name="error_placeholder_title">error_placeholder_title</string>
+
+
 <string name="media_explorer_title">Explorar Mídia Online</string>
     <string name="media_explorer_use_this">Usar esta Mídia</string>
     <string name="media_explorer_back_to_grid_desc">Voltar para a grade de resultados</string>

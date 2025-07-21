@@ -26,7 +26,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.carlex.euia.R
 import com.carlex.euia.viewmodel.MusicTrack
 import com.carlex.euia.viewmodel.MusicViewModel
-import java.io.File // <<< IMPORT CRUCIAL QUE FALTAVA
+import java.io.File
 
 @Composable
 fun MusicSelectionContent(
@@ -38,11 +38,8 @@ fun MusicSelectionContent(
     val selectedPath by musicViewModel.selectedMusicPath.collectAsState()
     val isPlayingId by musicViewModel.isPlayingId.collectAsState()
 
-    val localFilePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        musicViewModel.saveLocalMusicPath(uri)
-    }
+    // O launcher para pegar arquivos foi movido para o AppNavigationHost,
+    // pois a BottomBar que o aciona está lá.
 
     Column(
         modifier = modifier
@@ -50,22 +47,25 @@ fun MusicSelectionContent(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // O BOTÃO DE IMPORTAR FOI REMOVIDO DAQUI
-
-        Spacer(modifier = Modifier.height(8.dp))
-
         if (selectedPath.isNotEmpty()) {
             Text(
-                text = stringResource(R.string.music_current_selection, File(selectedPath).name),
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(R.string.music_current_selection_label),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                // Extrai o nome do arquivo do caminho completo para exibição
+                text = File(selectedPath).name,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Divider()
         }
 
-        Divider(modifier = Modifier.padding(vertical = 16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -76,7 +76,8 @@ fun MusicSelectionContent(
                 Text(
                     text = stringResource(R.string.music_no_files_found),
                     textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 32.dp)
                 )
             }
         } else {
@@ -123,7 +124,7 @@ private fun MusicTrackItem(
         Row(
             modifier = Modifier
                 .clickable(onClick = onSelectClick)
-                .padding(horizontal = 8.dp, vertical = 12.dp)
+                .padding(horizontal = 12.dp, vertical = 16.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {

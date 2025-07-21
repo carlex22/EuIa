@@ -1,0 +1,80 @@
+{
+  "allFiles": [
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/project/SceneCard.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 24304,
+          "line": 394
+        },
+        "start": {
+          "column": 1,
+          "index": 24304,
+          "line": 394
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/project/ProjectDialogs.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 13249,
+          "line": 266
+        },
+        "start": {
+          "column": 1,
+          "index": 13249,
+          "line": 266
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/project/ProjectPlaceholders.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 4645,
+          "line": 124
+        },
+        "start": {
+          "column": 1,
+          "index": 4645,
+          "line": 124
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/VideoProjectContent.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 12920,
+          "line": 274
+        },
+        "start": {
+          "column": 1,
+          "index": 12920,
+          "line": 274
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml",
+      "selection": {
+        "end": {
+          "column": 43,
+          "index": 1005,
+          "line": 20
+        },
+        "start": {
+          "column": 43,
+          "index": 1005,
+          "line": 20
+        }
+      }
+    }
+  ],
+  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml"
+}

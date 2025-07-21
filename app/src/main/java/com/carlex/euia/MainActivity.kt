@@ -29,8 +29,9 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     
-    private val showNotificationPermissionDialog = mutableStateOf(false) 
+    private val showNotificationPermissionDialog = mutableStateOf(false)
 
+    // Launcher para solicitar a permissão de notificação
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             if (isGranted) {
@@ -41,32 +42,46 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    /**
+     * Garante que o Firebase foi inicializado (pelo Initializer automático).
+     * Se ainda não estiver pronto, aguarda um pouco antes de prosseguir.
+     * Esta função agora roda em Dispatchers.IO para evitar qualquer bloqueio na Main Thread.
+     */
     private suspend fun ensureFirebaseInitialized() {
         withContext(Dispatchers.IO) {
             try {
+                // Tenta obter a instância. Se funcionar, está inicializado.
                 FirebaseApp.getInstance()
                 Log.d("MainActivity", "Firebase já inicializado.")
             } catch (e: IllegalStateException) {
-                Log.w("MainActivity", "Firebase não inicializado ainda, aguardando...")
-                delay(200) 
+                // Se lançar exceção, o Initializer ainda pode estar rodando.
+                Log.w("MainActivity", "Firebase não inicializado, aguardando inicializador automático...")
+                delay(300) // Aguarda um tempo para o Initializer concluir.
                 try {
                     FirebaseApp.getInstance()
+                    Log.d("MainActivity", "Firebase inicializado após espera.")
                 } catch (e2: IllegalStateException) {
                     Log.e("MainActivity", "Firebase não pôde ser inicializado: ${e2.message}")
+                    // Em um app de produção, aqui poderia ser exibido um erro fatal para o usuário.
                 }
             }
         }
     }
 
+    /**
+     * Lida com a lógica de solicitar a permissão de notificações no Android 13+ (TIRAMISU).
+     */
     private fun askNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             when {
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED -> {
                     Log.d("MainActivity", "Permissão de notificação já concedida.")
                 }
+                // Mostra um diálogo explicativo se o usuário já negou a permissão uma vez.
                 shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
                     showNotificationPermissionDialog.value = true
                 }
+                // Solicita a permissão diretamente na primeira vez.
                 else -> {
                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
@@ -77,21 +92,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Injeção de contexto síncrona (rápida, pode permanecer aqui)
         Log.i("MainActivity", "Injetando contexto da aplicação nas classes de API.")
         GeminiTextAndVisionProApi.setApplicationContext(application)
         GeminiTextAndVisionProRestApi.setApplicationContext(application)
 
+        // Solicita a permissão de notificação (se aplicável)
         askNotificationPermission()
         
+        // Lança uma corrotina para lidar com a inicialização e a configuração da UI
         lifecycleScope.launch {
+            // Garante que o Firebase está pronto ANTES de tentar compor a UI
             ensureFirebaseInitialized()
-            delay(300)
             
             setContent {
                 val permissionViewModel: PermissionViewModel = viewModel()
                 val showOverlayDialog by permissionViewModel.showInitialOverlayDialog.collectAsState()
                 val showZombieWarningDialog by permissionViewModel.showZombieWorkerDialog.collectAsState()
 
+                // Efeitos lançados para verificar permissões e estados na inicialização da UI
                 LaunchedEffect(Unit) {
                     permissionViewModel.checkOverlayPermissionOnStartup(this@MainActivity)
                     permissionViewModel.ZombieWorkerDetected(this@MainActivity)
@@ -136,13 +155,13 @@ class MainActivity : ComponentActivity() {
                             },
                             dismissButton = {
                                 TextButton(onClick = { permissionViewModel.onIgnoreZombieWarningClicked() }) {
-                                    Text(stringResource(R.string.overlay_permission_dialog_ignore_button)) // Reutilizando a string "Ignorar"
+                                    Text(stringResource(R.string.overlay_permission_dialog_ignore_button))
                                 }
                             }
                         )
                     }
 
-                    // Diálogo de permissão de notificação (sem alterações)
+                    // Diálogo de permissão de notificação
                     if (showNotificationPermissionDialog.value) {
                         AlertDialog(
                             onDismissRequest = { showNotificationPermissionDialog.value = false },
@@ -166,6 +185,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Funções de ciclo de vida para logging (não precisam de alterações)
     override fun onStop() {
         super.onStop()
         Log.d("MainActivity", "onStop chamado.")

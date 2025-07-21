@@ -50,16 +50,23 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val isPlayingId: StateFlow<String?> = _isPlayingId.asStateFlow()
 
     init {
-        if (!sharedMusicDir.exists()) {
-            sharedMusicDir.mkdirs()
+        // <<< INÍCIO DA CORREÇÃO >>>
+        // A verificação de diretório e o carregamento dos arquivos agora
+        // são disparados dentro de uma corrotina para não bloquear o construtor.
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!sharedMusicDir.exists()) {
+                sharedMusicDir.mkdirs()
+            }
+            loadLocalMusicFiles()
         }
-        loadLocalMusicFiles()
+        // <<< FIM DA CORREÇÃO >>>
     }
 
     fun loadLocalMusicFiles() {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             try {
+                // A verificação `exists()` foi removida daqui, pois já acontece no `init`
                 val files = sharedMusicDir.listFiles { _, name -> name.endsWith(".mp3") || name.endsWith(".wav") || name.endsWith(".m4a") }
                 val tracks = files?.mapNotNull { file ->
                     getMusicTrackFromFile(file)
@@ -68,7 +75,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao carregar arquivos de música locais", e)
             } finally {
-                _isLoading.value = false
+                withContext(Dispatchers.Main) {
+                     _isLoading.value = false
+                }
             }
         }
     }
@@ -151,9 +160,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 if (selectedMusicPath.value == track.path) {
                     audioDataStore.setVideoMusicPath("")
                 }
-                withContext(Dispatchers.Main) {
-                    loadLocalMusicFiles()
-                }
+                // Recarrega a lista após a exclusão
+                loadLocalMusicFiles()
             } else {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(getApplication(), "Falha ao deletar o arquivo", Toast.LENGTH_SHORT).show()
@@ -179,17 +187,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 Log.i(TAG, "Música importada e salva em: ${outputFile.absolutePath}")
 
-                // <<< INÍCIO DA CORREÇÃO >>>
                 val newTrack = getMusicTrackFromFile(outputFile)
                 if (newTrack != null) {
+                    // Seleciona a música recém-importada automaticamente
                     selectMusicForProject(newTrack)
                     Log.i(TAG, "Música recém-importada '${newTrack.title}' foi definida como a seleção atual.")
                 }
-                // <<< FIM DA CORREÇÃO >>>
 
-                withContext(Dispatchers.Main) {
-                    loadLocalMusicFiles()
-                }
+                // Recarrega a lista para incluir o novo arquivo
+                loadLocalMusicFiles()
+
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao salvar o arquivo de música importado.", e)
                  withContext(Dispatchers.Main) {
