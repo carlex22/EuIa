@@ -109,7 +109,7 @@ class SceneOrchestrator(
                     val prompt = scene.promptGeracao 
                     if (prompt != null) {
                         sceneWorkerManager.enqueueImageGeneration(scene.id, prompt, emptyList())
-                        sceneRepository.updateScene(scene.id) { it.copy(isGenerating = true) }
+                        //sceneRepository.updateScene(scene.id) { it.copy(isGenerating = true) }
                         delay(200) // Pequeno delay para não sobrecarregar o enfileiramento do WorkManager
                     } else {
                         Log.w(TAG, "Cena ${scene.id} não tinha prompt para geração, pulando.")

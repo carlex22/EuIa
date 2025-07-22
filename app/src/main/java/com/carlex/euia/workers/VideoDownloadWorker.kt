@@ -53,7 +53,7 @@ class VideoDownloadWorker(
             }
 
             // Gerar a thumbnail
-            val generatedThumbPath = generateThumbnail(downloadedVideoFile.absolutePath, projectDirName, "thumb_${downloadedVideoFile.nameWithoutExtension}")
+            val generatedThumbPath = generateThumbnail(downloadedVideoFile.absolutePath, projectDirName, "${downloadedVideoFile.nameWithoutExtension}")
             if (generatedThumbPath == null || !isActive) {
                 downloadedVideoFile.delete()
                 throw Exception("Falha na geração da thumbnail ou tarefa cancelada.")
@@ -79,7 +79,7 @@ class VideoDownloadWorker(
 
         if (!response.isSuccessful) return null
 
-        val videoDir = BitmapUtils.getAppSpecificDirectory(applicationContext, projectDirName, "downloaded_videos")
+        val videoDir = BitmapUtils.getAppSpecificDirectory(applicationContext, projectDirName, "pixabay_videos")
         val outputFile = File(videoDir, "$baseName.mp4")
 
         response.body?.byteStream()?.use { inputStream ->
@@ -109,7 +109,7 @@ class VideoDownloadWorker(
             if (thumbnailBitmap != null) {
                 BitmapUtils.saveBitmapToFile(
                     applicationContext, thumbnailBitmap, projectDirName,
-                    "ref_images", // Salva na mesma pasta das outras referências
+                    "thumbs", // Salva na mesma pasta das outras referências
                     thumbBaseName, Bitmap.CompressFormat.WEBP, 80
                 )
             } else {

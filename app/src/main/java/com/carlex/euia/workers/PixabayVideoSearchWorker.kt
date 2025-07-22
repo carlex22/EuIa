@@ -162,9 +162,6 @@ class PixabayVideoSearchWorker(
             // Atualiza o DataStore com os caminhos do vídeo e da thumbnail
             updateSceneWithDownloadedAsset(sceneId, finalAssetPath, finalThumbPath)
             
-            // Enfileira a geração da pré-visualização em vez de gerá-la aqui
-            enqueueScenePreviewWorker(sceneId)
-            // <<< FIM DA MUDANÇA PRINCIPAL >>>
 
             updateNotification(applicationContext.getString(R.string.notification_content_pixabay_success), isFinished = true)
             return@coroutineScope Result.success()
@@ -178,22 +175,7 @@ class PixabayVideoSearchWorker(
         }
     }
     
-    private fun enqueueScenePreviewWorker(sceneId: String) {
-        Log.d(TAG, "Enfileirando ScenePreviewWorker para a cena $sceneId após download da Pixabay.")
-        val workRequest = OneTimeWorkRequestBuilder<ScenePreviewWorker>()
-            .setInputData(workDataOf(ScenePreviewWorker.KEY_SCENE_ID to sceneId))
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .addTag("${WorkerTags.SCENE_PREVIEW_WORK}_$sceneId")
-            .addTag(WorkerTags.SCENE_PREVIEW_WORK)
-            .build()
-
-        workManager.enqueueUniqueWork(
-            "SCENE_PREVIEW_QUEUE",
-            ExistingWorkPolicy.APPEND_OR_REPLACE,
-            workRequest
-        )
-    }
-
+    
     private suspend fun downloadFile(url: String, projectDirName: String, baseName: String, type: String): File? = withContext(Dispatchers.IO) {
         val client = OkHttpClient()
         val request = Request.Builder().url(url).build()

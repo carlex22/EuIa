@@ -17,7 +17,7 @@ data class ImagemReferencia(
     val pathVideo: String? = null, // Path to the video file, if this is a video reference
     val pathThumb: String? = null, // Path to the video file, if this is a video reference
     val videoDurationSeconds: Long? = null,
-    val containsPeople: Boolean = false
+    val containsPeople: Boolean = true
 )
 
 /**
@@ -34,7 +34,7 @@ data class ImagemReferenciaComEstadoProcessamento(
     val error: String? = null,
     val pathVideo: String? = null, // Path to the video file
     val videoDurationSeconds: Long? = null,
-    val containsPeople: Boolean = false
+    val containsPeople: Boolean = true
 )
 
 // --- Funções de Conversão ---

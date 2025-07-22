@@ -24,6 +24,19 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/**
+ * Enum para definir o propósito do diálogo de seleção de assets,
+ * permitindo que um único diálogo seja usado para múltiplas ações.
+ */
+enum class AssetSelectionPurpose {
+    REPLACE_GENERATED_ASSET, // Para substituir o asset principal da cena
+    UPDATE_REFERENCE_IMAGE,  // Para apenas atualizar a imagem de referência
+    SELECT_CLOTHING_IMAGE    // Para selecionar o figurino para a troca de roupa
+}
 
 class VideoProjectViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -37,6 +50,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     private val videoPreferencesDataStoreManager = VideoPreferencesDataStoreManager(application)
 
     // Classes Auxiliares (Helpers/Services)
+    private val projectAssetManager = ProjectAssetManager(applicationContext, videoPreferencesDataStoreManager)
     private val sceneRepository = SceneRepository(VideoProjectDataStoreManager(application), viewModelScope)
     private val pixabayHelper = PixabayHelper(applicationContext, workManager, videoPreferencesDataStoreManager)
     private val sceneGenerationService = SceneGenerationService(
@@ -54,6 +68,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         sceneWorkerManager = sceneWorkerManager,
         creditChecker = { cost -> authViewModel.checkAndDeductCredits(TaskType.IMAGE) }
     )
+    private val scenePreviewOrchestrator: ScenePreviewOrchestrator
 
     // --- StateFlows para a UI ---
     val sceneLinkDataList: StateFlow<List<SceneLinkData>> = sceneRepository.sceneLinkDataList
@@ -93,20 +108,45 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     val isGeneratingPreviewForSceneId: StateFlow<String?> = _isGeneratingPreviewForSceneId.asStateFlow()
     private val _availableProjectAssets = MutableStateFlow<List<ProjectAsset>>(emptyList())
     val availableProjectAssets: StateFlow<List<ProjectAsset>> = _availableProjectAssets.asStateFlow()
+    private val _availableReferenceImageAssets = MutableStateFlow<List<ProjectAsset>>(emptyList())
+    val availableReferenceImageAssets: StateFlow<List<ProjectAsset>> = _availableReferenceImageAssets.asStateFlow()
     private val _sceneIdToRecreateImage = MutableStateFlow<String?>(null)
     val sceneIdToRecreateImage: StateFlow<String?> = _sceneIdToRecreateImage.asStateFlow()
     private val _promptForRecreateImage = MutableStateFlow<String?>(null)
     val promptForRecreateImage: StateFlow<String?> = _promptForRecreateImage.asStateFlow()
-    private val _sceneIdForReferenceChangeDialog = MutableStateFlow<String?>(null)
-    val sceneIdForReferenceChangeDialog: StateFlow<String?> = _sceneIdForReferenceChangeDialog.asStateFlow()
+    private val _sceneForPromptEdit = MutableStateFlow<SceneLinkData?>(null)
+    val sceneForPromptEdit: StateFlow<SceneLinkData?> = _sceneForPromptEdit.asStateFlow()
+    private val _assetSelectionState = MutableStateFlow<Pair<String, AssetSelectionPurpose>?>(null)
+    val assetSelectionState: StateFlow<Pair<String, AssetSelectionPurpose>?> = _assetSelectionState.asStateFlow()
+
+   /*private val workInfoObserver = Observer<List<WorkInfo>> { workInfos ->
+        val isAnyWorkRunning = workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+        if (!isAnyWorkRunning ){
+            OverlayManager.hideOverlay(applicationContext)
+        } else {
+            val runningCount = workInfos.count { it.state == WorkInfo.State.RUNNING }
+            val enqueuedCount = workInfos.count { it.state == WorkInfo.State.ENQUEUED }
+            val totalActiveCount = runningCount + enqueuedCount
+            val quantidadeDeRegistros = sceneLinkDataList.value.size
+            val quantidadeOk = sceneLinkDataList.value.count { it.imagemGeradaPath != null }
+            val progresso = ((quantidadeOk.toFloat() / quantidadeDeRegistros.toFloat()) * 100).coerceIn(0f, 100f)
+            OverlayManager.showOverlay(applicationContext, "$totalActiveCount/$quantidadeDeRegistros",  progresso.toInt())
+        }
+    }*/
     
-    // --- Lógica de Observação ---
-    private val workInfoObserver = Observer<List<WorkInfo>> { /* ... */ }
-    private val previewWorkObserver = Observer<List<WorkInfo>> { /* ... */ }
+    
 
     init {
-        workManager.getWorkInfosByTagLiveData(WorkerTags.VIDEO_PROCESSING).observeForever(workInfoObserver)
-        workManager.getWorkInfosByTagLiveData(WorkerTags.SCENE_PREVIEW_WORK).observeForever(previewWorkObserver)
+                
+       /* workManager.getWorkInfosByTagLiveData(WorkerTags.VIDEO_PROCESSING)
+            .observeForever(workInfoObserver)
+        workManager.getWorkInfosByTagLiveData(WorkerTags.SCENE_PREVIEW_WORK)
+            .observeForever(previewWorkObserver)*/
+        
+        
+        scenePreviewOrchestrator = ScenePreviewOrchestrator(applicationContext, sceneRepository, sceneWorkerManager, viewModelScope)
+        scenePreviewOrchestrator.startObserving()
+        
         loadProjectAssets()
 
         viewModelScope.launch {
@@ -120,15 +160,14 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             }
         }
     }
-    
+
     override fun onCleared() {
         super.onCleared()
         stopPlayback()
-        workManager.getWorkInfosByTagLiveData(WorkerTags.SCENE_PREVIEW_WORK).removeObserver(previewWorkObserver)
-        workManager.getWorkInfosByTagLiveData(WorkerTags.VIDEO_PROCESSING).removeObserver(workInfoObserver)
+        scenePreviewOrchestrator.stopObserving()
+         
     }
 
-    // --- MÉTODOS PÚBLICOS PARA A UI ---
     fun onSnackbarMessageShown() { _snackbarMessage.value = null }
     fun postSnackbarMessage(message: String) { _snackbarMessage.value = message }
 
@@ -151,43 +190,38 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             performFullSceneGeneration()
         }
     }
-    
+
     private fun performFullSceneGeneration() {
         _isProcessingGlobalScenes.value = true
         OverlayManager.showOverlay(applicationContext, "🎬", 0)
         sceneOrchestrator.generateFullSceneStructure()
     }
-    
+
     fun cancelSceneGenerationProcess() {
         sceneOrchestrator.cancelFullSceneStructureGeneration()
         _isProcessingGlobalScenes.value = false
         postSnackbarMessage("Geração de estrutura de cenas cancelada.")
     }
-    
+
     fun confirmImageBatchGeneration() = sceneOrchestrator.confirmAndEnqueueBatchGeneration()
     fun cancelImageBatchGeneration() = sceneOrchestrator.cancelBatchGeneration()
-    
-    // <<< INÍCIO DA CORREÇÃO 1 >>>
-    fun cancelSceneGenerationDialog() {
-        _showSceneConfirmationDialogVM.value = false
-    }
-    
+    fun cancelSceneGenerationDialog() { _showSceneConfirmationDialogVM.value = false }
+
     fun triggerBatchPixabayVideoSearch() {
         viewModelScope.launch {
             val currentState = sceneOrchestrator.batchState.value
             if (currentState is BatchGenerationState.AwaitingCostConfirmation) {
-                sceneOrchestrator.cancelBatchGeneration() // Cancela o diálogo de custo
+                sceneOrchestrator.cancelBatchGeneration()
                 postSnackbarMessage(applicationContext.getString(R.string.toast_batch_video_search_started))
                 
                 currentState.scenes.forEach { scene ->
-                    sceneWorkerManager.enqueuePreviewGeneration(scene.id) // Simplificado, poderia ser um worker específico
+                    scenePreviewOrchestrator.requestPreviewForScene(scene.id)
                     delay(200)
                 }
             }
         }
     }
-    // <<< FIM DA CORREÇÃO 1 >>>
-    
+
     fun generateImageForScene(sceneId: String, prompt: String) {
         viewModelScope.launch {
             val scene = sceneLinkDataList.value.find { it.id == sceneId } ?: return@launch
@@ -205,14 +239,18 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             sceneRepository.updateScene(sceneId) { it.copy(isGenerating = true, generationAttempt = it.generationAttempt + 1, generationErrorMessage = null) }
         }
     }
-    
+
     fun changeClothesForSceneWithSpecificReference(sceneId: String, chosenReferenceImagePath: String) {
         viewModelScope.launch {
             val scene = sceneLinkDataList.value.find { it.id == sceneId } ?: return@launch
-            if (isSceneBusy(scene)) return@launch
+            if (isSceneBusy(scene)) {
+                postSnackbarMessage("A cena já está processando.")
+                return@launch
+            }
             
             sceneWorkerManager.enqueueClothesChange(sceneId, chosenReferenceImagePath)
             sceneRepository.updateScene(sceneId) { it.copy(isChangingClothes = true, clothesChangeAttempt = it.clothesChangeAttempt + 1, generationErrorMessage = null) }
+            postSnackbarMessage("Troca de figurino iniciada para a cena ${scene.cena}.")
         }
     }
 
@@ -270,10 +308,9 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
 
     fun onPixabayAssetSelected(sceneId: String, asset: PixabayAsset) {
         viewModelScope.launch {
-            sceneRepository.updateScene(sceneId) { it.copy(isGeneratingVideo = true, generationErrorMessage = null) }
             pixabayHelper.downloadAndAssignAssetToScene(sceneId, asset)
             onDismissPixabaySearchDialog()
-            postSnackbarMessage("Download do asset iniciado...")
+            postSnackbarMessage("Download do asset iniciado em segundo plano...")
         }
     }
 
@@ -284,7 +321,7 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             } else if (!scene.videoPreviewPath.isNullOrBlank()){
                 _currentlyPlayingSceneId.value = scene.id
             } else {
-                sceneWorkerManager.enqueuePreviewGeneration(scene.id)
+                scenePreviewOrchestrator.requestPreviewForScene(scene.id)
                 postSnackbarMessage(applicationContext.getString(R.string.toast_preview_generation_queued))
             }
         }
@@ -293,20 +330,22 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
     fun stopPlayback() {
         if (_currentlyPlayingSceneId.value != null) _currentlyPlayingSceneId.value = null
     }
-
-    fun updateScenePrompt(id: String, newPrompt: String) {
-       viewModelScope.launch {
-           sceneRepository.updateScene(id) {
-               it.copy(
-                   promptGeracao = newPrompt,
-                   imagemGeradaPath = null, pathThumb = null, videoPreviewPath = null,
-                   isGenerating = false, aprovado = false, generationErrorMessage = null
-               )
-           }
-       }
-   }
+    
+    fun updatePromptAndGenerateImage(sceneId: String, newPrompt: String) {
+        viewModelScope.launch {
+            sceneRepository.updateScene(sceneId) {
+                it.copy(
+                    promptGeracao = newPrompt,
+                    imagemGeradaPath = null, pathThumb = null, videoPreviewPath = null,
+                    isGenerating = false, aprovado = false, generationErrorMessage = null
+                )
+            }
+            generateImageForScene(sceneId, newPrompt)
+            postSnackbarMessage(applicationContext.getString(R.string.toast_image_generation_started_for_scene))
+        }
+    }
    
-    fun replaceGeneratedImageWithReference(sceneId: String, chosenAsset: ProjectAsset) {
+    private fun replaceGeneratedImageWithReference(sceneId: String, chosenAsset: ProjectAsset) {
         viewModelScope.launch {
             sceneRepository.updateScene(sceneId) { scene ->
                 scene.copy(
@@ -323,77 +362,22 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         }
     }
     
-    fun updateSceneReferenceImage(sceneId: String, newReferenceImage: ImagemReferencia) {
+    private fun updateSceneReferenceImage(sceneId: String, newReferenceAsset: ProjectAsset) {
         viewModelScope.launch {
-            sceneRepository.updateScene(sceneId) { scene ->
-                val isVideo = newReferenceImage.pathVideo != null
-                scene.copy(
-                    imagemReferenciaPath = newReferenceImage.path,
-                    descricaoReferencia = newReferenceImage.descricao,
-                    imagemGeradaPath = if (isVideo) newReferenceImage.pathVideo else null,
-                    pathThumb = if (isVideo) newReferenceImage.path else null,
-                    isGenerating = if (!isVideo) scene.promptGeracao?.isNotBlank() == true else false,
-                    aprovado = isVideo,
-                    generationErrorMessage = null, videoPreviewPath = null
+            sceneRepository.updateScene(sceneId) {
+                it.copy(
+                    imagemReferenciaPath = newReferenceAsset.thumbnailPath,
+                    descricaoReferencia = newReferenceAsset.displayName
                 )
             }
+            postSnackbarMessage("Imagem de referência atualizada.")
         }
     }
     
     fun loadProjectAssets() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val projectDirName = videoPreferencesDataStoreManager.videoProjectDir.first()
-                if (projectDirName.isBlank()) {
-                    _availableProjectAssets.value = emptyList()
-                    return@launch
-                }
-                
-                val projectDir = ProjectPersistenceManager.getProjectDirectory(applicationContext, projectDirName)
-                val assetList = mutableListOf<ProjectAsset>()
-
-                val subDirsToScan = listOf("ref_images", "pixabay_images", "pixabay_videos", "downloaded_videos", "gemini_generated_images")
-                
-                for (subDirName in subDirsToScan) {
-                    val dir = File(projectDir, subDirName)
-                    if (!dir.exists() || !dir.isDirectory) continue
-                    
-                    dir.listFiles()?.forEach { file ->
-                        if (file.isFile) {
-                            if (subDirName == "ref_images" && file.name.startsWith("thumb_", true)) {
-                                // Ignora thumbnails
-                            } else {
-                                val isVideo = file.extension.equals("mp4", true) || file.extension.equals("webm", true)
-                                var thumbPath = file.absolutePath
-                                
-                                if (isVideo) {
-                                    val expectedThumbName = "thumb_${file.nameWithoutExtension}.webp"
-                                    val thumbFileInRefDir = File(File(projectDir, "ref_images"), expectedThumbName)
-                                    if(thumbFileInRefDir.exists()) {
-                                        thumbPath = thumbFileInRefDir.absolutePath
-                                    }
-                                }
-                                
-                                assetList.add(ProjectAsset(
-                                    displayName = file.name,
-                                    finalAssetPath = file.absolutePath,
-                                    thumbnailPath = thumbPath,
-                                    isVideo = isVideo
-                                ))
-                            }
-                        }
-                    }
-                }
-                withContext(Dispatchers.Main) {
-                    _availableProjectAssets.value = assetList.sortedBy { it.displayName }
-                }
-                Log.d(TAG, "Carregados ${_availableProjectAssets.value.size} assets do projeto '$projectDirName'.")
-            } catch (e: Exception) {
-                Log.e(TAG, "Erro ao carregar assets do projeto.", e)
-                withContext(Dispatchers.Main) {
-                    _availableProjectAssets.value = emptyList()
-                }
-            }
+        viewModelScope.launch {
+            _availableProjectAssets.value = projectAssetManager.loadAllProjectAssets()
+            _availableReferenceImageAssets.value = projectAssetManager.loadReferenceImageAssets()
         }
     }
 
@@ -437,11 +421,34 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         dismissRecreateImageDialog()
     }
     
-    fun triggerSelectReferenceImageForScene(sceneId: String) {
-        _sceneIdForReferenceChangeDialog.value = sceneId
+    fun triggerPromptEditForScene(scene: SceneLinkData) {
+        _sceneForPromptEdit.value = scene
     }
 
-    fun dismissReferenceImageSelectionDialog() {
-        _sceneIdForReferenceChangeDialog.value = null
+    fun dismissPromptEditDialog() {
+        _sceneForPromptEdit.value = null
+    }
+
+    fun triggerAssetSelectionForScene(sceneId: String, purpose: AssetSelectionPurpose) {
+        _assetSelectionState.value = Pair(sceneId, purpose)
+    }
+
+    fun dismissAssetSelectionDialog() {
+        _assetSelectionState.value = null
+    }
+
+    fun handleAssetSelection(sceneId: String, selectedAsset: ProjectAsset, purpose: AssetSelectionPurpose) {
+        when (purpose) {
+            AssetSelectionPurpose.REPLACE_GENERATED_ASSET -> replaceGeneratedImageWithReference(sceneId, selectedAsset)
+            AssetSelectionPurpose.UPDATE_REFERENCE_IMAGE -> updateSceneReferenceImage(sceneId, selectedAsset)
+            AssetSelectionPurpose.SELECT_CLOTHING_IMAGE -> {
+                changeClothesForSceneWithSpecificReference(sceneId, selectedAsset.finalAssetPath)
+            }
+        }
+        dismissAssetSelectionDialog()
+    }
+    
+    fun triggerClothesChangeForScene(sceneId: String) {
+        _assetSelectionState.value = Pair(sceneId, AssetSelectionPurpose.SELECT_CLOTHING_IMAGE)
     }
 }

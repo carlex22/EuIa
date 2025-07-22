@@ -82,11 +82,10 @@ class SceneGenerationService(
             }
 
             // 4. Limpa e processa a resposta JSON
-            val cleanedResponse = cleanGeminiResponse(rawResponse)
-            val sceneList = parseSceneData(cleanedResponse, imageRefs)
+            val sceneList = parseSceneData(rawResponse, imageRefs)
 
             if (sceneList.isEmpty()) {
-                Log.w(TAG, "O processamento do JSON da IA não resultou em nenhuma cena. Resposta limpa: $cleanedResponse")
+                Log.w(TAG, "O processamento do JSON da IA não resultou em nenhuma cena. Resposta bruta: $rawResponse")
                 return Result.failure(Exception("A IA não retornou uma estrutura de cenas válida."))
             }
 
@@ -100,21 +99,35 @@ class SceneGenerationService(
     }
 
     /**
-     * Limpa a resposta bruta da IA, removendo marcadores de código e extraindo apenas o JSON válido.
+     * Processa a resposta da IA, que pode ser um JSON malformado (sem vírgulas entre objetos),
+     * e o transforma em um JSONArray válido.
+     * @param rawResponse A resposta completa da IA.
+     * @return Um JSONArray construído a partir dos objetos encontrados.
      */
-    private fun cleanGeminiResponse(response: String): String {
-        var cleaned = response.trim()
-        if (cleaned.startsWith("```json")) cleaned = cleaned.removePrefix("```json").trimStart()
-        else if (cleaned.startsWith("```")) cleaned = cleaned.removePrefix("```").trimStart()
-        if (cleaned.endsWith("```")) cleaned = cleaned.removeSuffix("```").trimEnd()
+    private fun parsePotentiallyBrokenJsonArray(rawResponse: String): JSONArray {
+        Log.d(TAG, "Tentando parsear resposta potencialmente quebrada da IA.")
+        // Primeiro, faz uma limpeza inicial de marcadores de código
+        val cleanedResponse = rawResponse.trim().removePrefix("```json").removeSuffix("```").trim()
+
+        // Regex para encontrar todos os objetos JSON (qualquer coisa entre { e })
+        val jsonObjectRegex = Regex("\\{.*?\\}", RegexOption.DOT_MATCHES_ALL)
+        val matches = jsonObjectRegex.findAll(cleanedResponse)
+
+        val jsonObjectsAsString = matches.map { it.value }.toList()
         
-        val startIndex = cleaned.indexOfFirst { it == '[' || it == '{' }
-        val endIndex = cleaned.indexOfLast { it == ']' || it == '}' }
-        
-        return if (startIndex != -1 && endIndex != -1) {
-            cleaned.substring(startIndex, endIndex + 1)
-        } else {
-            cleaned // Retorna a string limpa se não encontrar um JSON claro
+        if (jsonObjectsAsString.isEmpty()) {
+            Log.w(TAG, "Nenhum objeto JSON encontrado na resposta da IA após a limpeza.")
+            return JSONArray()
+        }
+
+        // Junta todos os objetos encontrados com uma vírgula
+        val validJsonArrayString = jsonObjectsAsString.joinToString(separator = ",", prefix = "[", postfix = "]")
+
+        return try {
+            JSONArray(validJsonArrayString)
+        } catch (e: JSONException) {
+            Log.e(TAG, "Falha ao criar JSONArray mesmo após a correção manual. JSON Tentado: $validJsonArrayString", e)
+            JSONArray() // Retorna um array vazio em caso de falha final
         }
     }
 
@@ -124,7 +137,8 @@ class SceneGenerationService(
     private fun parseSceneData(jsonString: String, allRefs: List<ImagemReferencia>): List<SceneLinkData> {
         val sceneList = mutableListOf<SceneLinkData>()
         try {
-            val jsonArray = JSONArray(jsonString)
+            // Usa a nova função de parse robusta
+            val jsonArray = parsePotentiallyBrokenJsonArray(jsonString)
             var lastTimeEnd: Double? = 0.0
 
             for (i in 0 until jsonArray.length()) {
@@ -164,9 +178,9 @@ class SceneGenerationService(
                 ))
                 lastTimeEnd = cenaObj.optDouble("TEMPO_FIM", 0.0).takeIf { it > 0 }
             }
-        } catch (e: JSONException) {
+        } catch (e: Exception) { // Captura qualquer exceção, não apenas JSONException
             Log.e(TAG, "Falha ao processar o JSON da IA para as cenas: '$jsonString'", e)
-            return emptyList() // Retorna lista vazia em caso de erro de parsing
+            return emptyList() // Retorna lista vazia em caso de qualquer erro de parsing
         }
         return sceneList
     }

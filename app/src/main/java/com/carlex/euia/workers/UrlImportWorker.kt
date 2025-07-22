@@ -630,7 +630,7 @@ private suspend fun processVideoAndCreateReferenceImage(
             bitmap = thumbnailBitmap,
             projectDirName = projectDirName,
             subDir = "ref_images",
-            baseName = "thumb_from_${File(savedVideoPath).nameWithoutExtension}",
+            baseName = "thumb_${File(savedVideoPath).nameWithoutExtension}",
             format = Bitmap.CompressFormat.WEBP,
             quality = 85
         )
@@ -713,7 +713,7 @@ private fun saveImageToStorage(
 
 private fun saveVideoFileToStorage(context: Context, videoUri: Uri, projectDirName: String, baseName: String): String? {
     val extension = getFileExtensionFromUri(context, videoUri) ?: "mp4"
-    val videoDir = BitmapUtils.getAppSpecificDirectory(context, projectDirName, "ref_videos")
+    val videoDir = BitmapUtils.getAppSpecificDirectory(context, projectDirName, "ref_images")
         ?: return null
     val outputFile = File(videoDir, "$baseName.$extension")
 

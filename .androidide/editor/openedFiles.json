@@ -1,80 +1,170 @@
 {
   "allFiles": [
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/project/SceneCard.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/VideoProcessingWorker.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 24304,
-          "line": 394
+          "column": 4,
+          "index": 11750,
+          "line": 222
         },
         "start": {
-          "column": 1,
-          "index": 24304,
-          "line": 394
+          "column": 4,
+          "index": 11750,
+          "line": 222
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/project/ProjectDialogs.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/VideoDownloadWorker.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 13249,
-          "line": 266
+          "column": 110,
+          "index": 3460,
+          "line": 81
         },
         "start": {
-          "column": 1,
-          "index": 13249,
-          "line": 266
+          "column": 96,
+          "index": 3446,
+          "line": 81
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/project/ProjectPlaceholders.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/helper/ProjectAssetManager.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 4645,
-          "line": 124
+          "column": 96,
+          "index": 2158,
+          "line": 51
         },
         "start": {
-          "column": 1,
-          "index": 4645,
-          "line": 124
+          "column": 96,
+          "index": 2158,
+          "line": 51
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/ui/VideoProjectContent.kt",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/VideoProjectViewModel.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 12920,
-          "line": 274
+          "column": 75,
+          "index": 8380,
+          "line": 142
         },
         "start": {
-          "column": 1,
-          "index": 12920,
-          "line": 274
+          "column": 46,
+          "index": 8351,
+          "line": 142
         }
       }
     },
     {
-      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml",
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/helper/SceneOrchestrator.kt",
       "selection": {
         "end": {
-          "column": 43,
-          "index": 1005,
-          "line": 20
+          "column": 26,
+          "index": 5422,
+          "line": 111
         },
         "start": {
-          "column": 43,
-          "index": 1005,
-          "line": 20
+          "column": 26,
+          "index": 5422,
+          "line": 111
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/data/VideoProjectDataStoreManager.kt",
+      "selection": {
+        "end": {
+          "column": 25,
+          "index": 6079,
+          "line": 140
+        },
+        "start": {
+          "column": 8,
+          "index": 6062,
+          "line": 140
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/helper/ScenePreviewOrchestrator.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 5593,
+          "line": 138
+        },
+        "start": {
+          "column": 1,
+          "index": 5593,
+          "line": 138
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/ScenePreviewWorker.kt",
+      "selection": {
+        "end": {
+          "column": 30,
+          "index": 177,
+          "line": 5
+        },
+        "start": {
+          "column": 30,
+          "index": 177,
+          "line": 5
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/VideoRenderWorker.kt",
+      "selection": {
+        "end": {
+          "column": 38,
+          "index": 9429,
+          "line": 191
+        },
+        "start": {
+          "column": 27,
+          "index": 9418,
+          "line": 191
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/workers/PixabayVideoSearchWorker.kt",
+      "selection": {
+        "end": {
+          "column": 4,
+          "index": 8328,
+          "line": 177
+        },
+        "start": {
+          "column": 4,
+          "index": 8328,
+          "line": 177
+        }
+      }
+    },
+    {
+      "file": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/helper/SceneWorkerManager.kt",
+      "selection": {
+        "end": {
+          "column": 55,
+          "index": 4670,
+          "line": 100
+        },
+        "start": {
+          "column": 37,
+          "index": 4652,
+          "line": 100
         }
       }
     }
   ],
-  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/res/values/strings.xml"
+  "selectedFile": "/data/user/0/com.itsaky.androidide/files/home/euia2/app/src/main/java/com/carlex/euia/viewmodel/helper/SceneWorkerManager.kt"
 }

@@ -250,21 +250,19 @@ private suspend fun processVideoAndCreateReferenceImage(
             return@withContext null
         }
 
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
-        val originalFileNameBase = BitmapUtils.getFileNameFromUri(appContext, uri) ?: "video_$timestamp"
+        
+        val originalFileNameBase = BitmapUtils.getFileNameFromUri(appContext, uri) ?: "video"
         val baseNameForFiles = originalFileNameBase.substringBeforeLast(".")
 
-        savedVideoPath = saveVideoFileToStorage(appContext, uri, projectDirName, "${baseNameForFiles}_${timestamp}")
-        if (savedVideoPath == null || !isActive) {
-            throw Exception("Falha ao salvar o arquivo de vídeo ou tarefa cancelada.")
-        }
+        savedVideoPath = saveVideoFileToStorage(appContext, uri, projectDirName, "${baseNameForFiles}")
+        
 
         savedThumbPath = BitmapUtils.saveBitmapToFile(
             context = appContext,
             bitmap = thumbnailBitmap,
             projectDirName = projectDirName,
-            subDir = "ref_images",
-            baseName = "thumb_from_${File(savedVideoPath).nameWithoutExtension}",
+            subDir = "thumbs",
+            baseName = "${baseNameForFiles}",
             format = Bitmap.CompressFormat.WEBP,
             quality = 85
         )
@@ -273,7 +271,7 @@ private suspend fun processVideoAndCreateReferenceImage(
         }
 
         return@withContext ImagemReferencia(
-            path = savedVideoPath,
+            path = savedVideoPath!!,
             descricao = "",
             pathThumb = savedThumbPath,
             pathVideo = savedVideoPath,
@@ -320,15 +318,12 @@ private fun saveImageToStorage(
         val saveDir = BitmapUtils.getAppSpecificDirectory(context, projectDirName, "ref_images") 
             ?: throw IOException("Não foi possível criar o diretório de salvamento")
 
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(Date())
-        val originalFileNameBase = BitmapUtils.getFileNameFromUri(context, uri) ?: "image_$timestamp"
+       val originalFileNameBase = BitmapUtils.getFileNameFromUri(context, uri) ?: "image"
        
        
-        var finalFileName = "${originalFileNameBase.substringBeforeLast(".")}_${timestamp}.webp"
+        var finalFileName = "${originalFileNameBase.substringBeforeLast(".")}.webp"
         
-        if (originalFileNameBase.startsWith("MLB_")) 
-            finalFileName = "${originalFileNameBase.substringBeforeLast(".")}.webp"
-  
+        
         
         val file = File(saveDir, finalFileName)
 

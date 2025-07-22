@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="scene_item_placeholder_no_ref_image_selected_clickable">Nenhuma imagem de referência selecionada.\n\nClique aqui para escolher uma.</string>
+<string name="toast_image_generation_started_for_scene">Iniciando geração da imagem para a cena</string>
 
 <string name="music_current_selection_label">Música selecionada</string>
+<string name="scene_item_label_ref_image_for_prompt">Imagem de Referência para Inspiração:</string>
+    <string name="scene_item_dialog_title_select_figurino">Trocar Figurino</string>
+
+
 <string name="error_placeholder_title">error_placeholder_title</string>
 
 

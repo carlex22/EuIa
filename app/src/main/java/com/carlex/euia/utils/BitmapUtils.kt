@@ -264,7 +264,7 @@ object BitmapUtils {
         
         val extension = "webp"
         
-        val fileName = "${baseName}_${timestamp}_$uuid.$extension"
+        val fileName = "${baseName}.$extension"
         val file = File(directory, fileName)
 
         var fos: FileOutputStream? = null

@@ -38,8 +38,9 @@ class ScenePreviewWorker(
     companion object {
         const val KEY_SCENE_ID = "key_scene_id_for_preview"
         const val KEY_ERROR_MESSAGE = "key_preview_error_message"
+        // <<< CORREÇÃO AQUI: Renomeando a constante para o nome correto >>>
+        const val KEY_OVERRIDE_IMAGE_PATH = "key_override_image_path"
     }
-
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val notification = createNotification(applicationContext.getString(R.string.notification_content_preview_starting))
         return ForegroundInfo(System.currentTimeMillis().toInt(), notification)

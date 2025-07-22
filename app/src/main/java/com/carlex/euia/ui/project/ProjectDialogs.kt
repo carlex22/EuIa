@@ -1,6 +1,7 @@
 // File: euia/ui/project/ProjectDialogs.kt
 package com.carlex.euia.ui.project
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -11,8 +12,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayCircleFilled // <<< ADICIONADO: Import PlayCircleFilled
+import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.carlex.euia.R
 import com.carlex.euia.data.ProjectAsset
+import com.carlex.euia.data.SceneLinkData
+import com.carlex.euia.viewmodel.AssetSelectionPurpose
 import com.carlex.euia.viewmodel.VideoProjectViewModel
 import com.carlex.euia.viewmodel.helper.PixabayAsset
 import com.carlex.euia.viewmodel.helper.PixabayAssetType
@@ -34,10 +38,7 @@ import java.io.File
 
 /**
  * Um Composable gerenciador que observa os estados do ViewModel e renderiza
- * os diálogos apropriados para a tela de gerenciamento de cenas, mantendo a
- * UI principal (`VideoProjectContent` e `SceneCard`) limpa.
- *
- * @param projectViewModel O ViewModel que controla a visibilidade e os dados dos diálogos.
+ * os diálogos apropriados para a tela de gerenciamento de cenas.
  */
 @Composable
 fun HandleProjectDialogs(
@@ -45,40 +46,78 @@ fun HandleProjectDialogs(
 ) {
     val sceneIdForMediaExplorer by projectViewModel.showPixabaySearchDialogForSceneId.collectAsState()
     val sceneIdToRecreateImage by projectViewModel.sceneIdToRecreateImage.collectAsState()
-    val sceneIdForRefChange by projectViewModel.sceneIdForReferenceChangeDialog.collectAsState()
     val availableAssets by projectViewModel.availableProjectAssets.collectAsState()
+    val referenceImageAssets by projectViewModel.availableReferenceImageAssets.collectAsState()
+    val sceneToEditPrompt by projectViewModel.sceneForPromptEdit.collectAsState()
+    val assetSelectionState by projectViewModel.assetSelectionState.collectAsState()
 
-    // Diálogo para buscar mídias na Pixabay
-    sceneIdForMediaExplorer?.let { sceneId ->
-        MediaExplorerDialog(
-            sceneId = sceneId,
-            projectViewModel = projectViewModel
-        )
-    }
+    // Lógica de Prioridade de Exibição de Diálogos
+    when {
+        // Prioridade 1: Diálogo de seleção de assets (para qualquer propósito)
+        assetSelectionState != null -> {
+            val (sceneId, purpose) = assetSelectionState!!
+            val dialogTitle: String
+            val assetsToShow: List<ProjectAsset>
 
-    // Diálogo para confirmar a recriação de uma imagem
-    if (sceneIdToRecreateImage != null) {
-        AlertDialog(
-            onDismissRequest = { projectViewModel.dismissRecreateImageDialog() },
-            title = { Text(stringResource(R.string.scene_item_dialog_recreate_image_title)) },
-            text = { Text(stringResource(R.string.scene_item_dialog_recreate_image_message)) },
-            confirmButton = { Button(onClick = { projectViewModel.confirmAndProceedWithImageRecreation() }) { Text(stringResource(R.string.action_recreate)) } },
-            dismissButton = { OutlinedButton(onClick = { projectViewModel.dismissRecreateImageDialog() }) { Text(stringResource(R.string.action_cancel)) } }
-        )
-    }
-    
-    // Diálogo para selecionar um asset (imagem/vídeo) local do projeto
-    sceneIdForRefChange?.let { sceneId ->
-        AssetSelectionDialog(
-            onDismissRequest = { projectViewModel.dismissReferenceImageSelectionDialog() },
-            availableAssets = availableAssets,
-            onAssetSelected = { selectedAsset ->
-                // TODO: Ação de selecionar asset local e atualizar a cena no ViewModel
-                // Por exemplo: projectViewModel.replaceGeneratedImageWithReference(sceneId, selectedAsset)
-                projectViewModel.dismissReferenceImageSelectionDialog()
-            },
-            dialogTitle = stringResource(R.string.scene_item_dialog_title_select_ref_image)
-        )
+            when (purpose) {
+                AssetSelectionPurpose.REPLACE_GENERATED_ASSET -> {
+                    dialogTitle = stringResource(R.string.scene_item_dialog_title_select_asset)
+                    assetsToShow = availableAssets
+                }
+                AssetSelectionPurpose.UPDATE_REFERENCE_IMAGE -> {
+                    dialogTitle = stringResource(R.string.scene_item_dialog_title_select_ref_image)
+                    assetsToShow = referenceImageAssets
+                }
+                AssetSelectionPurpose.SELECT_CLOTHING_IMAGE -> {
+                    dialogTitle = stringResource(R.string.scene_item_dialog_title_select_figurino)
+                    assetsToShow = referenceImageAssets
+                }
+            }
+            
+            AssetSelectionDialog(
+                onDismissRequest = { projectViewModel.dismissAssetSelectionDialog() },
+                availableAssets = assetsToShow,
+                onAssetSelected = { selectedAsset ->
+                    projectViewModel.handleAssetSelection(sceneId, selectedAsset, purpose)
+                },
+                dialogTitle = dialogTitle
+            )
+        }
+        
+        // Prioridade 2: Diálogo de edição de prompt
+        sceneToEditPrompt != null -> {
+            val scene = sceneToEditPrompt!!
+            PromptEditDialog(
+                scene = scene,
+                onDismiss = { projectViewModel.dismissPromptEditDialog() },
+                onSaveAndGenerate = { sceneId, newPrompt ->
+                    projectViewModel.updatePromptAndGenerateImage(sceneId, newPrompt)
+                    projectViewModel.dismissPromptEditDialog()
+                },
+                onChangeReferenceClick = {
+                    projectViewModel.triggerAssetSelectionForScene(scene.id, AssetSelectionPurpose.UPDATE_REFERENCE_IMAGE)
+                }
+            )
+        }
+
+        // Prioridade 3: Diálogo de busca na Pixabay
+        sceneIdForMediaExplorer != null -> {
+            MediaExplorerDialog(
+                sceneId = sceneIdForMediaExplorer!!,
+                projectViewModel = projectViewModel
+            )
+        }
+
+        // Prioridade 4: Diálogo para confirmar recriação de imagem
+        sceneIdToRecreateImage != null -> {
+            AlertDialog(
+                onDismissRequest = { projectViewModel.dismissRecreateImageDialog() },
+                title = { Text(stringResource(R.string.scene_item_dialog_recreate_image_title)) },
+                text = { Text(stringResource(R.string.scene_item_dialog_recreate_image_message)) },
+                confirmButton = { Button(onClick = { projectViewModel.confirmAndProceedWithImageRecreation() }) { Text(stringResource(R.string.action_recreate)) } },
+                dismissButton = { OutlinedButton(onClick = { projectViewModel.dismissRecreateImageDialog() }) { Text(stringResource(R.string.action_cancel)) } }
+            )
+        }
     }
 }
 
@@ -111,7 +150,12 @@ private fun MediaExplorerDialog(
                         keyboardActions = KeyboardActions(onSearch = {
                             focusManager.clearFocus()
                             projectViewModel.searchPixabayAssets()
-                        })
+                        }),
+                        trailingIcon = {
+                            IconButton(onClick = { projectViewModel.searchPixabayAssets() }, enabled = !isSearching) {
+                                Icon(Icons.Default.Search, stringResource(R.string.pixabay_search_action_desc))
+                            }
+                        }
                     )
                     Spacer(Modifier.height(16.dp))
                 }
@@ -252,7 +296,17 @@ private fun AssetSelectionDialog(
                                     modifier = Modifier.fillMaxSize()
                                 )
                                 if (asset.isVideo) {
-                                    Icon(Icons.Default.PlayCircleFilled, contentDescription = null) // <<< CORRIGIDO: Icon.Default.PlayCircleFilled
+                                    Icon(
+                                        Icons.Default.PlayCircleFilled,
+                                        contentDescription = stringResource(R.string.content_desc_video_indicator),
+                                        tint = Color.White.copy(alpha = 0.8f),
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(
+                                                Color.Black.copy(alpha = 0.3f),
+                                                RoundedCornerShape(50)
+                                            )
+                                    )
                                 }
                             }
                         }
@@ -262,6 +316,81 @@ private fun AssetSelectionDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismissRequest) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
+}
+
+@Composable
+private fun PromptEditDialog(
+    scene: SceneLinkData,
+    onDismiss: () -> Unit,
+    onSaveAndGenerate: (sceneId: String, newPrompt: String) -> Unit,
+    onChangeReferenceClick: () -> Unit
+) {
+    var promptText by remember(scene.promptGeracao) { mutableStateOf(scene.promptGeracao ?: "") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.scene_item_dialog_edit_prompt_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.scene_item_label_ref_image_for_prompt),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .padding(bottom = 16.dp)
+                        .clickable { onChangeReferenceClick() },
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (scene.imagemReferenciaPath.isNotBlank()) {
+                            AsyncImage(
+                                model = File(scene.imagemReferenciaPath),
+                                contentDescription = stringResource(R.string.content_desc_reference_image),
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(R.string.scene_item_placeholder_no_ref_image_selected_clickable),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = promptText,
+                    onValueChange = { promptText = it },
+                    label = { Text(stringResource(R.string.scene_item_label_image_generation_prompt)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                    singleLine = false
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSaveAndGenerate(scene.id, promptText) },
+                enabled = promptText.isNotBlank()
+            ) {
+                Text(stringResource(R.string.action_save_and_generate))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
         }
     )
 }

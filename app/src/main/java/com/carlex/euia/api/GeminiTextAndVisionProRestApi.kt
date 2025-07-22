@@ -367,7 +367,20 @@ object GeminiTextAndVisionProRestApi {
 
     private fun ajustarCaminhosDeImagem(imagens: List<String>): List<String> =
         imagens.map { path ->
-            val file = File(path)
+            var file = File(path)
+            val extension = file.extension.lowercase()
+            val isVideo = extension == "mp4" || extension == "webm" || extension == "ts"
+
+            if (isVideo) {
+                val expectedThumbName = "${file.nameWithoutExtension}.webp"
+                val thumbFile = File("thumb", expectedThumbName)
+                if (thumbFile.exists()) 
+                    file = thumbFile
+            } 
+            
+            Log.w(TAG, "${file.absolutePath}")
+                      
+            
             if (file.name.startsWith("thumb_")) {
                 File(file.parentFile, file.name.replaceFirst("thumb_", "img_")).takeIf { it.exists() }?.absolutePath ?: path
             } else { path }
