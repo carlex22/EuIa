@@ -19,12 +19,15 @@ import java.io.FileNotFoundException
 // Removido: import com.carlex.euia.data.VideoPreferencesDataStoreManager // Esta classe é usada fora deste arquivo para obter o projectDir
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.*
-import java.io.File
+
 import java.io.FileOutputStream
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import com.carlex.euia.BuildConfig
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import com.carlex.euia.data.VideoPreferencesDataStoreManager
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.ReturnCode
@@ -555,6 +558,9 @@ object Audio {
                     val rawTranscriptFileName = "$srtBaseName.srt.raw_transcript.json"
                     // Salva o JSON bruto no diretório do projeto
                     saveRawTranscriptAsJson(projectDir, transcriptionResponse, rawTranscriptFileName)
+                    
+                    
+                    
                 } catch (e: Exception) {
                     Log.e(TAG, "❌ Erro ao salvar resposta bruta da transcrição SRT: ${e.message}", e)
                 }
@@ -591,6 +597,45 @@ object Audio {
             }
         }
     }
+    
+    
+    
+    
+
+fun processarEConverter(inputFile: File, outputFile: File) {
+    val jsonString = inputFile.readText()
+    val json = JSONObject(jsonString)
+    val wordsArray = json.getJSONArray("words")
+
+    val novaLista = JSONArray()
+    var previousEnd = 0.0
+
+    for (i in 0 until wordsArray.length()) {
+        val item = wordsArray.getJSONObject(i)
+        val word = item.getString("word")
+        val end = item.getDouble("end")
+        val start = previousEnd
+        val duration = end - start
+
+        val novoObj = JSONObject().apply {
+            put("word", word)
+            put("start", start)
+            put("end", end)
+            put("duration", duration)
+        }
+
+        novaLista.put(novoObj)
+        previousEnd = end
+    }
+
+    // Salva novo JSON em arquivo
+    val resultado = JSONObject().apply {
+        put("words", novaLista)
+    }
+    outputFile.writeText(resultado.toString(2)) // 2 = identado
+}
+
+    
 
     private fun cleanText(text: String): String {
         var cleaned = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?-]"), "")
@@ -756,6 +801,12 @@ private fun generateSrtContent1(
         val jsonContent = gson.toJson(transcriptResponse)
         val file = File(projectDir, fileName)
         FileOutputStream(file).use { it.write(jsonContent.toByteArray(StandardCharsets.UTF_8)) }
+        
+        
+        val fileDura = File(projectDir, "Dura_$fileName")
+        processarEConverter(file, fileDura)
+        
+        
         Log.d(TAG, "Conteúdo JSON bruto da transcrição salvo em ${file.absolutePath}")
         return file
     }
@@ -782,3 +833,7 @@ private fun generateSrtContent1(
         }
     }
 }
+
+
+
+data class PalavraComTempo(val word: String, val start: Double, val end: Double, val duration: Double)

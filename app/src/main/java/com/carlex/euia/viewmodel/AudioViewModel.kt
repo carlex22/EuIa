@@ -434,7 +434,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
             isChat = isChatNarrative.value,
             speaker1Voice = voiceSpeaker1.value,
             speaker2Voice = voiceSpeaker2.value!!,
-            speaker3Voice = voiceSpeaker3.value!!
+            speaker3Voice = ""
         )
         pendingPromptToSaveAndGenerate = null
     }
@@ -495,7 +495,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
             isChat = isChatNarrative.value,
             speaker1Voice = voiceSpeaker1.value ?: "",
             speaker2Voice = voiceSpeaker2.value ?: "",
-            speaker3Voice = voiceSpeaker3.value ?: ""
+            speaker3Voice = ""
         )
         clearPendingExternalTriggerParams()
     }

@@ -377,7 +377,7 @@ class AudioNarrativeWorker(
                         val srtCorrigido = correcaoResult.getOrNull()
                         if (!srtCorrigido.isNullOrBlank()) {
                             val nomeBaseLegendaOriginal = File(generatedLegendaPath!!).nameWithoutExtension
-                            val arquivoLegendaCorrigida = File(projectDir, "${nomeBaseLegendaOriginal}_corrigido.txt")
+                            val arquivoLegendaCorrigida = File(projectDir, "${nomeBaseLegendaOriginal}")
                             try {
                                 arquivoLegendaCorrigida.writeText(srtCorrigido)
                                 Log.i(TAG, "Legenda corrigida salva em: ${arquivoLegendaCorrigida.absolutePath}")

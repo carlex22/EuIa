@@ -2,11 +2,12 @@
 package com.carlex.euia.viewmodel
 
 import android.app.Application
-import android.graphics.BitmapFactory // <<< CORREÇÃO AQUI
+import android.graphics.BitmapFactory
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
+import kotlinx.serialization.json.contentOrNull
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.work.*
@@ -27,11 +28,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.util.UUID
+
+/**
+ * Extension function para extrair de forma segura o valor de uma String de um JsonElement.
+ * Retorna null se o elemento não for um JsonPrimitive ou não contiver uma string.
+ */
+private fun JsonElement?.stringValueOrNull(): String? {
+    return (this as? JsonPrimitive)?.contentOrNull
+}
 
 class VideoGeneratorViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -47,7 +58,7 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
     private val jsonParser = Json { ignoreUnknownKeys = true; isLenient = true }
 
     // --- Estados para Geração de Vídeo ---
-    var isGeneratingVideo: StateFlow<Boolean> = videoGeneratorDataStoreManager.isCurrentlyGeneratingVideo
+    val isGeneratingVideo: StateFlow<Boolean> = videoGeneratorDataStoreManager.isCurrentlyGeneratingVideo
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val generatedVideoPath: StateFlow<String> = videoGeneratorDataStoreManager.finalVideoPath
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
@@ -109,9 +120,35 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
         cleanupObserver()
     }
 
-    // --- Funções de Controle da UI e Lógica de Negócio ---
-    private fun cleanGeminiJsonResponse(rawResponse: String): String {
-        return rawResponse.trim().removePrefix("```json").removeSuffix("```").trim()
+    /**
+     * Limpa a resposta da IA e extrai o PRIMEIRO objeto JSON válido encontrado.
+     * Lida com casos onde a IA retorna um objeto simples, um array de objetos,
+     * ou um objeto JSON cercado por texto/lixo.
+     */
+    private fun extractFirstJsonObject(rawResponse: String): JsonObject? {
+        val cleanedResponse = rawResponse.trim().removePrefix("```json").removeSuffix("```").trim()
+        
+        val firstBrace = cleanedResponse.indexOf('{')
+        val lastBrace = cleanedResponse.lastIndexOf('}')
+        
+        if (firstBrace == -1 || lastBrace == -1 || lastBrace < firstBrace) {
+            Log.e(TAG, "Nenhuma estrutura de objeto JSON válida encontrada na resposta da IA.")
+            return null
+        }
+        
+        val potentialJsonString = cleanedResponse.substring(firstBrace, lastBrace + 1)
+        
+        return try {
+            val jsonElement = jsonParser.parseToJsonElement(potentialJsonString)
+            if (jsonElement is JsonArray && jsonElement.isNotEmpty()) {
+                jsonElement.first().jsonObject
+            } else {
+                jsonElement.jsonObject
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Falha ao parsear o objeto JSON extraído da resposta da IA. JSON Tentado: '$potentialJsonString'", e)
+            null
+        }
     }
 
     fun onOpenUploadDialog() {
@@ -146,14 +183,17 @@ class VideoGeneratorViewModel(application: Application) : AndroidViewModel(appli
                 val result = GeminiTextAndVisionProRestApi.perguntarAoGemini(prompt, emptyList())
 
                 if (result.isSuccess) {
-                    val cleanedJson = cleanGeminiJsonResponse(result.getOrThrow())
-                    val jsonElement = jsonParser.parseToJsonElement(cleanedJson)
-                    val metadata: JsonObject = if (jsonElement is JsonArray && jsonElement.isNotEmpty()) jsonElement.first().jsonObject else jsonElement.jsonObject
-                    _uploadTitle.value = metadata["title"]?.jsonPrimitive?.content ?: ""
-                    _uploadDescription.value = metadata["description"]?.jsonPrimitive?.content ?: ""
-                    _uploadHashtags.value = metadata["hashtags"]?.jsonPrimitive?.content ?: ""
+                    val rawResponse = result.getOrThrow()
+                    val metadata = extractFirstJsonObject(rawResponse)
+                    if (metadata == null) {
+                        throw Exception("A IA retornou uma resposta JSON inválida ou vazia.")
+                    }
+
+                    _uploadTitle.value = metadata["title"].stringValueOrNull() ?: ""
+                    _uploadDescription.value = metadata["description"].stringValueOrNull() ?: ""
+                    _uploadHashtags.value = metadata["hashtags"].stringValueOrNull() ?: ""
                     
-                    val thumbnailPrompt = metadata["thumbnail_prompt"]?.jsonPrimitive?.content
+                    val thumbnailPrompt = metadata["thumbnail_prompt"].stringValueOrNull()
                     if (!thumbnailPrompt.isNullOrBlank()) {
                         generateThumbnailFromPrompt(thumbnailPrompt)
                     } else {

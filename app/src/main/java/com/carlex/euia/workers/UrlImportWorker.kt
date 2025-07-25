@@ -347,7 +347,7 @@ private suspend fun performFullCleanup() {
             // <<< FIM DA CORREÇÃO >>>
             suggestedTitle = jsonObject["suggested_title"]?.jsonPrimitive?.contentOrNull ?: ""
             mainSummary = jsonObject["main_summary"]?.jsonPrimitive?.contentOrNull ?: ""
-            val introObjective = jsonObject["video_objective_introduction"]?.jsonPrimitive?.contentOrNull ?: ""
+            val introObjective = jsonObject["video_hook"]?.jsonPrimitive?.contentOrNull ?: ""
             val contentObjective = jsonObject["video_objective_content"]?.jsonPrimitive?.contentOrNull ?: ""
             val outcomeObjective = jsonObject["video_objective_outcome"]?.jsonPrimitive?.contentOrNull ?: ""
             val suggestedLanguageTone = jsonObject["suggested_language_tone"]?.jsonPrimitive?.contentOrNull ?: ""

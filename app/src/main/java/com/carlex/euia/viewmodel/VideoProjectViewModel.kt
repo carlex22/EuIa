@@ -57,7 +57,8 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
         applicationContext,
         UserInfoDataStoreManager(application),
         AudioDataStoreManager(application),
-        VideoDataStoreManager(application)
+        VideoDataStoreManager(application),
+        VideoProjectDataStoreManager(application)
     )
     private val sceneWorkerManager = SceneWorkerManager(applicationContext, workManager, json)
     private val sceneOrchestrator = SceneOrchestrator(
@@ -177,16 +178,18 @@ class VideoProjectViewModel(application: Application) : AndroidViewModel(applica
             return
         }
         if (sceneLinkDataList.value.isNotEmpty()) {
+             postSnackbarMessage("novas cenas")
             _showSceneConfirmationDialogVM.value = true
+            performFullSceneGeneration()
         } else {
             performFullSceneGeneration()
         }
     }
 
     fun confirmAndProceedWithSceneGeneration() {
-        _showSceneConfirmationDialogVM.value = false
+        postSnackbarMessage("novas cenas")
+        _showSceneConfirmationDialogVM.value = true
         viewModelScope.launch {
-            sceneRepository.clearAllScenes()
             performFullSceneGeneration()
         }
     }

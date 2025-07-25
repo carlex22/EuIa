@@ -23,117 +23,139 @@ class ExtractInfoFromUrlPrompt(
     private val isChat: Boolean // Novo parâmetro
 ) {
 
-    private val userInfoHint: String = buildString {
-        appendLine("Dados cliente solicitante:")
-        if (currentUserNameCompany.isNotBlank()) appendLine("- Nome/Empresa: $currentUserNameCompany")
-        if (currentUserProfessionSegment.isNotBlank()) appendLine("- Profissão/Ramo Atuação: $currentUserProfessionSegment")
-        if (currentUserAddress.isNotBlank()) appendLine("- Endereço: $currentUserAddress")
-    }.trim()
+private val userInfoHint: String = buildString {
+    appendLine("Client details for personalization:")
+    if (currentUserNameCompany.isNotBlank()) appendLine("- Name/Company: $currentUserNameCompany")
+    if (currentUserProfessionSegment.isNotBlank()) appendLine("- Profession/Industry: $currentUserProfessionSegment")
+    if (currentUserAddress.isNotBlank()) appendLine("- Location: $currentUserAddress")
+}.trim()
 
     val prompt: String
 
-    init {
-        // --- INÍCIO DA MODIFICAÇÃO: Lógica para alternar as instruções ---
-        val objectiveInstructions = if (isChat) {
-            """
-            *   **Adapte para um DIÁLOGO.** Pense em como o conteúdo pode ser apresentado em uma conversa entre duas ou mais pessoas.
+init {
+    // --- BEGIN MODIFICATION: Modern engagement logic for creators ---
+    val objectiveInstructions = if (isChat) {
+        """
+        *   **Adapt to a DIALOGUE.** Think like modern content creators: how would two characters hook the audience within 3 seconds?
 
-            6.  "video_objective_introduction": String
-                *   Sugira um **gancho de conversa** ou uma pergunta inicial que um personagem poderia fazer para iniciar o vídeo. Ex: "Você viu essa nova tecnologia? Parece incrível!", "Será que isso realmente funciona como prometem?".
+        6.  "video_hook": String
+            *   Suggest a powerful **opening line** in dialogue form to instantly grab attention.
+            *   Think of what one character would say to make the viewer curious and stay. Examples:
+                - "Wait — you haven’t seen this yet?"
+                - "This thing might change your life..."
+                - "Why is nobody talking about this?"
 
-            7.  "video_objective_content": String
-                *   Descreva como o **diálogo se desenrolaria**. Quem explicaria o quê? Que tipo de perguntas ou contrapontos o outro personagem faria para extrair as informações do conteúdo da URL?
+        7.  "video_objective_content": String
+            *   Describe how the **conversation develops naturally**, keeping curiosity and energy alive.
+            *   Who questions, who explains? What unexpected turns or playful tension keeps the viewer engaged?
 
-            8.  "video_objective_outcome": String
-                *   Sugira como os **personagens concluiriam a conversa**, fazendo uma chamada para ação conjunta ou deixando uma pergunta para o público.
-            """
-        } else {
-            """
-            *   **Adapte para um NARRADOR ÚNICO.** Pense em como o conteúdo pode ser apresentado por uma única voz, como em um documentário ou vídeo explicativo.
+        8.  "video_objective_outcome": String
+            *   Suggest how the **conversation ends**, with a clever **call to action** or a **thought-provoking line** to spark comments or shares.
+        """
+    } else {
+        """
+        *   **Adapt to a SINGLE NARRATOR.** Think like a solo storyteller aiming to hook the viewer in under 3 seconds.
 
-            6.  "video_objective_introduction": String
-                *   Considerando o conteúdo e o perfil do solicitante, sugira um objetivo para a INTRODUÇÃO do vídeo, apresentando uma dúvida, problema ou desafio que o conteúdo irá resolver. Máximo de 18 tokens.
+        6.  "video_hook": String
+            *   Suggest a high-impact **first sentence** for the narrator to grab attention.
+            *   Use surprise, curiosity, or emotional weight. Example:
+                - "You’ve been doing this wrong your whole life..."
+                - "No one told me this — but it works."
+                - "Here’s why this matters more than you think."
+            *   Max 18 tokens.
 
-            7.  "video_objective_content": String
-                *   Sugira um objetivo para o desenvolvimento do CONTEÚDO PRINCIPAL do vídeo e um resumo completo, alinhado com os interesses do público-alvo e o tom de linguagem.
+        7.  "video_objective_content": String
+            *   Describe the **flow of the core content**: how it’s structured to maintain interest.
+            *   Suggest mini-reveals, emotional storytelling, and logic layers to hold attention.
 
-            8.  "video_objective_outcome": String
-                *   Sugira um objetivo para o desfecho do vídeo. Pode ser uma chamada para ação (curtir, comprar, compartilhar, comentar) para engajar o usuário. Máximo de 25 tokens.
-            """
-        }
-        // --- FIM DA MODIFICAÇÃO ---
-
-        prompt = """
-        Você é um roteirista criador de vídeos para internet. Foi contratado para criar um vídeo.
-        
-        $userInfoHint
-        
-        Seu objetivo é analisar uma url ou frase para elaborar sugestões para o pré-contexto de um vídeo que fale ou aborde o tema/produto/objeto informado.
-        Analise o conteúdo da seguinte URL para obter um contexto para a criação do vídeo do seu cliente:
-       
-        URL: "$contentUrl"
-        
-        Vamos lembra como voce mestre genial se prepara lendo seu RACIOCÍNIO anotado em seu diario secreto pessoal.
-        A sua receita basica secreta do sucesso, seu tempero e forma mais guardada que a da coca-cola
-        
-        == ETAPA 1: FILOSOFIA → NARRATIVA ==
-        Analise a essência conceitual do projeto:
-        - Qual é o insight central que move esta narrativa?
-        - Que perspectiva única está sendo apresentada?
-        - Como transformar conceitos abstratos em história tangível?
-        - Qual é a "grande ideia" por trás do conteúdo?
-        
-        == ETAPA 2: TEORIA → PRÁTICA ==
-        Conecte conceitos com aplicação real:
-        - Como os conceitos se manifestam na vida cotidiana?
-        - Que exemplos concretos ilustram a teoria?
-        - Quais são as implicações práticas para o público?
-        - Como tornar o abstrato em acionável?
-        
-        == ETAPA 3: CONVERSA → ESTRUTURA ==
-        Transforme diálogo em roteiro estruturado:
-        - Qual é o gancho emocional mais forte?
-        - Como criar progressão lógica e envolvente?
-        - Que pontos de conexão ressoam com o público?
-        - Como equilibrar informação e entretenimento?
-        
-        == ETAPA 4: APLICAÇÃO → IMPACTO ==
-        Defina resultado desejado:
-        - Que mudança de perspectiva esperamos?
-        - Qual ação específica o público deve tomar?
-        - Como medir o sucesso da narrativa?
-        - Qual é o legado da mensagem?
-        
-
-        Sua tarefa é extrair e gerar as seguintes informações, retornando-as como um ÚNICO objeto JSON.
-        A resposta deve ser exclusivamente o objeto JSON, sem nenhum texto adicional ou marcadores como ```json.
-
-        Campos a serem preenchidos no JSON:
-        1.  "suggested_title": String
-            *   Com base no conteúdo da URL, sugira um título OTIMIZADO e ATRAENTE.
-            *   Deve ser relevante e remover informações desnecessárias (códigos, etc.), se aplicável.
-            
-        2.  "main_summary": String
-            *   Gere um resumo principal conciso do conteúdo da URL.
-            
-        3.  "suggested_language_tone": String
-            *   Sugira o TOM DE LINGUAGEM mais apropriado para o narrador. Máximo de 3 tokens.
-
-        4.  "suggested_target_audience": String
-            *   Sugira o PÚBLICO-ALVO ideal para o vídeo. Máximo de 6 tokens.
-        
-        
-
-        formato de resposta esperada:
-        [{
-          "suggested_title": "string",
-          "main_summary": "string",
-          "video_objective_introduction": "string",
-          "video_objective_content": "string",
-          "video_objective_outcome": "string",
-          "suggested_language_tone": "string",
-          "suggested_target_audience": "string"
-        }]
-        """.trimIndent()
+        8.  "video_objective_outcome": String
+            *   Suggest a **modern ending**: bold CTA, a twist, a final question, or a relatable thought that makes the viewer want to interact (like, comment, share, explore). Max 25 tokens.
+        """
     }
+    // --- END MODIFICATION ---
+
+    prompt = """
+    You are a screenwriter who creates high-engagement videos for the internet. You've been hired to craft a short-form video.
+
+    $userInfoHint
+
+    Your job is to analyze a URL or theme to generate a **strategic and creative pre-context** for a video that will perform well on platforms like YouTube Shorts, TikTok, or Instagram Reels.
+
+    Analyze the following URL to understand the content and build the foundation for your video creation:
+
+    URL: "$contentUrl"
+
+    Now tap into your secret mental notebook — your **creator playbook** — and follow the proven structure below.
+
+    == STAGE 1: PHILOSOPHY → NARRATIVE ==
+    Uncover the big idea:
+    - What is the emotional or conceptual core of the story?
+    - What angle or lens makes this different from other content?
+    - How to turn abstract ideas into a relatable and visual micro-narrative?
+
+    == STAGE 2: THEORY → PRACTICE ==
+    Ground it in the real world:
+    - How does this idea apply to everyday life or common pain points?
+    - What specific examples or metaphors can be used?
+    - Why should the audience care — what’s in it for them?
+
+    == STAGE 3: CONVERSATION → STRUCTURE ==
+    Shape the content arc:
+    - What’s the emotional hook in the first 3 seconds?
+    - How does the tension or curiosity build throughout?
+    - What’s the high point or surprise moment?
+
+    == STAGE 4: APPLICATION → IMPACT ==
+    What outcome do we want?
+    - What mindset shift or curiosity should remain after watching?
+    - What action do we want viewers to take?
+    - What makes this video memorable or worth sharing?
+
+    ➤ Your response must be a SINGLE JSON OBJECT.
+    ⚠️ Return only the JSON. No text, no markdown, no explanation.
+    ⚠️ **All values must be written in Brazilian Portuguese (pt-BR).**
+    
+    Fields to generate:
+    
+
+    1.  "suggested_title": String  
+        *   Catchy and relevant to the content. Strip technical jargon or unnecessary text.
+
+    2.  "main_summary": String  
+        *   Concise and clear explanation of the main idea behind the URL content.
+
+    3.  "video_hook": String  
+        *   First line of the video — it must **grab attention** fast.
+        *   Use mystery, contradiction, or direct emotional connection.
+
+    4.  "video_objective_content": String  
+        *   Core content flow or dialogue structure. What’s revealed, and how.
+
+    5.  "video_objective_outcome": String  
+        *   Ending with impact — call to action, twist, or a bold final phrase.
+
+    6.  "suggested_language_tone": String  
+        *   Suggest tone style (e.g. bold, casual, inspiring). Max 3 tokens.
+
+    7.  "suggested_target_audience": String  
+        *   Who is the content made for? Max 6 tokens.
+
+    $objectiveInstructions
+
+    Expected JSON format:
+    [{
+      "suggested_title": "string",
+      "main_summary": "string",
+      "video_hook": "string",
+      "video_objective_content": "string",
+      "video_objective_outcome": "string",
+      "suggested_language_tone": "string",
+      "suggested_target_audience": "string"
+    }]
+    """.trimIndent()
+}
+
+
+
+
 }

@@ -10,6 +10,7 @@ import androidx.work.*
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFprobeKit
 import com.arthenica.ffmpegkit.ReturnCode
+import kotlin.math.min
 import com.carlex.euia.R
 import com.carlex.euia.data.*
 import com.carlex.euia.utils.NotificationUtils
@@ -115,7 +116,8 @@ class ScenePreviewWorker(
             audioSnippetPath = createAudioSnippetForPreview(mainAudioPath, scene)
                 ?: throw IOException("Falha ao criar o trecho de áudio para a prévia.")
                 
-                
+                Log.i(TAG, "scene ${scene.toString()}")
+        
   
 
             updateNotification(applicationContext.getString(R.string.notification_content_preview_rendering, sceneId.take(4)))
@@ -143,7 +145,7 @@ class ScenePreviewWorker(
             updateSceneData(sceneId, null, e.message)
             return@withContext Result.failure(workDataOf(KEY_ERROR_MESSAGE to errorMessage))
         } finally {
-            audioSnippetPath?.let { File(it).delete() }
+            //audioSnippetPath?.let { File(it).delete() }
         }
     }
     
@@ -155,9 +157,13 @@ class ScenePreviewWorker(
         videoHeight: Int,
         videoFps: Int
     ): String {
+        val arquivo = File(scene.imagemGeradaPath)  
+        val tamanhoBytes: Long = if (arquivo.exists()) arquivo.length() else 0L
+
+
         val stringToHash = buildString {
             append(scene.cena)
-            append(scene.imagemGeradaPath)
+            append("$tamanhoBytes")
             append(scene.tempoInicio)
             append(scene.tempoFim)
             append(enableZoomPan)
@@ -187,15 +193,42 @@ class ScenePreviewWorker(
             }
         }
     }
+    
+    
+    private suspend fun getClipDuration(filePath: String): Double? = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Obtendo duração para: $filePath")
+        val session = FFprobeKit.execute("-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$filePath\"")
+        if (ReturnCode.isSuccess(session.returnCode)) {
+            val durationString = session.output.trim()
+            val duration = durationString.toDoubleOrNull()
+            if (duration == null) {
+                Log.e(TAG, "Falha ao converter a duração '$durationString' para Double.")
+            }
+            return@withContext duration
+        } else {
+            Log.e(TAG, "ffprobe falhou ao obter a duração para $filePath. Logs: ${session.allLogsAsString}")
+            return@withContext null
+        }
+    }
+
 
     private suspend fun createAudioSnippetForPreview(mainAudioPath: String, scene: SceneLinkData): String? {
-        val tempDir = File(applicationContext.cacheDir, "preview_audio_snippets")
-        tempDir.mkdirs()
-        val outputFile = File.createTempFile("snippet_preview_${scene.id}_", ".mp3", tempDir)
+        
+       
+        
+        val projectDirName = videoPreferencesDataStore.videoProjectDir.first()
+        val baseProjectDir = ProjectPersistenceManager.getProjectDirectory(applicationContext, projectDirName)
+        val previewsDir = File(baseProjectDir, "audio")
+        previewsDir.mkdirs()
+        
+        
+        
+        
+        val outputFile = File(previewsDir.absolutePath, "scene_${scene.id}_.mp3")
 
         val startTime = scene.tempoInicio ?: 0.0
         val endTime = scene.tempoFim ?: 0.0
-        val duration = (endTime - startTime).coerceAtLeast(0.1)
+        val duration = ((endTime  - startTime).coerceAtLeast(0.1))
 
         val command = "-y -i \"$mainAudioPath\" -ss $startTime -t $duration -c:a libmp3lame -q:a 4 \"${outputFile.absolutePath}\""
         val session = FFmpegKit.execute(command)

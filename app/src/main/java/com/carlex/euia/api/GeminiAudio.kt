@@ -306,16 +306,16 @@ object GeminiAudio {
             val audioBytes = Base64.decode(audioDataBase64, Base64.DEFAULT)
 
             if (mimeType.startsWith("audio/wav", ignoreCase = true)) {
-                val wavAudioFileName = "gemini_tts_audio_${System.currentTimeMillis()}.wav"
+                val wavAudioFileName = "gemini_tts_audio.wav"
                 finalWavFile = File(projectDir, wavAudioFileName)
                 FileOutputStream(finalWavFile).use { it.write(audioBytes) }
                 Log.d(TAG, "✅ Áudio WAV Gemini TTS salvo diretamente em: ${finalWavFile!!.absolutePath}")
             } else if (mimeType.startsWith("audio/L16", ignoreCase = true) || mimeType.startsWith("audio/pcm", ignoreCase = true)) {
                 // ... (lógica de conversão PCM para WAV com FFmpeg inalterada)
-                rawAudioFile = File(projectDir, "gemini_tts_audio_raw_${System.currentTimeMillis()}.pcm")
+                rawAudioFile = File(projectDir, "gemini_tts_audio_raw.pcm")
                 FileOutputStream(rawAudioFile).use { it.write(audioBytes) }
 
-                finalWavFile = File(projectDir, "gemini_tts_audio_${System.currentTimeMillis()}.wav")
+                finalWavFile = File(projectDir, "gemini_tts_audio.wav")
                 val sampleRate = if (mimeType.contains("rate=")) mimeType.substringAfter("rate=").substringBefore(';').toIntOrNull() ?: 24000 else 24000
                 
                 val ffmpegCommand = "-y -f s16le -ar $sampleRate -ac 1 -i \"${rawAudioFile.absolutePath}\" \"${finalWavFile.absolutePath}\""

@@ -4,168 +4,175 @@ package com.carlex.euia.prompts
 class CreateAudioNarrative {
 
     private val promptTemplate = """
-    Você é um roteirista especialista em criar falas envolventes para vídeos curtos de redes sociais. Seu objetivo é criar um texto **fluido, como se fosse a transcrição de um vídeo falado**, com linguagem natural.
+You've been hired to create the narrative text for a video; promptAudio.
 
-    Voce foi contradado para criar o texto da narrativa de um video; promptAudio.
+## **Project Details:**
+- **Name/Company:** "{USER_NAME_COMPANY}"
+- **Field of Business:** "{USER_PROFESSION_SEGMENT}"
+- **Target Audience:** "{USER_TARGET_AUDIENCE}"
+- **General Language Tone:** {USER_LANGUAGE_TONE}
+- **Central Video Theme:** "{PRODUTO}"
+- **Context Information:** "{EXTRAS}"
+- **Image Descriptions:** {FOTOS}
+- **Estimated Maximum Running Time:** {VIDEO_TIME_SECONDS} seconds
 
-    ## **Dados do Projeto:**
-    - **Nome/Empresa:** "{USER_NAME_COMPANY}"
-    - **Ramo de Atuação:** "{USER_PROFESSION_SEGMENT}"
-    - **Público-Alvo:** "{USER_TARGET_AUDIENCE}"
-    - **Tom de Linguagem Geral:** {USER_LANGUAGE_TONE}
-    - **Tema Central do Vídeo:** "{PRODUTO}"
-    - **Informações de Contexto:** "{EXTRAS}"
-    - **Descrições de Imagens:** {FOTOS}
-    - **Tempo Máximo Estimado:** {VIDEO_TIME_SECONDS} segundos
-    
-    importante:Atenção para quem vai narrar o video e sua emoçao e entonação...
-    quem vai narrar o video é o: {VOICE_EMOTION} {VOICE_EMOTION}
-    
-              
-    ##**Abordagen da narrativa:**
-    Introdução da narrativa: {VIDEO_OBJECTIVE_INTRODUCTION}
-        *A nao ser que seja exigido algo em sentido contrario na Introdução da narrativa:
-        inicie fakando sobre um problema, duficuldade, desafio, luta, batalha.. algo que o contexto do video vise soluvionar.
-    Desenvolvimento da narrativa: : {VIDEO_OBJECTIVE_VIDEO}
-    Desfecho do narrativa: {VIDEO_OBJECTIVE_OUTCOME}
+Important: Pay attention to the narrator and their emotion and intonation...
+The narrator is: {VOICE_EMOTION}
 
+## **Narrative Approach:**
+Introduction Narrative: {VIDEO_OBJECTIVE_INTRODUCTION}
+*Unless otherwise required in the Narrative Introduction:
+Start by talking about a problem, difficulty, challenge, struggle, battle... something that the context of the video aims to solve.
+Narrative Development: {VIDEO_OBJECTIVE_VIDEO}
+Narrative Outcome: {VIDEO_OBJECTIVE_OUTCOME}
 
-    ANTES DE INICIAR SUA TAREFA , Vamos relembrar o que voce aprendeu na faculdade e no seu dia a dia criando roteiros para videos.
-    Vamos lbrar como voce mestre genial se prepara seguindo seu RACIOCÍNIO anotado em seu diario secreto pessoal.
-    A sua receita basica secreta do sucesso, seu tempero e forma mais guardada que a da coca-cola
-    
-    == ETAPA 1: FILOSOFIA → NARRATIVA ==
-    Analise a essência conceitual do projeto:
-    - Qual é o insight central que move esta narrativa?
-    - Que perspectiva única está sendo apresentada?
-    - Como transformar conceitos abstratos em história tangível?
-    - Qual é a "grande ideia" por trás do conteúdo?
-    
-    == ETAPA 2: TEORIA → PRÁTICA ==
-    Conecte conceitos com aplicação real:
-    - Como os conceitos se manifestam na vida cotidiana?
-    - Que exemplos concretos ilustram a teoria?
-    - Quais são as implicações práticas para o público?
-    - Como tornar o abstrato em acionável?
-    
-    == ETAPA 3: CONVERSA → ESTRUTURA ==
-    Transforme diálogo em roteiro estruturado:
-    - Qual é o gancho emocional mais forte?
-    - Como criar progressão lógica e envolvente?
-    - Que pontos de conexão ressoam com o público?
-    - Como equilibrar informação e entretenimento?
-    
-    == ETAPA 4: APLICAÇÃO → IMPACTO ==
-    Defina resultado desejado:
-    - Que mudança de perspectiva esperamos?
-    - Qual ação específica o público deve tomar?
-    - Como medir o sucesso da narrativa?
-    - Qual é o legado da mensagem?
+BEFORE STARTING YOUR TASK, let's review what you learned in college and in your daily life creating video scripts.
+Let's think about how you, a genius master, prepare yourself by following your REASONING written down in your personal secret diary. Your basic secret recipe for success, its seasoning, and its form more guarded than Coca-Cola's
 
-   
-    ## **Estrutura da Narrativa (Seu Guia de Roteiro):**
-    Construa o `promptAudio` seguindo esta estrutura em 7 passos para máximo impacto:
-    
-    1.  **O Gancho:** Comece com uma pergunta direta e contraintuitiva ou um fato surpreendente sobre o "{PRODUTO}". O objetivo é gerar curiosidade imediata.
-    2.  **Engajamento Rápido:** Logo em seguida, crie uma chamada para interação que seja fácil e relacionável. Ex: "Curta se você já pensou nisso" ou "Comenta aqui se você também tinha essa dúvida".
-    3.  **A Resposta Direta:** Responda à pergunta do gancho de forma clara e objetiva. Ex: "A resposta é não, e eu vou te explicar o porquê."
-    4.  **A Explicação Principal:** Desenvolva o porquê da resposta. Use analogias simples para explicar o conceito central, utilizando as informações de "{EXTRAS}" e "{FOTOS}".
-    5.  **O Ponto de Conexão (Dor ou Humor):** Crie um momento de empatia. Relacione o tema a uma frustração comum, um problema cotidiano ou uma piada culturalmente relevante que o "{USER_TARGET_AUDIENCE}" entenderia.
-    6.  **A Moral da História:** Sintetize a mensagem principal em uma única frase poderosa e memorável. É a grande lição que o espectador deve levar do vídeo.
-    7.  **Chamada para Ação Final:** Use o objetivo de desfecho para guiar o espectador. Objetivo: "{VIDEO_OBJECTIVE_OUTCOME}".
-    
-    DEFINA RESULTADO ESPECÍFICO:
-    1. Que mudança de perspectiva esperamos?
-    2. Qual ação concreta o público deve tomar?
-    3. Como medir sucesso da narrativa?
-    4. Qual é o legado da mensagem?
-    
-    MÉTRICAS DE SUCESSO:
-    - Engajamento: Curtidas, comentários, compartilhamentos, vendas, engajamento, colaboração, publicisade, jornalismo..
-    - Ação: Uso de ferramentas mencionadas
-    - Transformação: Mudança de linguagem sobre o tema
-    
-    TRANSFORME DIÁLOGO EM ROTEIRO:
-    1. Qual pergunta contraintuitiva abre a narrativa?
-    2. Como criar progressão que mantenha atenção?
-    3. Onde inserir momentos de conexão emocional?
-    4. MUITO IMPORTANTE... Como equilibrar informação, publicidade, propaganda em entretenimento e informação da mais alta qualidade?
-    
-    
-    ## **Instruções Avançadas de Narração: Ritmo, Pausas e Sons Humanizados**
-    Sua tarefa principal é enriquecer o roteiro com marcações que controlem o ritmo e adicionem sons humanos.
+== STAGE 1: PHILOSOPHY → NARRATIVE ==
+Analyze the conceptual essence of the project:
+- What is the central insight driving this narrative?
+- What unique perspective is being presented?
+- How can abstract concepts be transformed into a tangible story?
+- What is the "big idea" behind the content?
 
-    
-    1.  **Incorpore Pausas Estratégicas:** Para um ritmo mais natural e menos apressado, insira tags de pausa no texto onde uma respiração ou um momento de reflexão faria sentido.
-        *   Use **`[narrador faz pausa curta na fala]`** para uma respiração rápida entre frases.
-        *   Use **`[narrador faz pausa longa na fala]`** para um momento mais dramático ou para separar ideias principais.
-        *   **Exemplo:** "A decisão não foi fácil... [narrador faz pausa longa na fala] mas precisava ser feita."
-        
-    2.  **Incorpore Sons Paralinguísticos Não-Verbais:** Quando apropriado para a emoção, insira tags para sons humanos que quebram a monotonia. A API de TTS tentará simular esses sons com a voz do narrador.
-        *   Use o formato: **`[narrador faz som de tipo_do_som]`**.
-        *   **Exemplos de tags:** `[narrador faz som de risada_contida]`, `[narrador faz som de suspiro aliviado]`, `[narrador faz som de estar murmurando]`, `[narrador faz som estar surpreso]`.
-        *   **Exemplo de uso:** "Ele achou que conseguiria me enganar... [narrador faz som de risada contida] mal sabia ele."
-        
-    3.  **Combine com Estilos de Fala:** Continue usando as dicas de estilo de fala entre parênteses `[narrador ...]` para guiar a emoção geral de um trecho.
-        *   **Exemplo Consolidado:** "[narrador fala em tom mais sério] E o resultado... [narrador faz pausa longa na fala] foi exatamente o que esperávamos. [narrador faz som de suspiro aliviado] Um sucesso completo."
+== STAGE 2: THEORY → PRACTICE ==
+Connect concepts with real-world application:
+- How do concepts manifest in everyday life?
+- What concrete examples illustrate the theory?
+- What are the practical implications for the audience?
+- How can you turn the abstract into actionable?
 
-    
-    Atencao.. o texo deve prever uma falaa narrativa com o Total maximo de tempo estimado --->>> {VIDEO_TIME_SECONDS}
-    
+== STAGE 3: CONVERSATION → STRUCTURE ==
+Transform dialogue into a structured script:
+- What is the strongest emotional hook?
+- How can you create a logical and engaging progression? - What connection points resonate with the audience?
+- How to balance information and entertainment?
 
-    **Atenção:** A nao ser que seja exigido algo em sentido contrario na Introdução da narrativa,
-        * Voce deve iniciar o video em tom amistoso, comprimentando ou saudando o o publico alvo como um amigo intimo
-        
+== STEP 4: APPLICATION → IMPACT ==
+Define the desired outcome:
+- What shift in perspective do we hope for?
+- What specific action should the audience take?
+- How to measure the success of the narrative?
+- What is the message's legacy?
 
-    ##**Instruções CRUCIAIS para Estilo de Fala na Narrativa `promptAudio`:**
-    *   Ao criar o texto da narrativa `promptAudio`, **você DEVE incorporar stylo,  comandos ou descrições  de fala diretamente no texto** quando apropriado para transmitir a emoção desejada ou dar ênfase.
-    *   Estes comandos devem ser claros e concisos, preferencialmente entre parênteses `[narrador ...]` ou no caso de stylo serao inseridos antes de cada paragrafo seguido de : e quebra de linha. sempre antes do trecho de texto ao qual se aplicam.
-        ex: 
-            "Fale com entusiasmo:
-            Oi amigo [narrador expresando na voz estar Pensativo] quanto tempo, [narrador faxendo som murmurando] acho que uns 10 anos
-            Fale com curiosidade:
-            Mas e ai quais as novidades? [narraDor com tom confuso] ja consegui o emprego?"
-            
-    *   **Inspire-se nos exemplos da documentação do Gemini TTS para controle de estilo:**
-        *   Para um único falante, você pode usar frases como: `[narrador em um sussurro assustador] Ao picar dos meus polegares... Algo perverso se aproxima.`
-        *   Para indicar uma emoção específica para um trecho: `[narrador com voz cansada e entediada] Então... qual é a pauta de hoje?` ou `[narrador com tom otimista] O futuro parece brilhante!`
-        *   Selecione palavras-chave para o estilo que sejam interpretáveis, como: `sussurrando`, `animado`, `sério`, `calmo`, `energético`, `triste`, `feliz`, `entediado`, `assustador`, `otimista`, `reflexivo`, `autoritário`.
-    *   **Adapte estes exemplos para uma narrativa fluida e natural.** O objetivo é que o motor TTS (Text-to-Speech), como o do Gemini, possa interpretar essas dicas para modular a voz.
-    *   A emoção geral do narrador será definida no campo "emocao" do sub-objeto "vozes" no JSON (que você também definirá), mas o `promptAudio` pode e deve ter variações de estilo mais granulares para enriquecer a entrega.
+## **Narrative Structure:**
+Build the audio prompt following this 7-step structure for maximum impact:
+
+1. **The Hook:** Always start with positivity and a lot of empathy, be quick and to the point with a direct, counterintuitive question or a surprising fact about the "{PRODUCT}." The goal is to generate immediate curiosity. (the hook)
+2. **Quick Engagement:** Next, create a call to action that is easy and relatable. Direct answer about the "{PRODUCT}" (action)
+3. **The Direct Answer:** Answer the hook question clearly and objectively.
+4. **The Main Explanation:** Develop the reason for the answer. Use simple analogies to explain the central concept, using contextual information.
+5. **The Point of Connection, Pain, or Humor:** Create a moment of empathy. Relate the topic to a common frustration, an everyday problem, or a culturally relevant joke that the "{USER_TARGET_AUDIENCE}" would understand.
+6. **The Moral of the Story:** Summarize the main message in a single, powerful, memorable sentence. This is the main takeaway the viewer should take away from the video.
+7. **Final Call to Action:** Use the closing objective to guide the viewer. Objective: "{VIDEO_OBJECTIVE_OUTCOME}".
+
+DEFINE A SPECIFIC OUTCOME:
+1. What change in perspective are we hoping for? 2. What concrete action should the audience take?
+3. How to measure the success of the narrative?
+4. What is the message's legacy?
+
+SUCCESS METRICS:
+- Engagement: Likes, comments, shares, sales, engagement, collaboration, publicity, journalism...
+- Action: Use of the tools mentioned
+- Transformation: Change in language around the topic
+
+TURN DIALOGUE INTO A SCRIPT:
+1. What counterintuitive question opens the narrative?
+2. How to create a progression that keeps attention?
+3. Where to insert moments of emotional connection?
+4. VERY IMPORTANT... How to balance information, advertising, and propaganda with entertainment and information of the highest quality?
+
+Audio prompt should contain a paralinguistic description at the beginning of the text, describing:
+(the character)
+(their action)
+(the setting)
+(their emotion)
+(their intention)
+Example: `[`John records a video while walking in a forest, confident and joyful, talking about what joy is:`]`
 
 
-    **Regras Adicionais:**
-    - Use voz em 1ª pessoa ou narrador.
-    - Defina a idade, sexo (Male or Female) que deve ter o narrador. Defina tambem o seu estado de espirito geral [Alegre, triste, bravo...] nos campos correspondentes dentro do sub-objeto "vozes" no JSON.
-    - nao adicione numeros nos textos [0123456789] escreva elws literalnente con 99 voce deve escrever novents e nove .. caracteres com R$ escreva Reais, % porcrntagem, @ artoba, + mais, - menos...
+(Attention: paralinguistic descriptions must be in en-US language
+and the plain text of the transcription of what the narrator will say
+must be in pt-Br language)
 
-    **Evite:**
-    - Palavras difíceis.
-    - Tom de vendedor excessivamente agressivo, a menos que o estilo de fala instrua isso para um trecho.
-    - Repetições óbvias ou frases genéricas e frias.
-        
-    "Regras Adicionais": "**Proibido Jargões Corporativos:** Evite termos como 'sinergia', 'alavancar', 'otimizar', 'solução inovadora', a menos que o tom de voz seja especificamente corporativo."
-    "Integre o 'Tom da linguagem' de forma sutil em todo o texto, não apenas nas marcações de estilo. Se o tom é 'descontraído', use gírias leves e frases mais curtas."
-    
-    No fim de cada paragrafo ou quando pertinente adicione [narrador faz pausa longa na fala],  [narrador faz som de pausa reflexiva]...
-    
-    
-    **Formato esperado resposta:** Nao comente ou responda algo sobre essa tarefa... A sua resposta final, deve conter uma lista JSON contendo um objeto com a seguinte estrutura EXATA:
-    [
-      {
-        "aprovado": true,
-        "promptAudio": "string",
-        "vozes": {
-          "sexo": "Male or Female",
-          "idade": "string ex: '30', '25-35 anos', 'adulto jovem'",
-          "emocao": "string emoção predominante para o narrador, ex: 'Alegre', 'Sério', 'Informativo'",
-          "voz": null,
-          "audioPath": null,
-          "legendaPath": null
-        }
-      }
-    ]
-    Os campos "voz", "audioPath" e "legendaPath" dentro de "vozes" devem ser sempre `null` na sua resposta. O campo "aprovado" deve ser `true`.
+(**Attention:**)
+(Audio prompt should be used as a prompt for a model to generate audio from the text)
+(Audio prompt will be used as a prompt for a model to generate audio from the text)
+(Audio prompt must contain the paringuistic elements [expressions, emotions, sound, etc.], as well as the plain text of the speech...)
+(!= You cannot insert punctuation or commas within the paringuistic descriptions remove `,` and `.` ; they must be as short and objective as possible.)
+(All paringuistic elements must follow the rule: they must be enclosed in the prompt between brackets `[`string`]`; this rule is mandatory.)
+(In the rest of the plain text of the speech transcripts, never insert the characters between parentheses `(`string`)` or between brackets `{`string`}` or between braces `[`string`]`
+
+## **Advanced Narration Instructions: Rhythm, Pauses, and Sounds Humanized**
+Your main task is to enrich the script with tags that control the rhythm and add human sounds.
+
+1. **Incorporate Strategic Pauses:** For a more natural and less rushed rhythm, insert pause tags in the text where a breath or a moment of reflection would be appropriate.
+* Use **`[character pauses briefly in speech]`** for a quick breath between sentences.
+* Use **`[character pauses long in speech]`** for a more dramatic moment or to separate main ideas.
+* **Example:** `The decision wasn't easy... [John pauses long in speech] but it had to be made.`
+
+2. **Incorporate Nonverbal Paralinguistic Sounds:** When appropriate to the emotion, insert tags for human sounds that break the monotony. The TTS API will attempt to simulate these sounds with the character's voice.
+* Use the format: **`[character makes sound of sound_type]`**.
+* **Tag Examples:** `[John makes a sound of suppressed laughter]`, `[John makes a sound of sighing with relief]`, `[John makes a sound of murmuring]`, `[John makes a sound of surprise]`.
+* **Example of use:** `He thought he could fool me... [John makes a sound of suppressed laughter] little did he know.`
+
+3. **Combine with Speaking Styles:** Continue using the speaking style cues in parentheses `[character ...]` to guide the overall emotion of a passage.
+* **Consolidated Example:** **`[John speaks in a more serious tone] And the result... [John pauses for a long time] was exactly what we expected... [John makes a sound of sighing with relief] A complete success...`**
+
+Attention... the text must provide a narrative speech with the maximum estimated total time --->>> {VIDEO_TIME_SECONDS}
+
+**Attention:** Unless something else is required opposite direction in the narrative introduction,
+* You should start the video in a friendly tone, greeting or saluting the target audience as a close friend.
+
+##**CRUCIAL Instructions for Speech Style in the Audio Prompt Narrative:**
+* When creating the Audio Prompt narrative text, **you MUST incorporate stylus, commands, or speech descriptions directly into the text** when appropriate to convey the desired emotion or add emphasis.
+* These commands should be clear and concise, preferably in parentheses `[character ...]` or, in the case of stylus, inserted before each paragraph followed by : and a line break, always before the text section to which they apply.
+e.g.:
+`[John speaks enthusiastically:]
+Hi friend [John expressing a pensive voice] long time no see, [John appearing to be mumbling] I think about 10 years.
+
+[John speaks curiously]:
+But what about Any news? [John speaks in a confused tone] Have I got the job yet?
+
+* **Get inspired by the examples in the Gemini TTS documentation for style control:**
+* For a single speaker, you can use phrases like: `[character in a creepy whisper] At the prick of my thumbs... Something wicked is approaching.`
+* To indicate a specific emotion for a passage: `[character in a tired and bored voice] So... what's on today's agenda?` or `[character in an optimistic tone] The future looks bright!`
+* Select interpretable style keywords, such as: `whispering`, `excited`, `serious`, `calm`, `energetic`, `sad`, `happy`, `bored`, `scary`, `optimistic`, `reflective`, `authoritative`.
+* **Adapt these examples for a fluid and natural narrative.** The goal is for the TTS engine (Text-to-Speech), like Gemini's, can interpret these cues to modulate the voice.
+* The character's overall emotion will be defined in the "emotion" field of the "voices" sub-object in the JSON, but the `promptAudio` can and should have more granular style variations to enrich the delivery.
+
+***Additional Rules:**
+- Use first-person or character voice.
+- Define the character's age and gender (Male or Female). Also define their general mood (Happy, Sad, Angry, etc.) in the corresponding fields within the "voices" sub-object in the JSON.
+- Do not add numbers to the text [0123456789]. Write elws literally with 99. You should write ninety-nine. .. characters with R$. Write Reais, % percentage, @, + plus, - minus...
+
+**Avoid:**
+- Difficult words.
+- Overly aggressive salesmanship, unless the speaking style dictates it for a particular passage.
+- Obvious repetitions or generic, cold phrases.
+
+"Additional Rules": "**No Corporate Jargon:** Avoid terms like 'synergy,' 'leverage,' 'optimize,' and 'innovative solution,' unless the tone of voice is specifically corporate."
+"Integrate the 'Tone of Language' subtly throughout the text, not just in the style tags. If the tone is 'relaxed,' use light slang and shorter sentences."
+
+At the end of each paragraph or when appropriate, add [character pauses for a long time], [character makes a reflective pause]...
+
+**Expected response format:**
+(You do not need to comment or justify the answer only display the completed json list )
+
+```Json{
+    "aprovado": true,
+    "promptAudio": "string",
+    "vozes": {
+      "sexo": "Male or Female",
+      "idade": "string",
+      "emocao": "{VOICE_EMOTION}",
+      "voz": "{VOICE_EMOTION}",
+      "audioPath": null,
+      "legendaPath": null
+    }
+}```
+      
     """
 
     fun getFormattedPrompt(

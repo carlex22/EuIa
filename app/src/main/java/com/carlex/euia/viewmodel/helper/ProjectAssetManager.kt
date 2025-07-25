@@ -35,7 +35,7 @@ class ProjectAssetManager(
             val projectDir = ProjectPersistenceManager.getProjectDirectory(context, projectDirName)
             val assetList = mutableListOf<ProjectAsset>()
             val mediaDirs = listOf(
-                "ref_images", "pixabay_images", "pixabay_videos",
+                "ref_images", "ref_videos",  "pixabay_images", "pixabay_videos",
                 "downloaded_videos", "gemini_generated_images", "imagens_ml_originais"
             )
             

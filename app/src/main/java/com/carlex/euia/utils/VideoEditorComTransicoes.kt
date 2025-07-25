@@ -160,6 +160,8 @@ object VideoEditorComTransicoes {
             if (cachedFile.exists() && cachedFile.length() > 100) {
                 logCallback("Lote $batchNumber encontrado no cache.")
                 subVideoPaths.add(cachedFile.absolutePath)
+                logCallback("Lote $batchNumber de ${totalBatches}, Duracao: 0")
+
                 continue
             }
             
@@ -244,110 +246,231 @@ object VideoEditorComTransicoes {
     }
 
 
-    /**
-     * Junta uma lista de clipes de vídeo MP4 com transições xfade entre eles.
-     * Esta função lê a duração de cada clipe automaticamente.
-     *
-     * @param context O contexto da aplicação.
-     * @param clipPaths A lista de caminhos absolutos para os arquivos MP4 de entrada.
-     * @param outputPath O caminho absoluto para o arquivo de vídeo final de saída.
-     * @param enableTransitions Se as transições devem ser aplicadas. Se false, usa uma concatenação simples.
-     * @param transitionDuration A duração de cada transição em segundos.
-     * @param videoFps A taxa de quadros (FPS) para o vídeo de saída.
-     * @param logCallback Callback para receber logs de progresso do FFmpeg.
-     * @return O caminho do arquivo de saída em caso de sucesso.
-     * @throws IOException se a lista de clipes estiver vazia ou se ocorrer um erro no FFmpeg.
-     */
-    suspend fun stitchClipsWithTransitions(
-        context: Context,
-        clipPaths: List<String>,
-        outputPath: String,
-        enableTransitions: Boolean = true,
-        transitionDuration: Double = DEFAULT_TRANSITION_DURATION,
-        videoFps: Int = 30,
-        logCallback: (String) -> Unit,
-        subDura: List<Double>
-    ): Pair<String, Double> {
-        if (clipPaths.isEmpty()) {
-            throw IOException("A lista de clipes para juntar não pode estar vazia.")
-        }
-        
-        
-        logCallback("Iniciando junção de ${clipPaths.size} clipes com transições.")
-        // 1. Obter a duração de todos os clipes de entrada.
-        var durations = clipPaths.map { path ->
-            getClipDuration(path) ?: throw IOException("Não foi possível obter a duração do clipe: $path")
-        }
 
-        // Se houver apenas um clipe, simplesmente copie-o para o destino para economizar processamento.
-      /*  if (clipPaths.size == 1) {
-            logCallback("Apenas um clipe fornecido. Copiando para o destino...")
-            val command = "-y -i \"${clipPaths.first()}\" -c copy \"$outputPath\""
-            return Pair(outputPath, durations.sum())
-        }*/
-        
-        if (subDura.size >0)
-            durations = subDura
+suspend fun stitchClipsWithTransitions(
+    context: Context,
+    clipPaths: List<String>,
+    outputPath: String,
+    enableTransitions: Boolean = true,
+    transitionDuration: Double = DEFAULT_TRANSITION_DURATION,
+    videoFps: Int = 30,
+    logCallback: (String) -> Unit,
+    subDura: List<Double>
+): Pair<String, Double> {
+    if (clipPaths.isEmpty()) {
+        throw IOException("A lista de clipes para juntar não pode estar vazia.")
+    }
 
-        
+    logCallback("Iniciando junção de ${clipPaths.size} clipes.")
 
-        
+    var durations = clipPaths.map { path ->
+        getClipDuration(path) ?: throw IOException("Não foi possível obter a duração do clipe: $path")
+    }
 
-        val cmd = StringBuilder("-y -hide_banner ")
-        val filterComplex = StringBuilder()
-        val tempoDeTransicaoEfetivo = if (enableTransitions) transitionDuration else 0.0
+    if (subDura.isNotEmpty()) {
+        durations = subDura
+    }
 
-        // 2. Definir todos os arquivos como inputs.
-        clipPaths.forEach { path ->
-            cmd.append("-i \"$path\" ")
-        }
+    val totalDuration = durations.sum() - if (enableTransitions && clipPaths.size > 1) {
+        transitionDuration * (clipPaths.size - 1)
+    } else {
+        0.0
+    }
 
+    val cmd = StringBuilder("-y -hide_banner ")
+    val filterComplex = StringBuilder()
+
+    // Definir todos os arquivos como inputs.
+    clipPaths.forEach { path ->
+        cmd.append("-i \"$path\" ")
+    }
+    
+    // CASO 1: Apenas um clipe.
+    if (clipPaths.size == 1) {
+        logCallback("Apenas um clipe fornecido. Re-codificando...")
+        // **CORREÇÃO AQUI**
+        // Mapeamento direto sem filter_complex, então não usamos colchetes.
+        cmd.append("-map 0:v -map 0:a ")
+
+    } else { // CASO 2: Múltiplos clipes (com ou sem transição)
         val videoStreamFinal: String
+        val audioStreamFinal: String
 
         if (enableTransitions) {
-            // Lógica de transição com XFADE
-            logCallback("Construindo filtro xfade...")
-
-            // Normaliza cada stream de entrada
+            logCallback("Construindo filtro xfade para vídeo e acrossfade para áudio...")
+            val tempoDeTransicaoEfetivo = transitionDuration
             clipPaths.forEachIndexed { index, _ ->
                 filterComplex.append("[$index:v]setpts=PTS-STARTPTS,format=yuv420p[sc$index];\n")
+                filterComplex.append("[$index:a]asetpts=PTS-STARTPTS[sa$index];\n")
             }
-
-            var currentStream = "[sc0]"
+            var currentVideoStream = "[sc0]"
+            var currentAudioStream = "[sa0]"
             var accumulatedDuration = durations[0]
 
             for (i in 0 until clipPaths.size - 1) {
-                val nextSceneStream = "[sc${i + 1}]"
-                val outputStreamName = if (i == clipPaths.size - 2) "[v_final]" else "[xfade${i}]"
+                val nextVideoStream = "[sc${i + 1}]"
+                val nextAudioStream = "[sa${i + 1}]"
+                val outputVideoStream = if (i == clipPaths.size - 2) "[v_final]" else "[xfade_v${i}]"
+                val outputAudioStream = if (i == clipPaths.size - 2) "[a_final]" else "[xfade_a${i}]"
                 val xfadeOffset = max(0.0, accumulatedDuration - tempoDeTransicaoEfetivo)
                 val transitionType = listOf("fade", "wipeleft", "slideright", "circleopen").random()
-
-                filterComplex.append(
-                    "$currentStream$nextSceneStream xfade=transition=$transitionType:duration=$tempoDeTransicaoEfetivo:offset=$xfadeOffset$outputStreamName;\n"
-                )
-                currentStream = outputStreamName
+                
+                filterComplex.append("$currentVideoStream$nextVideoStream xfade=transition=$transitionType:duration=$tempoDeTransicaoEfetivo:offset=$xfadeOffset$outputVideoStream;\n")
+                filterComplex.append("$currentAudioStream$nextAudioStream acrossfade=d=$tempoDeTransicaoEfetivo$outputAudioStream;\n")
+                
+                currentVideoStream = outputVideoStream
+                currentAudioStream = outputAudioStream
                 accumulatedDuration += durations[i + 1] - tempoDeTransicaoEfetivo
             }
             videoStreamFinal = "[v_final]"
-
+            audioStreamFinal = "[a_final]"
         } else {
-            // Lógica de concatenação simples (sem transições)
-            logCallback("Construindo filtro de concatenação simples...")
-            val concatInputs = clipPaths.indices.joinToString("") { "[$it:v:0]" }
-            filterComplex.append("$concatInputs concat=n=${clipPaths.size}:v=1:a=0[v_final];\n")
+            logCallback("Construindo filtro de concatenação simples para vídeo e áudio...")
+            val concatInputs = clipPaths.indices.joinToString("") { "[$it:v:0][$it:a:0]" }
+            filterComplex.append("$concatInputs concat=n=${clipPaths.size}:v=1:a=1[v_final][a_final];\n")
             videoStreamFinal = "[v_final]"
+            audioStreamFinal = "[a_final]"
+        }
+        
+        cmd.append("-filter_complex \"${filterComplex.toString().trim()}\" ")
+        // Mapeamento via filter_complex, então usamos colchetes.
+        cmd.append("-map \"$videoStreamFinal\" -map \"$audioStreamFinal\" ")
+    }
+
+    // Parte final do comando (comum a todos os casos)
+    cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
+    cmd.append("-c:a aac -b:a 192k ")
+    cmd.append("-movflags +faststart ")
+    cmd.append("\"$outputPath\"")
+
+    return Pair(cmd.toString(), totalDuration)
+}
+
+
+
+suspend fun stitchClipsWithTransitionns(
+    context: Context,
+    clipPaths: List<String>,
+    outputPath: String,
+    enableTransitions: Boolean = true,
+    transitionDuration: Double = DEFAULT_TRANSITION_DURATION,
+    videoFps: Int = 30,
+    logCallback: (String) -> Unit,
+    subDura: List<Double>
+): Pair<String, Double> {
+    if (clipPaths.isEmpty()) {
+        throw IOException("A lista de clipes para juntar não pode estar vazia.")
+    }
+
+    logCallback("Iniciando junção de ${clipPaths.size} clipes.")
+
+    // 1. Obter a duração de todos os clipes de entrada.
+    var durations = clipPaths.map { path ->
+        getClipDuration(path) ?: throw IOException("Não foi possível obter a duração do clipe: $path")
+    }
+
+    if (subDura.isNotEmpty()) {
+        durations = subDura
+    }
+
+    val totalDuration = durations.sum() - if (enableTransitions && clipPaths.size > 1) {
+        transitionDuration * (clipPaths.size - 1)
+    } else {
+        0.0
+    }
+
+    val cmd = StringBuilder("-y -hide_banner ")
+    val filterComplex = StringBuilder()
+
+    // 2. Definir todos os arquivos como inputs.
+    clipPaths.forEach { path ->
+        cmd.append("-i \"$path\" ")
+    }
+
+    val videoStreamFinal: String
+    val audioStreamFinal: String
+
+    // Caso especial: Apenas um clipe, sem necessidade de filtros complexos de junção.
+    if (clipPaths.size == 1) {
+        logCallback("Apenas um clipe fornecido. Re-codificando...")
+        videoStreamFinal = "[0:v]"
+        audioStreamFinal = "[0:a]"
+        // Nenhum filter_complex é necessário, o mapeamento direto funciona.
+        cmd.append("-map \"$videoStreamFinal\" -map \"$audioStreamFinal\" ")
+
+    } else if (enableTransitions) {
+        // Lógica de transição com XFADE (vídeo) e ACROSSFADE (áudio)
+        logCallback("Construindo filtro xfade para vídeo e acrossfade para áudio...")
+        val tempoDeTransicaoEfetivo = transitionDuration
+
+        // Normaliza cada stream de entrada de vídeo e áudio
+        clipPaths.forEachIndexed { index, _ ->
+            // Vídeo: Sincroniza timestamp e define formato/resolução
+            filterComplex.append("[$index:v]setpts=PTS-STARTPTS,format=yuv420p[sc$index];\n")
+            // Áudio: Sincroniza timestamp
+            filterComplex.append("[$index:a]asetpts=PTS-STARTPTS[sa$index];\n")
         }
 
-        // 3. Montar o comando final
-        cmd.append("-filter_complex \"${filterComplex}\" ")
-        cmd.append("-map \"$videoStreamFinal\" ")
-       // cmd.append("-an ") // Ignora o áudio dos clipes de entrada
-        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
-        cmd.append("-movflags +faststart ")
-        cmd.append("\"$outputPath\"")
+        var currentVideoStream = "[sc0]"
+        var currentAudioStream = "[sa0]"
+        var accumulatedDuration = durations[0]
 
-        return Pair(cmd.toString(), durations.sum())
+        for (i in 0 until clipPaths.size - 1) {
+            val nextVideoStream = "[sc${i + 1}]"
+            val nextAudioStream = "[sa${i + 1}]"
+
+            // Define os nomes dos outputs intermediários ou finais
+            val outputVideoStream = if (i == clipPaths.size - 2) "[v_final]" else "[xfade_v${i}]"
+            val outputAudioStream = if (i == clipPaths.size - 2) "[a_final]" else "[xfade_a${i}]"
+
+            // Calcula o ponto de início da transição
+            val xfadeOffset = max(0.0, accumulatedDuration - tempoDeTransicaoEfetivo)
+            val transitionType = listOf("fade", "wipeleft", "slideright", "circleopen").random()
+
+            // Filtro de transição de vídeo
+            filterComplex.append(
+                "$currentVideoStream$nextVideoStream xfade=transition=$transitionType:duration=$tempoDeTransicaoEfetivo:offset=$xfadeOffset$outputVideoStream;\n"
+            )
+            // Filtro de transição de áudio
+            filterComplex.append(
+                "$currentAudioStream$nextAudioStream acrossfade=d=$tempoDeTransicaoEfetivo$outputAudioStream;\n"
+            )
+
+            currentVideoStream = outputVideoStream
+            currentAudioStream = outputAudioStream
+            accumulatedDuration += durations[i + 1] - tempoDeTransicaoEfetivo
+        }
+        videoStreamFinal = "[v_final]"
+        audioStreamFinal = "[a_final]"
+        cmd.append("-filter_complex \"${filterComplex}\" ")
+        cmd.append("-map \"$videoStreamFinal\" -map \"$audioStreamFinal\" ")
+
+    } else {
+        // Lógica de concatenação simples (sem transições) para vídeo e áudio
+        logCallback("Construindo filtro de concatenação simples para vídeo e áudio...")
+        // Prepara os inputs para o filtro concat: [0:v][0:a][1:v][1:a]...
+        val concatInputs = clipPaths.indices.joinToString("") { "[$it:v:0][$it:a:0]" }
+        // Concatena N clipes, com 1 stream de vídeo (v=1) e 1 de áudio (a=1)
+        filterComplex.append("$concatInputs concat=n=${clipPaths.size}:v=1:a=1[v_final][a_final];\n")
+        
+        videoStreamFinal = "[v_final]"
+        audioStreamFinal = "[a_final]"
+        cmd.append("-filter_complex \"${filterComplex}\" ")
+        cmd.append("-map \"$videoStreamFinal\" -map \"$audioStreamFinal\" ")
     }
+
+    // 3. Montar o comando final com codecs de vídeo e áudio
+    cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
+    // Adiciona codec de áudio. AAC é uma escolha comum e compatível.
+    cmd.append("-c:a aac -b:a 192k ")
+    cmd.append("-movflags +faststart ")
+    cmd.append("\"$outputPath\"")
+
+    // Retorna o comando e a duração total calculada
+    return Pair(cmd.toString(), totalDuration)
+}
+
+
 
     
     
@@ -411,297 +534,9 @@ object VideoEditorComTransicoes {
         }
     }
     
+   
     
-    private suspend fun buildFFmpegCommandForBatch(
-        context: Context, 
-        mediaPaths: List<String>,
-        duracaoCenas: List<Double>,
-        batchIndex: Int,
-        larguraVideo: Int,
-        alturaVideo: Int,
-        enableSubtitles: Boolean,
-        legendaPath: String?, 
-        fonteArialPath: String,
-        enableSceneTransitions: Boolean,
-        enableZoomPan: Boolean,
-        videoFps: Int, 
-        videoHdMotion: Boolean,
-        outputPath: String,
-        globalOffsetSeconds: Double,
-        addBlurBackground: Boolean
-    ): String {
-        val cmd = StringBuilder("-y -hide_banner ")
-        val filterComplex = StringBuilder()
-        val tempoDeTransicaoEfetivo = if (enableSceneTransitions && mediaPaths.size > 1) DEFAULT_TRANSITION_DURATION else 0.0
-    
-        
-        // --- SEÇÃO 1: LEITURA DOS INPUTS (CORRIGIDA) ---
-        var inputIndex = 0
-        mediaPaths.forEachIndexed { index, path ->
-            val isVideoInput = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
-            val duracaoDestaCena = duracaoCenas[index]
-            val isLastInBatch = (index == mediaPaths.lastIndex)
-            
-            if (isVideoInput) {
-                val duracaoLeituraVideo = duracaoDestaCena - tempoDeTransicaoEfetivo
-                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" ", duracaoLeituraVideo, path))
-            } else {
-                val duracaoInputImagem = duracaoDestaCena -  tempoDeTransicaoEfetivo
-                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoInputImagem, path))
-            }
-            inputIndex++
-        }
-    
-        // --- SEÇÃO 2: PROCESSAMENTO DE CADA MÍDIA ---
-        val processedMediaPads = mutableListOf<String>()
-        mediaPaths.forEachIndexed { i, path ->
-            val outputPad = "[processed_m$i]"
-            processedMediaPads.add(outputPad)
-    
-            val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
-            val durBase = duracaoCenas[i]
-            val isLast = (i == mediaPaths.lastIndex)
-            val trimDuration = durBase - (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
-    
-            val frames = (trimDuration * videoFps).toInt().coerceAtLeast(1)
-            val durationExata = frames.toDouble() / videoFps
-            val w = larguraVideo
-            val h = alturaVideo
-            val input = "[${i}:v]" 
-    
-            
-            var squareDix = w
-            var squareDiy = h
-            var ss = "${w}x${h}"
-    
-            if (w > h) {
-                squareDix = (squareDiy * 1.2).toInt()
-                ss = "${squareDix}x${squareDiy}"
-            } else if (w < h) {
-                squareDiy = (squareDix * 1.2).toInt()
-                ss = "${squareDix}y${squareDiy}"
-            }
-            
-            // Processamento condicional do background
-            if (addBlurBackground) {
-                // Usar split quando precisar do background blur
-                filterComplex.append("  ${input}split=2[main${i}][bg${i}];\n")
-                filterComplex.append("  [bg${i}]scale='max(iw,${w}*2)':'max(ih,${h}*2)',crop=${w}:${h},boxblur=40:2,setsar=1[bg_final${i}];\n")
-            } else {
-                // Usar diretamente o input quando não precisar do background blur
-                filterComplex.append("  ${input}copy[main${i}];\n")
-            }
-            
-            
-            // Processamento do foreground
-            if (isVideo || !enableZoomPan) {
-                filterComplex.append("[main${i}]scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h[fg_scaled${i}];\n")
-            } else {
-                val fgChain = mutableListOf<String>()
-                if (enableZoomPan) {
-                    val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, squareDix, squareDiy, frames, i)
-                    fgChain.add("scale=${squareDix}:${squareDiy}:force_original_aspect_ratio=decrease," +
-                                "pad=${squareDix}:${squareDiy}:(ow-iw)/2:(oh-ih)/2:color=black," +
-                                "setsar=1," +
-                                "zoompan=z=$zoomExpr:s=${ss}:d=$frames:x=$xExpr:y=$yExpr:fps=$videoFps")
-                }
-                fgChain.add("crop=$squareDix:$squareDiy")
-                if (videoHdMotion) {
-                    fgChain.add("minterpolate=fps=$videoFps:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
-                }
-                filterComplex.append("  [main${i}]${fgChain.joinToString(",")}[fg_scaled${i}];\n")
-            }
-            
-            filterComplex.append("  [fg_scaled${i}]pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0[fg_padded${i}];\n")
-            
-            // Overlay condicional
-            if (addBlurBackground) {
-                filterComplex.append("  [bg_final${i}][fg_padded${i}]overlay=0:0[composite${i}];\n")
-            } else {
-                filterComplex.append("  [fg_padded${i}]copy[composite${i}];\n")
-            }
-            
-            val finalEffects = mutableListOf<String>()
-            finalEffects.add("format=pix_fmts=rgba")
-            finalEffects.add("fps=$videoFps")
-            finalEffects.add("trim=duration=$durationExata")
-            finalEffects.add("setpts=PTS-STARTPTS")
-            filterComplex.append("  [composite${i}]${finalEffects.joinToString(separator = ",")}$outputPad;\n")
-        }
-    
-        // --- SEÇÃO 3: TRANSIÇÕES E CONCATENAÇÃO ---
-        val tiposDeTransicao = listOf(
-            "fade", "slidedown", "circleopen", "circleclose",
-            "rectcrop", "distance", "fadeblack", "fadewhite"
-        )
-        val random = java.util.Random()
-        
-        //enableSceneTransitions = true
-    
-        val videoStreamFinal: String = when {
-            enableSceneTransitions && processedMediaPads.size > 1 -> {
-                // Transições com xfade
-                processedMediaPads.forEachIndexed { index, padName ->
-                    filterComplex.append("  $padName setpts=PTS-STARTPTS[sc_trans$index];\n")
-                }
-                
-                val offsets = calcularOffsetsMagicos(duracaoCenas, tempoDeTransicaoEfetivo)
-                var currentStream = "[sc_trans0]"
-                
-                for (i in 0 until processedMediaPads.size - 1) {
-                    val nextSceneStream = "[sc_trans${i + 1}]"
-                    val xfadeOffset = offsets[i]
-                    val tipoTransicao = tiposDeTransicao[random.nextInt(tiposDeTransicao.size)]
-                    val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
-                
-                    filterComplex.append(
-                        "  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=$tempoDeTransicaoEfetivo:offset=$xfadeOffset$xfadeOutputStreamName;\n"
-                    )
-                
-                    currentStream = xfadeOutputStreamName
-                }
-                currentStream
-            }
-            
-            processedMediaPads.isNotEmpty() && processedMediaPads.size > 1 -> {
-                // Concatenação simples sem transições
-                processedMediaPads.forEachIndexed { index, pad ->
-                    filterComplex.append("  $pad setpts=PTS-STARTPTS[s_concat$index];\n")
-                }
-                val concatInputs = processedMediaPads.indices.joinToString("") { "[s_concat$it]" }
-                filterComplex.append("  $concatInputs concat=n=${processedMediaPads.size}:v=1:a=0[vc_final_batch];\n")
-                "[vc_final_batch]"
-            }
-            processedMediaPads.isNotEmpty() -> {
-                // Vídeo único
-                filterComplex.append("  ${processedMediaPads[0]} copy[vc_final_batch];\n")
-                "[vc_final_batch]"
-            }
-            else -> {
-                // Fallback para vídeo preto
-                val totalDurationFallback = duracaoCenas.sum().takeIf { it > 0.0 } ?: 0.1
-                filterComplex.append("color=c=black:s=${larguraVideo}x${alturaVideo}:d=${max(0.1, totalDurationFallback)}[vc_final_batch];\n")
-                "[vc_final_batch]"
-            }
-        }
-    
-        // --- SEÇÃO 4: COMANDO FINAL DE OUTPUT (CORRIGIDO) ---
-        cmd.append("-filter_complex \"${filterComplex}\" ")
-        cmd.append("-map \"$videoStreamFinal\" ")
-        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
-        cmd.append("-movflags +faststart ")
-        
-        // A duração total do lote é a soma das durações das cenas
-       // val batchDuration = duracaoCenas.sum()
-        //cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, duracaoCenas.sum())))
-        cmd.append("\"$outputPath\"")
-        
-        return cmd.toString()
-    }
-    
-    fun calcularOffsetsMagicos(duracoes: List<Double>, tempoTransicao: Double): List<Double> {
-        val offsets = mutableListOf<Double>()
-        offsets.add(duracoes[0] - tempoTransicao) // offset da primeira transição
-        
-        for (i in 1 until duracoes.size - 1) {
-            val novoOffset = offsets[i - 1] + duracoes[i]
-            offsets.add("%.2f".format(Locale.US, novoOffset).toDouble())
-        }
-        return offsets
-    }
-
-    
-    
-    private fun buildFFmpegCommandForBatch1(
-        mediaPaths: List<String>, duracaoCenas: List<Double>, larguraVideo: Int, alturaVideo: Int,
-        enableSceneTransitions: Boolean, enableZoomPan: Boolean, videoFps: Int, videoHdMotion: Boolean, outputPath: String
-    ): String {
-        val cmd = StringBuilder("-y -hide_banner ")
-        val filterComplex = StringBuilder()
-        val tempoDeTransicaoEfetivo = if (enableSceneTransitions && mediaPaths.size > 1) DEFAULT_TRANSITION_DURATION else 0.0
-
-        mediaPaths.forEachIndexed { index, path ->
-            val isVideoInput = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
-            val duracaoLeitura = duracaoCenas[index] + if (index < mediaPaths.lastIndex) tempoDeTransicaoEfetivo else 0.0
-            if (isVideoInput) {
-                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" ", duracaoLeitura, path))
-            } else {
-                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoLeitura, path))
-            }
-        }
-
-        val processedMediaPads = mutableListOf<String>()
-        mediaPaths.forEachIndexed { i, path ->
-            val outputPad = "[processed_m$i]"
-            processedMediaPads.add(outputPad)
-
-            val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
-            val durBase = duracaoCenas[i]
-            val isLast = (i == mediaPaths.lastIndex)
-            val trimDuration = durBase + (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
-            val frames = (trimDuration * videoFps).toInt().coerceAtLeast(1)
-            val durationExata = frames.toDouble() / videoFps
-            val w = larguraVideo
-            val h = alturaVideo
-            val input = "[${i}:v]"
-
-            filterComplex.append("  ${input}split=2[main${i}][bg${i}];\n")
-            filterComplex.append("  [bg${i}]scale='max(iw,${w}*2)':'max(ih,${h}*2)',crop=${w}:${h},boxblur=40:2,setsar=1[bg_final${i}];\n")
-
-            if (isVideo || !enableZoomPan) {
-                filterComplex.append("[main${i}]scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h[fg_scaled${i}];\n")
-            } else {
-                val fgChain = mutableListOf<String>()
-                val (zoomExpr, xExpr, yExpr) = gerarZoompanExpressao(path, w, h, frames, i)
-                fgChain.add("scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,zoompan=z=$zoomExpr:s=${w}x${h}:d=$frames:x=$xExpr:y=$yExpr:fps=$videoFps")
-                fgChain.add("crop=$w:$h")
-                if (videoHdMotion) {
-                    fgChain.add("minterpolate=fps=$videoFps:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
-                }
-                filterComplex.append("  [main${i}]${fgChain.joinToString(",")}[fg_scaled${i}];\n")
-            }
-
-            filterComplex.append("  [fg_scaled${i}]pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0[fg_padded${i}];\n")
-            filterComplex.append("  [bg_final${i}][fg_padded${i}]overlay=0:0[composite${i}];\n")
-            filterComplex.append("  [composite${i}]format=pix_fmts=rgba,fps=$videoFps,trim=duration=$durationExata,setpts=PTS-STARTPTS$outputPad;\n")
-        }
-
-        val videoStreamFinal: String
-        if (enableSceneTransitions && processedMediaPads.size > 1) {
-            processedMediaPads.forEachIndexed { index, padName ->
-                filterComplex.append("  $padName setpts=PTS-STARTPTS[sc_trans$index];\n")
-            }
-            var currentStream = "[sc_trans0]"
-            var durationOfCurrentStream = duracaoCenas[0] + tempoDeTransicaoEfetivo
-            for (i in 0 until processedMediaPads.size - 1) {
-                val nextSceneStream = "[sc_trans${i + 1}]"
-                val nextSceneOriginalDuration = duracaoCenas[i + 1]
-                val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
-                val xfadeOffset = max(0.0, durationOfCurrentStream) - tempoDeTransicaoEfetivo
-                val tipoTransicao = listOf("fade", "slidedown", "circleopen", "circleclose", "rectcrop", "distance", "fadeblack", "fadewhite").random()
-                filterComplex.append("  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=${tempoDeTransicaoEfetivo}:offset=$xfadeOffset$xfadeOutputStreamName;\n")
-                currentStream = xfadeOutputStreamName
-                durationOfCurrentStream = max(0.1, durationOfCurrentStream + nextSceneOriginalDuration)
-            }
-            videoStreamFinal = currentStream
-        } else if (processedMediaPads.size > 1) {
-            processedMediaPads.forEachIndexed { index, pad -> filterComplex.append("  $pad setpts=PTS-STARTPTS[s_concat$index];\n") }
-            val concatInputs = processedMediaPads.indices.joinToString("") { "[s_concat$it]" }
-            filterComplex.append("  $concatInputs concat=n=${processedMediaPads.size}:v=1:a=0[vc_final_batch];\n")
-            videoStreamFinal = "[vc_final_batch]"
-        } else {
-            filterComplex.append("  ${processedMediaPads.firstOrNull() ?: ""} copy[vc_final_batch];\n")
-            videoStreamFinal = "[vc_final_batch]"
-        }
-
-        cmd.append("-filter_complex \"${filterComplex}\" ")
-        cmd.append("-map \"$videoStreamFinal\" ")
-        cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps -movflags +faststart \"$outputPath\"")
-
-        return cmd.toString()
-    }
-    
-    private fun buildAudioAndSubtitleMixingCommand(
+private fun buildAudioAndSubtitleMixingCommand(
         videoPath: String, audioPath: String, musicaPath: String, legendaPath: String?, fonteArialPath: String,
         usarLegendas: Boolean, outputVideoPath: String, videoFps: Int, totalDuration: Double
     ): String {
@@ -734,6 +569,8 @@ object VideoEditorComTransicoes {
         cmd.append("\"$outputVideoPath\"")
         return cmd.toString()
     }
+
+
 
     private fun obterDimensoesImagem(path: String): Pair<Int, Int>? {
         return try {
@@ -778,31 +615,11 @@ object VideoEditorComTransicoes {
             yExpr = "'($t-(($t/$frames)*on))'"
         }
 
-        val zoomExpr = "'$zoom + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/1000)'"
+        val zoomExpr = "'$zoom + ((on * ($frames - 1 - on) / (($frames - 1) ))/100)'"
         return Triple(zoomExpr, xExpr, yExpr)
     }
 
-    private fun gerarZoompanExpressao2(
-        imgCaminho: String, larguraVideo: Int, alturaVideo: Int, frames: Int, cenaIdx: Int
-    ): Triple<String, String, String> {
-        val (larguraImg, alturaImg) = obterDimensoesImagem(imgCaminho) ?: (larguraVideo to alturaVideo)
-        val escalaX = larguraVideo.toDouble() / larguraImg
-        val escalaY = alturaVideo.toDouble() / alturaImg
-        val zoomAjuste = min(escalaX, escalaY)
-        val larguraAjuste = larguraImg * zoomAjuste
-        val alturaAjuste = alturaImg * zoomAjuste
-        val escalaX1 = larguraVideo / larguraAjuste
-        val escalaY1 = alturaVideo / alturaAjuste
-        val zoomFixo = max(escalaX1, escalaY1)
-        val padX = ((larguraAjuste * zoomFixo) - larguraAjuste) / 2
-        val padY = ((alturaAjuste * zoomFixo) - alturaAjuste) / 2
-        var xExpr = "'$padX'"
-        var yExpr = "'$padY'"
-        if (escalaY1 == zoomFixo) xExpr = "'($padX-(($padX/$frames)*on))'"
-        else if (escalaX1 == zoomFixo) yExpr = "'($padY-(($padY/$frames)*on))'"
-        val zoomExpr = "'$zoomFixo + ((on * ($frames - 1 - on) / (($frames - 1) / 2))/1000)'"
-        return Triple(zoomExpr, xExpr, yExpr)
-    }
+    
 
     private fun copiarFonteParaCache(context: Context, nomeFonte: String): String {
         val outFile = File(context.cacheDir, nomeFonte)
@@ -838,6 +655,8 @@ object VideoEditorComTransicoes {
     class VideoGenerationException(message: String) : Exception(message)
     private data class Octuple<A, B, C, D, E, F, G, H>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F, val seventh: G, val eighth: H)
 
+
+ 
 
     // <<< INÍCIO DA NOVA FUNÇÃO >>>
     /**
@@ -887,16 +706,13 @@ object VideoEditorComTransicoes {
         Log.i(TAG, "duracao $duracao")
         
         var addBlurBackground = true
-        
         var enableSceneTransitions = false
         var tempoDeTransicaoEfetivo = 0.0
-        
         val filterComplex = StringBuilder()
         val cmd = StringBuilder("-y -hide_banner ")
-        
         val outputPath = outputPreviewPath
-     
-
+        val duracaoAudioFinal = getClipDuration(audioSnippetPath!!) // você precisa implementar essa função
+        
          // --- SEÇÃO 1: LEITURA DOS INPUTS (CORRIGIDA) ---
         var inputIndex = 0
         mediaPaths.forEachIndexed { index, path ->
@@ -906,43 +722,36 @@ object VideoEditorComTransicoes {
             
             if (isVideoInput) {
                 val duracaoLeituraVideo = duracaoDestaCena + tempoDeTransicaoEfetivo
-                cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" ", duracaoLeituraVideo, path))
+                cmd.append(String.format(Locale.US, "-stream_loop -1 -i \"%s\" ", path))
             } else {
                 val duracaoInputImagem = duracaoDestaCena + tempoDeTransicaoEfetivo
-                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoInputImagem, path))
+                cmd.append(String.format(Locale.US, "-loop 1 -r %d -t %.4f -i \"%s\" ", videoFps, duracaoAudioFinal, path))
             }
             inputIndex++
         }
         
         // ADICIONAR INPUT DE ÁUDIO
-        cmd.append(String.format(Locale.US, "-i \"%s\" ", audioSnippetPath))
-        
-           
-        
-        
+        //cmd.append(String.format(Locale.US, "-stream_loop -1 -i \"%s\" ", audioSnippetPath))
+        cmd.append(String.format(Locale.US, "-t %.4f -i \"%s\" ", duracao, audioSnippetPath))
+
     
         // --- SEÇÃO 2: PROCESSAMENTO DE CADA MÍDIA ---
         val processedMediaPads = mutableListOf<String>()
         mediaPaths.forEachIndexed { i, path ->
             val outputPad = "[processed_m$i]"
             processedMediaPads.add(outputPad)
-    
             val isVideo = path.endsWith(".mp4", true) || path.endsWith(".webm", true)
             val durBase = duracaoCenas[i]
             val isLast = (i == mediaPaths.lastIndex)
             val trimDuration = durBase + (if (!isLast && enableSceneTransitions) tempoDeTransicaoEfetivo else 0.0)
-    
             val frames = (trimDuration * videoFps).toInt().coerceAtLeast(1)
             val durationExata = frames.toDouble() / videoFps
             val w = larguraVideo
             val h = alturaVideo
             val input = "[${i}:v]" 
-    
-            
             var squareDix = w
             var squareDiy = h
             var ss = "${w}x${h}"
-    
             if (w > h) {
                 squareDix = (squareDiy * 1.2).toInt()
                 ss = "${squareDix}x${squareDiy}"
@@ -961,9 +770,6 @@ object VideoEditorComTransicoes {
                 filterComplex.append("  ${input}copy[main${i}];\n")
             }
             
-            
-            // <<< INÍCIO DA CORREÇÃO >>>
-            // Processamento do foreground
             if (isVideo || !enableZoomPan) {
                 // Para vídeos OU para imagens sem zoom-pan, redimensiona para caber dentro, mantendo a proporção.
                 filterComplex.append("[main${i}]scale=$w:$h:force_original_aspect_ratio=decrease[fg_scaled${i}];\n")
@@ -981,8 +787,6 @@ object VideoEditorComTransicoes {
                 }
                 filterComplex.append("  [main${i}]${fgChain.joinToString(",")}[fg_scaled${i}];\n")
             }
-            // <<< FIM DA CORREÇÃO >>>
-            
             
             filterComplex.append("  [fg_scaled${i}]pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0[fg_padded${i}];\n")
             
@@ -996,7 +800,7 @@ object VideoEditorComTransicoes {
             val finalEffects = mutableListOf<String>()
             finalEffects.add("format=pix_fmts=rgba")
             finalEffects.add("fps=$videoFps")
-            finalEffects.add("trim=duration=$durationExata")
+            //finalEffects.add("trim=duration=$durationExata")
             finalEffects.add("setpts=PTS-STARTPTS")
             filterComplex.append("  [composite${i}]${finalEffects.joinToString(separator = ",")}$outputPad;\n")
         }
@@ -1021,9 +825,7 @@ object VideoEditorComTransicoes {
                     val nextSceneOriginalDuration = duracaoCenas[i+1] 
                     val xfadeOutputStreamName = if (i == processedMediaPads.size - 2) "[vc_final_batch]" else "[xfade_out_trans$i]"
                     val xfadeOffset = max(0.0, durationOfCurrentStream) - tempoDeTransicaoEfetivo
-    
                     val tipoTransicao = tiposDeTransicao[random.nextInt(tiposDeTransicao.size)]
-    
                     filterComplex.append(
                         "  $currentStream$nextSceneStream xfade=transition=$tipoTransicao:duration=${tempoDeTransicaoEfetivo}:offset=$xfadeOffset$xfadeOutputStreamName;\n"
                     )
@@ -1062,11 +864,12 @@ object VideoEditorComTransicoes {
         cmd.append("-map ${inputIndex}:a ") // Mapear o áudio do último input adicionado
         cmd.append("-c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -r $videoFps ")
         cmd.append("-movflags +faststart ")
-        
-        // A duração total do lote é a soma das durações das cenas
-        val batchDuration = duracaoCenas.sum()
-        cmd.append(String.format(Locale.US, "-t %.4f ", max(0.1, batchDuration + tempoDeTransicaoEfetivo)))
+        cmd.append(String.format(Locale.US, "-t %.4f ", duracaoAudioFinal)) 
         cmd.append("\"$outputPath\"")
+        
+        
+        
+        
 
         try {
             _executeFFmpegCommand(cmd.toString(), outputPreviewPath, "Prévia Cena ${scene.cena}", logCallback)
@@ -1076,5 +879,6 @@ object VideoEditorComTransicoes {
             return@coroutineScope false
         }
     }
+    
     
 }

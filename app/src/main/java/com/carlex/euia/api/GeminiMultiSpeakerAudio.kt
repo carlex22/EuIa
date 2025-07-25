@@ -281,11 +281,11 @@ object GeminiMultiSpeakerAudio {
         val effectiveMimeType = mimeType ?: "audio/L16;codec=pcm;rate=24000"
 
         if (effectiveMimeType.startsWith("audio/wav", ignoreCase = true)) {
-            val file = File(projectDir, "gemini_multispeaker_tts_${System.currentTimeMillis()}.wav")
+            val file = File(projectDir, "gemini_multispeaker_tts.wav")
             FileOutputStream(file).use { it.write(audioBytes) }
             return kotlin.Result.success(file.absolutePath)
         } else if (effectiveMimeType.startsWith("audio/L16", ignoreCase = true)) {
-            val rawFile = File(projectDir, "gemini_multispeaker_raw_${System.currentTimeMillis()}.pcm")
+            val rawFile = File(projectDir, "gemini_multispeaker_raw.pcm")
             FileOutputStream(rawFile).use { it.write(audioBytes) }
 
             val wavFile = File(projectDir, "gemini_multispeaker_tts_${System.currentTimeMillis()}.wav")

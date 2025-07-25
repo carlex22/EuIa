@@ -10,6 +10,8 @@ import com.carlex.euia.prompts.CreateScenesChat
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
+import com.carlex.euia.viewmodel.helper.*
+import com.carlex.euia.data.VideoProjectDataStoreManager
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.*
@@ -29,7 +31,8 @@ class SceneGenerationService(
     private val context: Context,
     private val userInfoDataStoreManager: UserInfoDataStoreManager,
     private val audioDataStoreManager: AudioDataStoreManager,
-    private val videoDataStoreManager: VideoDataStoreManager
+    private val videoDataStoreManager: VideoDataStoreManager,
+    private val dataStoreManager: VideoProjectDataStoreManager,
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -69,7 +72,7 @@ class SceneGenerationService(
             val geminiResult = GeminiTextAndVisionProRestApi.perguntarAoGemini(
                 pergunta = prompt,
                 imagens = imagePathsForGemini,
-                arquivoTexto = "$legendaPath.raw_transcript.json" // Anexa o arquivo de transcrição para contexto preciso
+                arquivoTexto = "$legendaPath.srt.raw_transcript.json" // Anexa o arquivo de transcrição para contexto preciso
             )
 
             if (geminiResult.isFailure) {
@@ -88,7 +91,9 @@ class SceneGenerationService(
                 Log.w(TAG, "O processamento do JSON da IA não resultou em nenhuma cena. Resposta bruta: $rawResponse")
                 return Result.failure(Exception("A IA não retornou uma estrutura de cenas válida."))
             }
-
+            
+            dataStoreManager.setSceneLinkDataList(emptyList())
+           
             Log.i(TAG, "Estrutura de ${sceneList.size} cenas gerada com sucesso pela IA.")
             Result.success(sceneList)
 
@@ -143,7 +148,7 @@ class SceneGenerationService(
 
             for (i in 0 until jsonArray.length()) {
                 val cenaObj = jsonArray.getJSONObject(i)
-                val originalImageIndex = cenaObj.optString("FOTO_REFERENCIA", null)?.toIntOrNull()
+                val originalImageIndex = cenaObj.optString("REFERENCE_IMG", null)?.toIntOrNull()
                 var refPath = ""
                 var refDesc = ""
                 var videoPath: String? = null
@@ -163,20 +168,20 @@ class SceneGenerationService(
 
                 sceneList.add(SceneLinkData(
                     id = UUID.randomUUID().toString(),
-                    cena = cenaObj.optString("CENA", null),
+                    cena = cenaObj.optString("SCENE", null),
                     tempoInicio = lastTimeEnd,
-                    tempoFim = cenaObj.optDouble("TEMPO_FIM", 0.0).takeIf { it > 0 },
+                    tempoFim = cenaObj.optDouble("END_TIME", 0.0).takeIf { it > 0 },
                     imagemReferenciaPath = refPath,
                     descricaoReferencia = refDesc,
-                    promptGeracao = cenaObj.optString("PROMPT_PARA_IMAGEM", null),
-                    exibirProduto = cenaObj.optBoolean("EXIBIR_PRODUTO", false),
+                    promptGeracao = cenaObj.optString("IMAGE_PROMPT", null),
+                    exibirProduto = cenaObj.optBoolean("PRODUCT_DISPLAY", false),
                     imagemGeradaPath = videoPath,
                     pathThumb = thumbPath,
                     isGenerating = false,
                     aprovado = isVideo,
-                    promptVideo = cenaObj.optString("TAG_SEARCH_WEB", null)
+                    promptVideo = cenaObj.optString("WEB_SEARCH_TAG", null)
                 ))
-                lastTimeEnd = cenaObj.optDouble("TEMPO_FIM", 0.0).takeIf { it > 0 }
+                lastTimeEnd = cenaObj.optDouble("END_TIME", 0.0).takeIf { it > 0 }
             }
         } catch (e: Exception) { // Captura qualquer exceção, não apenas JSONException
             Log.e(TAG, "Falha ao processar o JSON da IA para as cenas: '$jsonString'", e)
